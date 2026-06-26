@@ -220,6 +220,66 @@ describe('NotificationPrefsService', () => {
     });
   });
 
+  // ── shouldNotify — namespace-aware composite matching (#353) ─────────────────
+
+  describe('shouldNotify — namespace composite matching', () => {
+    it('slashless chip matches service across all namespaces (backward compat)', () => {
+      const svc = TestBed.inject(NotificationPrefsService);
+      svc.updatePrefs({
+        enabled:      true,
+        serviceMode:  'watch-only',
+        serviceChips: ['auth-bff'],
+      });
+      expect(svc.shouldNotify('success', 'auth-bff', 'prod', 'org-a')).toBe(true);
+      expect(svc.shouldNotify('success', 'auth-bff', 'prod', 'org-b')).toBe(true);
+      expect(svc.shouldNotify('success', 'auth-bff', 'prod', null  )).toBe(true);
+    });
+
+    it('slashed chip matches only the specific namespace/service composite', () => {
+      const svc = TestBed.inject(NotificationPrefsService);
+      svc.updatePrefs({
+        enabled:      true,
+        serviceMode:  'watch-only',
+        serviceChips: ['org-a/auth-bff'],
+      });
+      expect(svc.shouldNotify('success', 'auth-bff', 'prod', 'org-a')).toBe(true);
+      expect(svc.shouldNotify('success', 'auth-bff', 'prod', 'org-b')).toBe(false);
+    });
+
+    it('slashed glob matches all services under a namespace', () => {
+      const svc = TestBed.inject(NotificationPrefsService);
+      svc.updatePrefs({
+        enabled:      true,
+        serviceMode:  'watch-only',
+        serviceChips: ['org-a/*'],
+      });
+      expect(svc.shouldNotify('success', 'payments-api', 'prod', 'org-a')).toBe(true);
+      expect(svc.shouldNotify('success', 'order-svc',    'prod', 'org-a')).toBe(true);
+      expect(svc.shouldNotify('success', 'payments-api', 'prod', 'org-b')).toBe(false);
+    });
+
+    it('watch-all-except: slashed chip excludes only the specific composite', () => {
+      const svc = TestBed.inject(NotificationPrefsService);
+      svc.updatePrefs({
+        enabled:      true,
+        serviceMode:  'watch-all-except',
+        serviceChips: ['org-a/gateway'],
+      });
+      expect(svc.shouldNotify('success', 'gateway', 'prod', 'org-a')).toBe(false);
+      expect(svc.shouldNotify('success', 'gateway', 'prod', 'org-b')).toBe(true);
+    });
+
+    it('null namespace with slashed chip: does not match (no composite prefix)', () => {
+      const svc = TestBed.inject(NotificationPrefsService);
+      svc.updatePrefs({
+        enabled:      true,
+        serviceMode:  'watch-only',
+        serviceChips: ['org-a/auth-bff'],
+      });
+      expect(svc.shouldNotify('success', 'auth-bff', 'prod', null)).toBe(false);
+    });
+  });
+
   // ── shouldNotify — environment axis ───────────────────────────────────────
 
   describe('shouldNotify — environment axis', () => {

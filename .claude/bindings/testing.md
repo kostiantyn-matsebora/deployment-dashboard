@@ -12,7 +12,7 @@
 | Demo driver (Jest) | `demo/driver/**/*.spec.ts` | `npm test` (in `demo/driver`) | `✕` / `FAIL` lines |
 | API integration | `testing/api/**` | `docker compose up -d --build --wait` → `npm run test:integration` | failing requests + `docker compose logs --no-color` slice |
 | E2E (Playwright) | `testing/e2e/**` | `npx playwright test` | failing test + trace |
-| Scripts (Pester v5) | `*.Tests.ps1` (sibling) | `Invoke-Pester -Output Minimal` | failed `It` only |
+| Scripts (pytest) | `*_test.py` (sibling) | `pytest -q` | failed test only |
 
 - **Overlap invariants:** every new UI combo MUST add a row to `testing/e2e/tests/overlap-invariants.spec.ts` (`COMBOS_UNDER_TEST`).
 - **api-tests CI triggers main-only;** `gh run watch | tail` masks the exit code — check run status explicitly.

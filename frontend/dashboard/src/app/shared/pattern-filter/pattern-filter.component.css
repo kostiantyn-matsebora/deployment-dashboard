@@ -4,6 +4,13 @@
    .pat-input-row / .ac-dropdown / .ext-filter-chip classes.
    ============================================================ */
 
+/* Allow host to fill its flex/grid container and enable chip wrapping.
+   Without display:block the host stays inline and ignores width constraints. */
+:host {
+  display: block;
+  min-width: 0;
+}
+
 /* -- Mode segmented control ---------------------------------- */
 .pf-mode-seg {
   display: flex;

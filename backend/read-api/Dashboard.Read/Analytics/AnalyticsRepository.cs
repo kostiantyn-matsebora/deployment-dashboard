@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using Dashboard.Shared.Contracts;
 using Dashboard.Shared.Data;
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +11,12 @@ namespace Dashboard.Read.Analytics;
 /// Uses group-by / time-bucket SQL over <c>deployment_events</c> — no client-side
 /// aggregation, no event-stream replay.
 /// </summary>
-internal sealed class AnalyticsRepository(DashboardDbContext db, AnalyticsOptions options) : IAnalyticsRepository
+[SuppressMessage("SonarAnalyzer", "S1200",
+    Justification = "Analytics aggregate class: coupling to all nine query-result types, EF, LINQ, and AnalyticsExcludeFilter is inherent and irreducible without fragmenting cohesive aggregation logic.")]
+internal sealed class AnalyticsRepository(
+    DashboardDbContext db,
+    AnalyticsOptions options,
+    AnalyticsExcludeFilter excludeFilter) : IAnalyticsRepository
 {
     private static readonly string[] TerminalStatuses =
         [DeploymentStatus.Success, DeploymentStatus.Failure];
@@ -22,31 +28,34 @@ internal sealed class AnalyticsRepository(DashboardDbContext db, AnalyticsOption
     // ── DORA Four Keys ────────────────────────────────────────────────────────
 
     public async Task<IReadOnlyList<DailyTerminalCounts>> GetDailyTerminalCountsAsync(
-        DateTimeOffset from, DateTimeOffset to, CancellationToken ct)
+    DateTimeOffset from, DateTimeOffset to, CancellationToken ct)
     {
-        // Group terminal events by UTC date and status; merge in-memory into daily buckets.
-        var rows = await db.DeploymentEvents
+        // Fetch terminal events within the window; group in-memory to daily buckets.
+        // DateOnly.FromDateTime inside a GROUP BY does not translate on the SQLite test
+        // provider when the query source is wrapped in a filter subquery, so the date
+        // projection is computed client-side (the row set is already small — terminal
+        // events in a ≤30-day window).
+        var events = await excludeFilter.Apply(db.DeploymentEvents, db)
             .Where(e => TerminalStatuses.Contains(e.Status)
                         && e.HappenedAt >= from
                         && e.HappenedAt < to)
+            .Select(e => new { e.Status, e.HappenedAt })
+            .ToListAsync(ct);
+
+        return events
             .GroupBy(e => new
             {
                 e.Status,
                 Date = DateOnly.FromDateTime(e.HappenedAt.UtcDateTime.Date),
             })
-            .Select(g => new { g.Key.Status, g.Key.Date, Count = g.Count() })
-            .ToListAsync(ct);
-
-        return rows
-            .GroupBy(r => r.Date)
+            .GroupBy(g => g.Key.Date)
             .Select(g => new DailyTerminalCounts(
                 g.Key,
-                g.Where(r => r.Status == DeploymentStatus.Success).Sum(r => r.Count),
-                g.Where(r => r.Status == DeploymentStatus.Failure).Sum(r => r.Count)))
+                g.Where(r => r.Key.Status == DeploymentStatus.Success).Sum(r => r.Count()),
+                g.Where(r => r.Key.Status == DeploymentStatus.Failure).Sum(r => r.Count())))
             .OrderBy(b => b.Date)
             .ToList();
     }
-
     public async Task<IReadOnlyList<double>> GetLeadTimeHourSamplesAsync(
         DateTimeOffset from, DateTimeOffset to, CancellationToken ct)
     {
@@ -67,7 +76,7 @@ internal sealed class AnalyticsRepository(DashboardDbContext db, AnalyticsOption
     public async Task<IReadOnlyList<double>> GetMttrMinuteSamplesAsync(
         DateTimeOffset from, DateTimeOffset to, CancellationToken ct)
     {
-        var events = await db.DeploymentEvents
+        var events = await excludeFilter.Apply(db.DeploymentEvents, db)
             .Where(e => TerminalStatuses.Contains(e.Status)
                         && e.HappenedAt >= from
                         && e.HappenedAt < to)
@@ -88,7 +97,7 @@ internal sealed class AnalyticsRepository(DashboardDbContext db, AnalyticsOption
     public async Task<IReadOnlyList<double>> GetDurationMinuteSamplesAsync(
         DateTimeOffset from, DateTimeOffset to, CancellationToken ct)
     {
-        var durations = await db.DeploymentEvents
+        var durations = await excludeFilter.Apply(db.DeploymentEvents, db)
             .Where(e => e.HappenedAt >= from && e.HappenedAt < to)
             .GroupBy(e => e.DeploymentId)
             .Select(g => new
@@ -116,7 +125,7 @@ internal sealed class AnalyticsRepository(DashboardDbContext db, AnalyticsOption
         // — matching regardless of the casing stored in the database.
         // DB convention is lowercase, but an operator could configure "PrOD" and it must still match.
         var funnelEnvs = _funnelEnvironments; // captured local — EF translates the array, not the field expression
-        var rows = await db.DeploymentEvents
+        var rows = await excludeFilter.Apply(db.DeploymentEvents, db)
             .Where(e => funnelEnvs.Contains(e.Environment.ToLower())
                         && e.HappenedAt >= from
                         && e.HappenedAt < to)
@@ -138,7 +147,7 @@ internal sealed class AnalyticsRepository(DashboardDbContext db, AnalyticsOption
     public async Task<IReadOnlyList<StatusCount>> GetStatusCountsAsync(
         DateTimeOffset from, DateTimeOffset to, CancellationToken ct)
     {
-        var rows = await db.DeploymentEvents
+        var rows = await excludeFilter.Apply(db.DeploymentEvents, db)
             .Where(e => e.HappenedAt >= from && e.HappenedAt < to)
             .GroupBy(e => e.Status)
             .Select(g => new { Status = g.Key, Count = g.Count() })
@@ -150,7 +159,7 @@ internal sealed class AnalyticsRepository(DashboardDbContext db, AnalyticsOption
     public async Task<IReadOnlyList<HeatmapCell>> GetHeatmapCellsAsync(
         DateTimeOffset from, DateTimeOffset to, CancellationToken ct)
     {
-        var happenedAts = await db.DeploymentEvents
+        var happenedAts = await excludeFilter.Apply(db.DeploymentEvents, db)
             .Where(e => e.HappenedAt >= from && e.HappenedAt < to)
             .Select(e => e.HappenedAt)
             .ToListAsync(ct);
@@ -169,7 +178,7 @@ internal sealed class AnalyticsRepository(DashboardDbContext db, AnalyticsOption
         // Fetch all events for deployments that have at least one Success within the window.
         // We need events outside [from,to) only to find the earliest actor, but anchoring on
         // the Success event's HappenedAt in [from,to) keeps window semantics deterministic.
-        var qualifyingDeploymentIds = await db.DeploymentEvents
+        var qualifyingDeploymentIds = await excludeFilter.Apply(db.DeploymentEvents, db)
             .Where(e => e.Status == DeploymentStatus.Success
                         && e.HappenedAt >= from
                         && e.HappenedAt < to)
@@ -182,7 +191,7 @@ internal sealed class AnalyticsRepository(DashboardDbContext db, AnalyticsOption
 
         // Fetch (deploymentId, actor, happenedAt) for all events of qualifying deployments
         // so we can find the earliest actor per deployment on the client side.
-        var eventRows = await db.DeploymentEvents
+        var eventRows = await excludeFilter.Apply(db.DeploymentEvents, db)
             .Where(e => qualifyingDeploymentIds.Contains(e.DeploymentId))
             .Select(e => new DeployerEventRow(e.DeploymentId, e.Actor, e.HappenedAt))
             .ToListAsync(ct);
@@ -219,7 +228,7 @@ internal sealed class AnalyticsRepository(DashboardDbContext db, AnalyticsOption
     public async Task<IReadOnlyList<IncidentRow>> GetIncidentsAsync(
         DateTimeOffset from, DateTimeOffset to, int limit, CancellationToken ct)
     {
-        var events = await db.DeploymentEvents
+        var events = await excludeFilter.Apply(db.DeploymentEvents, db)
             .Where(e => TerminalStatuses.Contains(e.Status)
                         && e.HappenedAt >= from
                         && e.HappenedAt < to)
@@ -251,7 +260,7 @@ internal sealed class AnalyticsRepository(DashboardDbContext db, AnalyticsOption
         // The terminal is lowercase-normalized; compare against LOWER(e.Environment) for
         // case-insensitive matching (DB convention is lowercase, but config may vary).
         var prodEnv = _funnelEnvironments[^1];
-        return await db.DeploymentEvents
+        return await excludeFilter.Apply(db.DeploymentEvents, db)
             .Where(e => e.Environment.ToLower() == prodEnv
                         && TerminalStatuses.Contains(e.Status)
                         && e.HappenedAt >= from
@@ -264,7 +273,7 @@ internal sealed class AnalyticsRepository(DashboardDbContext db, AnalyticsOption
 
     private async Task<Dictionary<string, DateTimeOffset>> FetchParentMinTimesAsync(
         List<string> parentIds, CancellationToken ct)
-        => await db.DeploymentEvents
+        => await excludeFilter.Apply(db.DeploymentEvents, db)
             .Where(e => parentIds.Contains(e.DeploymentId))
             .GroupBy(e => e.DeploymentId)
             .Select(g => new { DeploymentId = g.Key, EarliestAt = g.Min(e => e.HappenedAt) })

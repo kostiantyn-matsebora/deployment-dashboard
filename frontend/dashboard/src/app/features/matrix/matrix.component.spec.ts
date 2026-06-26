@@ -23,6 +23,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import { MatrixComponent }     from './matrix.component';
 import { AppStateService }     from '../../core/services/app-state.service';
+import { PresetsService }      from '../../core/services/presets.service';
 import { Matrix, MatrixSlot, DeploymentEvent } from '../../core/models/deployment.model';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -535,6 +536,45 @@ describe('MatrixComponent', () => {
 
   });
 
+  // ── 4a. track-key uniqueness (issue #353 fix) ────────────────────────────
+  //
+  // When the same service name exists under two different namespaces, the two
+  // rows must be treated as distinct — the composite `namespace|service` track
+  // expression prevents Angular from collapsing them into a single DOM node.
+
+  describe('composite track-key — same service name under different namespaces', () => {
+
+    it('filteredRows returns two distinct rows for same service name in different namespaces', async () => {
+      const { component, state } = await createMatrix();
+      state.matrixData.set(mkMatrix(['dev'], [
+        { service: 'api', namespace: 'team-a', slots: { dev: mkSlot('api', 'dev') } },
+        { service: 'api', namespace: 'team-b', slots: { dev: mkSlot('api', 'dev') } },
+      ] as any));
+      state.serviceFilter.set('');
+      state.failuresOnly.set(false);
+      const rows = priv(component).filteredRows() as Array<{ service: string; namespace?: string | null }>;
+      expect(rows).toHaveLength(2);
+      expect(rows[0].namespace).toBe('team-a');
+      expect(rows[1].namespace).toBe('team-b');
+    });
+
+    it('renders two distinct row-head cells for same service under different namespaces', async () => {
+      const { fixture, state } = await createMatrix();
+      state.matrixData.set(mkMatrix(['dev'], [
+        { service: 'api', namespace: 'team-a', slots: { dev: mkSlot('api', 'dev') } },
+        { service: 'api', namespace: 'team-b', slots: { dev: mkSlot('api', 'dev') } },
+      ] as any));
+      state.serviceFilter.set('');
+      state.failuresOnly.set(false);
+      state.matrixColOrder.set(['dev']);
+      state.matrixColHidden.set(new Set());
+      fixture.detectChanges();
+      const rowHeads = fixture.debugElement.queryAll(By.css('.row-head'));
+      expect(rowHeads).toHaveLength(2);
+    });
+
+  });
+
   // ── 5. Rendering (DOM) ───────────────────────────────────────────────────
 
   describe('DOM rendering', () => {
@@ -649,6 +689,91 @@ describe('MatrixComponent', () => {
       const grid = fixture.debugElement.query(By.css('.matrix'));
       const style: string = grid.nativeElement.style.gridTemplateColumns;
       expect(style).toBe('180px repeat(2, minmax(140px, max-content))');
+    });
+
+  });
+
+  // ── 6. Presets visible-apply regression ──────────────────────────────────
+  //
+  // Regression gate: applying a preset that carries a serviceFilter MUST change
+  // the visible (rendered) row set in MatrixComponent.filteredRows(), not just
+  // write to localStorage.  A prior pass only asserted signal values; this suite
+  // asserts the derived, reactive filteredRows() so that a missing apply() wiring
+  // would be caught here.
+
+  describe('presets visible-apply regression — serviceFilter', () => {
+
+    async function createMatrixWithPresets(): Promise<{
+      fixture:  ReturnType<typeof TestBed.createComponent<MatrixComponent>>;
+      component: MatrixComponent;
+      state:    AppStateService;
+      presets:  PresetsService;
+    }> {
+      await TestBed.configureTestingModule({
+        imports:   [MatrixComponent],
+        schemas:   [NO_ERRORS_SCHEMA],
+        providers: [PresetsService],
+      }).compileComponents();
+
+      const fixture   = TestBed.createComponent(MatrixComponent);
+      const component = fixture.componentInstance;
+      const state     = TestBed.inject(AppStateService);
+      const presets   = TestBed.inject(PresetsService);
+      fixture.detectChanges();
+      return { fixture, component, state, presets };
+    }
+
+    it('applying a preset with serviceFilter:"auth" reduces filteredRows to only matching rows', async () => {
+      const { component, state, presets } = await createMatrixWithPresets();
+
+      // Matrix with two services: one matching 'auth', one not
+      state.matrixData.set(mkMatrix(['dev'], [
+        { service: 'auth-api',    slots: { dev: mkSlot('auth-api',    'dev') } },
+        { service: 'payment-api', slots: { dev: mkSlot('payment-api', 'dev') } },
+      ]));
+      state.failuresOnly.set(false);
+
+      // Start with no filter — both rows visible
+      state.serviceFilter.set('');
+      expect(priv(component).filteredRows()).toHaveLength(2);
+
+      // Save a preset with a non-empty service filter
+      state.serviceFilter.set('auth');
+      presets.save('auth-filter');
+
+      // Clear the filter — board shows both rows again
+      state.serviceFilter.set('');
+      expect(priv(component).filteredRows()).toHaveLength(2);
+
+      // Apply the preset — filteredRows MUST change to reflect the saved filter
+      presets.apply(presets.presets()[0]);
+
+      const after = priv(component).filteredRows() as Array<{ service: string }>;
+      expect(after).toHaveLength(1);
+      expect(after[0].service).toBe('auth-api');
+    });
+
+    it('applying a preset with serviceFilter:"" restores full row set after a manual filter', async () => {
+      const { component, state, presets } = await createMatrixWithPresets();
+
+      state.matrixData.set(mkMatrix(['dev'], [
+        { service: 'svc-a', slots: { dev: mkSlot('svc-a', 'dev') } },
+        { service: 'svc-b', slots: { dev: mkSlot('svc-b', 'dev') } },
+      ]));
+      state.failuresOnly.set(false);
+
+      // Save a preset with empty filter (show all)
+      state.serviceFilter.set('');
+      presets.save('no-filter');
+
+      // Apply a manual filter — only svc-a visible
+      state.serviceFilter.set('svc-a');
+      expect(priv(component).filteredRows()).toHaveLength(1);
+
+      // Apply the saved preset — both rows must become visible again
+      presets.apply(presets.presets()[0]);
+
+      expect(priv(component).filteredRows()).toHaveLength(2);
     });
 
   });

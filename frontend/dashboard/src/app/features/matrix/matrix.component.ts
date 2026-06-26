@@ -60,14 +60,18 @@ export class MatrixComponent {
 
     const filter    = this.state.serviceFilter().toLowerCase().trim();
     const failOnly  = this.state.failuresOnly();
-    const allSvcs   = matrix.rows.map((r) => r.service);
-    const visSvcs   = new Set(this.state.visibleServices(allSvcs));
+    const allIds    = matrix.rows.map((r) => ({ service: r.service, namespace: r.namespace ?? null }));
+    const visIds    = new Set(
+      this.state.visibleServiceIdentities(allIds)
+        .map((i) => `${i.namespace ?? ''}|${i.service}`),
+    );
 
     return matrix.rows.filter((row) => {
-      // Glob service filter (picker)
-      if (!visSvcs.has(row.service)) return false;
-      // Text search filter (inline input)
-      if (filter && !row.service.toLowerCase().includes(filter)) return false;
+      // Composite service filter (picker)
+      if (!visIds.has(`${row.namespace ?? ''}|${row.service}`)) return false;
+      // Text search filter (inline input) — matches bare service name or composite
+      const composite = row.namespace ? `${row.namespace}/${row.service}` : row.service;
+      if (filter && !composite.toLowerCase().includes(filter)) return false;
       // Failures-only toggle
       if (failOnly) {
         const hasFail = Object.values(row.slots).some((s) => {
@@ -79,6 +83,16 @@ export class MatrixComponent {
       return true;
     });
   });
+
+  /**
+   * Render label for a row (render-on-collision rule, issue #353):
+   * Show `namespace/service` only when the same service name appears under
+   * more than one namespace in the currently visible row set.
+   * Null-namespace rows are always shown unprefixed.
+   */
+  protected rowLabel(service: string, namespace: string | null | undefined): string {
+    return this.state.rowLabel(service, namespace, this.filteredRows());
+  }
 
   // ── Native HTML5 column drag-reorder ─────────────────────
   /** The env name currently being dragged; null when no drag is in progress. */

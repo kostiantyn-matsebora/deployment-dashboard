@@ -20,19 +20,23 @@ internal sealed class MatrixService(IDeploymentReadRepository repository) : IMat
         // All slots visible in the matrix: every slot that has at least one event of any kind.
         // Effective events are the primary source; non-effective events surface slots where
         // no effective event has ever been recorded (edge-case fallback).
+        // Slot identity is (Namespace, Service, Environment) — the same namespace+service
+        // combination in two namespaces produces two distinct rows.
         var allSlotKeys = lookups.Effective.Keys
             .Union(lookups.NonEffective.Keys)
             .ToHashSet();
 
         var rows = allSlotKeys
-            .GroupBy(k => k.Service)
-            .OrderBy(g => g.Key, StringComparer.Ordinal)
+            .GroupBy(k => (k.Namespace, k.Service))
+            .OrderBy(g => g.Key.Namespace, StringComparer.Ordinal)
+            .ThenBy(g => g.Key.Service, StringComparer.Ordinal)
             .Select(g => new MatrixRow(
-                Service: g.Key,
+                Service: g.Key.Service,
                 Slots: g.ToDictionary(
                     k => k.Environment,
                     k => BuildSlot(k, lookups),
-                    StringComparer.Ordinal)))
+                    StringComparer.Ordinal),
+                Namespace: g.Key.Namespace))
             .ToList<MatrixRow>();
 
         var environments = allSlotKeys
@@ -59,14 +63,14 @@ internal sealed class MatrixService(IDeploymentReadRepository repository) : IMat
         var latestTerminalBeforeCurrent = await repository.GetLatestTerminalBeforeCurrentPerSlotAsync(serviceFilter, ct);
 
         return new SlotLookups(
-            Effective: effectivePerSlot.ToDictionary(e => (e.Service, e.Environment)),
-            NonEffective: nonEffectivePerSlot.ToDictionary(e => (e.Service, e.Environment)),
-            Success: lastSuccessfulPerSlot.ToDictionary(e => (e.Service, e.Environment)),
-            PrevTerminal: latestTerminalBeforeCurrent.ToDictionary(e => (e.Service, e.Environment)));
+            Effective: effectivePerSlot.ToDictionary(e => (e.Namespace, e.Service, e.Environment)),
+            NonEffective: nonEffectivePerSlot.ToDictionary(e => (e.Namespace, e.Service, e.Environment)),
+            Success: lastSuccessfulPerSlot.ToDictionary(e => (e.Namespace, e.Service, e.Environment)),
+            PrevTerminal: latestTerminalBeforeCurrent.ToDictionary(e => (e.Namespace, e.Service, e.Environment)));
     }
 
     private static MatrixSlot BuildSlot(
-        (string Service, string Environment) key,
+        (string? Namespace, string Service, string Environment) key,
         SlotLookups lookups)
     {
         var (current, next) = ResolveCurrentAndNext(key, lookups.Effective, lookups.NonEffective);
@@ -77,9 +81,9 @@ internal sealed class MatrixService(IDeploymentReadRepository repository) : IMat
     }
 
     private static (DeploymentEvent Current, DeploymentEvent? Next) ResolveCurrentAndNext(
-        (string Service, string Environment) key,
-        Dictionary<(string Service, string Environment), DeploymentEvent> effectiveLookup,
-        Dictionary<(string Service, string Environment), DeploymentEvent> nonEffectiveLookup)
+        (string? Namespace, string Service, string Environment) key,
+        Dictionary<(string? Namespace, string Service, string Environment), DeploymentEvent> effectiveLookup,
+        Dictionary<(string? Namespace, string Service, string Environment), DeploymentEvent> nonEffectiveLookup)
     {
         effectiveLookup.TryGetValue(key, out var effective);
         nonEffectiveLookup.TryGetValue(key, out var nonEffective);
@@ -101,9 +105,9 @@ internal sealed class MatrixService(IDeploymentReadRepository repository) : IMat
     }
 
     private static DeploymentEvent? ResolveLastSuccessful(
-        (string Service, string Environment) key,
+        (string? Namespace, string Service, string Environment) key,
         DeploymentEvent current,
-        Dictionary<(string Service, string Environment), DeploymentEvent> successLookup)
+        Dictionary<(string? Namespace, string Service, string Environment), DeploymentEvent> successLookup)
     {
         // Spec: last_successful is omitted when current IS already the last success.
         successLookup.TryGetValue(key, out var lastSuccessful);
@@ -111,9 +115,9 @@ internal sealed class MatrixService(IDeploymentReadRepository repository) : IMat
     }
 
     private static bool ResolvePrevFailed(
-        (string Service, string Environment) key,
+        (string? Namespace, string Service, string Environment) key,
         DeploymentEvent current,
-        Dictionary<(string Service, string Environment), DeploymentEvent> prevTerminalLookup)
+        Dictionary<(string? Namespace, string Service, string Environment), DeploymentEvent> prevTerminalLookup)
     {
         // prev_failed: true when current is in-progress AND the latest terminal event
         // (success|failure) strictly older than current is a failure.
@@ -138,11 +142,13 @@ internal sealed class MatrixService(IDeploymentReadRepository repository) : IMat
                 .Select(e => e + "|"));
 
         var rowPart = string.Concat(
-            rows.OrderBy(r => r.Service, StringComparer.Ordinal)
+            rows.OrderBy(r => r.Namespace, StringComparer.Ordinal)
+                .ThenBy(r => r.Service, StringComparer.Ordinal)
                 .SelectMany(r => r.Slots
                     .OrderBy(kv => kv.Key, StringComparer.Ordinal)
                     .Select(kv =>
-                        $"{r.Service}/{kv.Key}={kv.Value.Current.Id}:{kv.Value.LastSuccessful?.Id}:{kv.Value.Next?.Id}\n")));
+                        // Namespace is null or a non-empty repo name; null interpolates as empty string here — safe given the stored invariant (never empty-string).
+                        $"{r.Namespace}/{r.Service}/{kv.Key}={kv.Value.Current.Id}:{kv.Value.LastSuccessful?.Id}:{kv.Value.Next?.Id}\n")));
 
         var fingerprint = envPart + rowPart;
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(fingerprint));
@@ -150,8 +156,8 @@ internal sealed class MatrixService(IDeploymentReadRepository repository) : IMat
     }
 
     private readonly record struct SlotLookups(
-        Dictionary<(string Service, string Environment), DeploymentEvent> Effective,
-        Dictionary<(string Service, string Environment), DeploymentEvent> NonEffective,
-        Dictionary<(string Service, string Environment), DeploymentEvent> Success,
-        Dictionary<(string Service, string Environment), DeploymentEvent> PrevTerminal);
+        Dictionary<(string? Namespace, string Service, string Environment), DeploymentEvent> Effective,
+        Dictionary<(string? Namespace, string Service, string Environment), DeploymentEvent> NonEffective,
+        Dictionary<(string? Namespace, string Service, string Environment), DeploymentEvent> Success,
+        Dictionary<(string? Namespace, string Service, string Environment), DeploymentEvent> PrevTerminal);
 }

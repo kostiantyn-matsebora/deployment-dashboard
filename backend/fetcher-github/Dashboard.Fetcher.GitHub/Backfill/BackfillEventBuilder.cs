@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Dashboard.Fetcher.GitHub.Graph;
 using Dashboard.Fetcher.GitHub.Mapping;
 using Dashboard.Fetcher.GitHub.Models;
@@ -12,13 +13,22 @@ namespace Dashboard.Fetcher.GitHub.Backfill;
 /// to reduce its class coupling (§S1200). Owns Pass 1 (collect chosen deployments), Pass 2
 /// (build ingest events), slot trimming, env-map merging, and shared per-deployment helpers.
 /// </summary>
+// S1200: This class is itself the coupling-reduction extraction from BackfillRunner (§S1200).
+// The WorkflowExcludeFilter dependency added by #348 is required for workflow-scope filtering during
+// backfill scans and cannot be removed.  Splitting further would fragment cohesive scan logic
+// without a genuine coupling benefit.
+[SuppressMessage("SonarAnalyzer", "S1200", Justification = "Class is a coupling-reduction extraction from BackfillRunner; WorkflowExcludeFilter dependency is required for #348 workflow-scope filter. Further splitting would fragment cohesive scan logic without genuine coupling benefit.")]
 public sealed class BackfillEventBuilder(
     GithubClient github,
     WorkflowGraphCache graphCache,
     VersionResolver versionResolver,
+    WorkflowExcludeFilter workflowExcludeFilter,
     ILogger<BackfillEventBuilder> logger)
 {
-    // Consecutive no-progress deployments before scanning stops for an environment (F1).
+    // Consecutive deployments with no new data before scanning stops for an environment (F13).
+    // "No data" means the service is unknown or has zero mapped statuses; a slot that is already
+    // full (eventsSoFar >= depth) is skipped silently so quieter services sharing the same
+    // environment can still reach depth — it does NOT count as no-progress.
     private const int StallWindow = 20;
 
     // ── per-env scan ──────────────────────────────────────────────────────────
@@ -67,7 +77,17 @@ public sealed class BackfillEventBuilder(
     /// Pass 1: pages through GitHub deployments for one environment and returns
     /// the chosen subset — up to <paramref name="depth"/> mapped statuses per service slot,
     /// stopping early when the stall window is exhausted or the cutoff is reached.
+    /// Each slot is filled independently: a deployment for an already-full service is skipped
+    /// (the scan keeps paging so quieter services in the same env can still reach depth),
+    /// and is never treated as no-progress. <c>consecutiveNoProgress</c> increments only when
+    /// a service is unknown or has zero mapped statuses.
     /// </summary>
+    // S3776/S1541: The five distinct skip/continue branches (cutoff, stall, all-slots-full,
+    // filter-excluded, already-full, unknown, zero-mapped) are all required for correct
+    // backfill semantics.  Extracting them into sub-methods would destroy the shared
+    // mutable state (filled, consecutiveNoProgress) without reducing real complexity.
+    [SuppressMessage("SonarAnalyzer", "S3776", Justification = "Backfill scan loop: multiple mutually-exclusive skip branches share mutable stall/fill state; structural complexity is irreducible.")]
+    [SuppressMessage("SonarAnalyzer", "S1541", Justification = "Backfill scan loop: multiple mutually-exclusive skip branches share mutable stall/fill state; structural complexity is irreducible.")]
     private async Task<List<(
             GhDeployment Deployment,
             List<GhDeploymentStatus> Statuses,
@@ -106,22 +126,56 @@ public sealed class BackfillEventBuilder(
                 break;
             }
 
+            // All known service slots for this env are full — stop; nothing left to fill.
+            // Starvation-safe: fires ONLY once EVERY known service reached depth (F13, #349),
+            // so a quiet service that has not appeared yet (filled.Count < allServiceNames.Count)
+            // is never cut off.
+            if (allServiceNames.Count > 0
+                && filled.Count == allServiceNames.Count
+                && filled.Values.All(v => v >= depth))
+            {
+                logger.LogDebug(
+                    "[Backfill] {Repo}/{Env}: all {N} service slots full — stopping scan",
+                    ctx.Repo, ctx.Env, allServiceNames.Count);
+                break;
+            }
+
             var statuses = await FetchAllStatusesAsync(ctx.Owner, ctx.RepoName, deployment.Id, ct);
             var runId = statuses
                 .Select(s => EventMapper.ExtractRunId(s.TargetUrl))
                 .FirstOrDefault(r => r.HasValue);
 
-            var service = await ResolveServiceFromRunAsync(
+            var (service, workflowName) = await ResolveServiceAndWorkflowFromRunAsync(
                 ctx.Owner, ctx.RepoName, ctx.Repo, runId, pathToService, serviceMap, ct);
 
+            // Apply workflow exclude filter: skip deployments whose workflow is excluded.
+            // A filtered-out workflow produces no data for us, so it counts as no-progress
+            // for the stall/early-exit logic — identical treatment to an unknown service.
+            // This prevents a repo where every deployment maps to excluded workflows from
+            // scanning all the way to the cutoff date instead of halting at the stall window.
+            // When the workflow name is null (graph unavailable), only '*' patterns match — acceptable.
+            if (workflowExcludeFilter.IsExcluded(ctx.Owner, ctx.RepoName, workflowName ?? string.Empty))
+            {
+                consecutiveNoProgress++;
+                continue;
+            }
+
             var eventsSoFar = filled.GetValueOrDefault(service, 0);
-            if (!allServiceNames.Contains(service) || eventsSoFar >= depth)
+
+            // (a) Slot already full — skip silently; this is NOT no-progress (F13).
+            if (allServiceNames.Contains(service) && eventsSoFar >= depth)
+                continue;
+
+            // (b) Unknown service — genuine no-data; bump stall counter.
+            if (!allServiceNames.Contains(service))
             {
                 consecutiveNoProgress++;
                 continue;
             }
 
             var mappedCount = statuses.Count(s => StatusMapper.Map(s.State) is not null);
+
+            // (c) Zero mapped statuses — genuine no-data; bump stall counter.
             if (mappedCount == 0)
             {
                 consecutiveNoProgress++;
@@ -245,7 +299,7 @@ public sealed class BackfillEventBuilder(
         return statuses;
     }
 
-    internal async Task<string> ResolveServiceFromRunAsync(
+    internal async Task<(string Service, string? WorkflowName)> ResolveServiceAndWorkflowFromRunAsync(
         string owner, string repoName, string repo,
         long? runId,
         IReadOnlyDictionary<string, string> pathToService,
@@ -253,12 +307,13 @@ public sealed class BackfillEventBuilder(
         CancellationToken ct)
     {
         if (!runId.HasValue)
-            return ServiceResolver.Resolve(null, repo, serviceMap);
+            return (ServiceResolver.Resolve(null, repo, serviceMap), null);
 
         var (path, name) = await graphCache.GetOrFetchRunInfoAsync(owner, repoName, runId.Value, github, ct);
-        if (path is not null && pathToService.TryGetValue(path, out var serviceFromPath))
-            return serviceFromPath;
+        var service = (path is not null && pathToService.TryGetValue(path, out var serviceFromPath))
+            ? serviceFromPath
+            : ServiceResolver.Resolve(name, repo, serviceMap);
 
-        return ServiceResolver.Resolve(name, repo, serviceMap);
+        return (service, name);
     }
 }

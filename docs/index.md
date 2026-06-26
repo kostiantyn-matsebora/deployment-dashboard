@@ -60,7 +60,7 @@ hide:
 
 === "Services filter"
 
-    Narrow the board to exactly the services you care about — type a glob pattern (`front-*`, `? checkout`, or any literal name), choose "Show only" or "Show all except", and the Matrix rows and Swimlanes lanes update instantly. Patterns persist across reloads. The same widget powers the notification service and environment filters.
+    Narrow the board to exactly the services you care about — type a glob pattern (`front-*`, `api`, or a namespaced `org-a/gateway`), choose "Show only" or "Show all except", and the Matrix rows and Swimlanes lanes update instantly. Patterns persist across reloads. When the same service name exists under different namespaces (e.g. `org-a/gateway` and `org-b/gateway`), each appears as a distinct row with its `namespace/` prefix shown only when there is a collision. A slashless pattern matches across all namespaces — existing saved patterns keep working without change. The same widget powers the notification service and environment filters.
 
     ![Services glob filter](_assets/screenshots/services-filter-dark.png){ .dd-shot }
 
@@ -70,6 +70,13 @@ hide:
 
     ![Notifications](_assets/screenshots/notifications-dark.png#only-dark){ .dd-shot }
     ![Notifications](_assets/screenshots/notifications-light.png#only-light){ .dd-shot }
+
+=== "Presets"
+
+    Save named sets of UI settings — active filters, view preferences, notification options — and apply them in one click. Export any preset as a `dd-preset-<slug>.json` file to share by email or by committing it to a git repo; teammates import it — no server involved.
+
+    ![UI settings presets](_assets/screenshots/presets-dark.png#only-dark){ .dd-shot }
+    ![UI settings presets](_assets/screenshots/presets-light.png#only-light){ .dd-shot }
 
 !!! quote ""
     **The question it answers:** *What version of service X is running in environment Y right now — and did the last deployment succeed?*
@@ -153,6 +160,7 @@ curl -X POST "$DASHBOARD_URL/api/deployments" \
   -d '{
     "deployment_id": "build-42",
     "service":       "checkout",
+    "namespace":     "storefront",
     "environment":   "prod",
     "version":       "1.4.2",
     "status":        "success",
@@ -179,11 +187,11 @@ A handful of containers behind one gateway: a stateless .NET API tier, PostgreSQ
 
     Run the whole stack locally in two minutes, zero config.
 
--   :material-server-network:{ .lg .middle } &nbsp; **[Install & deploy](guide/install.md)**
+-   :material-server-network:{ .lg .middle } &nbsp; **[Install & deploy](guide/install/index.md)**
 
-    Compose profiles, production checklist, hosting notes.
+    Compose profiles, production checklist, and Azure/Terraform Container Apps deploy path.
 
--   :material-cog:{ .lg .middle } &nbsp; **[Configuration](guide/configuration.md)**
+-   :material-cog:{ .lg .middle } &nbsp; **[Configuration](guide/configuration/index.md)**
 
     Every environment variable, grouped by concern.
 

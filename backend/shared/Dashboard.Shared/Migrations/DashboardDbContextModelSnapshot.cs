@@ -139,6 +139,11 @@ namespace Dashboard.Shared.Migrations
                         .HasColumnType("timestamptz")
                         .HasColumnName("happened_at");
 
+                    b.Property<string>("Namespace")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("namespace");
+
                     b.PrimitiveCollection<string[]>("ParentDeployments")
                         .HasColumnType("text[]")
                         .HasColumnName("parent_deployments");

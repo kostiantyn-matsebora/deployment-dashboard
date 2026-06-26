@@ -36,6 +36,7 @@ flowchart LR
 | Icon buttons — Columns (⊞) | Custom | **Matrix-only** (hidden in Swimlanes). Opens Columns picker popover. Shows accent state + hidden-count badge when any environments are hidden. Tooltip: `Columns — show/hide environments` (normal); `Columns — N environment(s) hidden` when N > 0. |
 | Icon buttons — Correlation (⇆) | Custom | **Swimlanes-only**. Opens Correlation picker popover. |
 | Bell toggle (🔔) | Custom | Enables/disables browser notifications. Toggling ON for the first time triggers the browser permission prompt (lazy — never on load). Hidden when the Notifications API is unsupported, permission is denied, or the context is insecure. Tooltip: `Notifications — enable/disable desktop alerts`. |
+| Presets (bookmark) | Custom | Shared (all views). Opens Presets popover. Shows filled badge dot (`presets-badge-dot`) when at least one preset is saved. Tooltip: `Presets — save and restore view configurations`. |
 | Live indicator | Custom | Green dot with `pulseRing` animation (1.8s). Shows SSE connection status. |
 
 **Tooltip consistency.** Every interactive topbar control carries a concise hover `title` tooltip: view tabs, service filter input, failures-only toggle, theme options, Fields button, Columns button, rate-limit chip, bell toggle, and the Live pill.
@@ -267,6 +268,15 @@ A reusable glob pattern filter widget used at three sites: the topbar Services p
 
 **Glob syntax.** `*` = any sequence of characters, `?` = any single character. All other characters are literal. Matching is case-insensitive.
 
+**Composite service identity (services board + notification service axis).**
+- Each slot is keyed by `(namespace, service)`. Namespaced services have the composite identity `namespace/service`; null-namespace services use the bare service name.
+- Autocomplete is populated from these composite identities derived from received data — no configuration required.
+- Pattern matching:
+  - Pattern **with `/`** → matched against the full `namespace/service` string.
+  - Pattern **without `/`** → matched against the `service` segment across all namespaces — backward-compatible with all existing saved patterns.
+
+**Render-on-collision.** In the Matrix and Swimlanes views the `namespace/` prefix is shown in the row/lane label only when two or more services share the same name under different namespaces.
+
 **Visibility logic.**
 - Exclude mode: an item is visible when it does not match any active pattern (empty pattern list = show all).
 - Include mode: an item is visible when it matches at least one active pattern (empty pattern list = show all).
@@ -303,11 +313,48 @@ Accessible from the bell toggle area when notifications are enabled. Three indep
 
 **Status filter.** One `p-checkbox` per deployment status (all 8). Checked = notify on that status. Default: all ON.
 
-**Service filter.** A [Pattern Filter](#pattern-filter-services--notifications) widget — mode "Watch all except" (exclude) / "Watch only" (include) + pattern chips + autocomplete input. Default: "Watch all except", empty pattern list.
+**Service filter.** A [Pattern Filter](#pattern-filter-services--notifications) widget — mode "Watch all except" (exclude) / "Watch only" (include) + pattern chips + autocomplete input. Composite `namespace/service` matching applies (same rules as the services board). Default: "Watch all except", empty pattern list.
 
 **Environment filter.** Same Pattern Filter widget, keyed by environment name. Default: "Watch all except", empty pattern list.
 
 **Persistence.** All three axes persisted to `localStorage` (key `dd.notifPrefs`). Restored on init.
+
+### Presets Popover
+
+Accessible from the bookmark icon button (`btn-presets`) in the topbar icon cluster. Shared across all views (Matrix, Swimlanes, Analytics).
+
+**PrimeNG component:** `p-popover` with `[dismissable]="true"`, `appendTo="body"`. Min-width: 300px; anchored right-aligned to the button.
+
+**Structure (top-to-bottom):**
+
+1. **"Saved" section label** — uppercase 10.5px muted heading.
+2. **Preset list** (`.preset-list`) — scrollable column (max-height 220px); one `.preset-item` row per saved preset. Empty state: italic "No presets saved yet." hint.
+3. **Save row** (`.preset-save-row`) — name input (`.preset-name-input`, max 60 chars, JetBrains Mono) + primary "Save" button.
+4. **Import row** (`.preset-io-row`) — "⬆ Import" button; triggers a hidden `<input type="file">` accepting `.json`.
+
+**Preset item row (`.preset-item`):**
+
+| Element | Description |
+|---|---|
+| Name span (`.preset-item-name`) | Truncated monospace label; full name in `title` tooltip. |
+| Actions cluster (`.preset-item-actions`) | Hidden by default; revealed on hover or when item `is-active`. |
+
+**Per-item action buttons (`.preset-action-btn`).** Rendered as icon buttons — each action is an icon (no label text) with a tooltip. Actions are hidden by default and revealed on row hover or when the item is `.is-active`.
+
+| Button | Icon | Action |
+|---|---|---|
+| Apply | ✓ | Writes the preset's settings snapshot back to the live UI. Marks item `.is-active`. |
+| Clone | ⊕ | Duplicates the preset as `<name> (copy)`, inserts immediately after, marks copy active. |
+| Update | ↺ | Overwrites the preset's saved settings with the current live settings after a `window.confirm`. Name and version unchanged. |
+| Rename | ✎ | Replaces the name span with an inline text input; commits on Enter / blur; cancels on Escape. |
+| Export | ⬇ | Downloads the single-preset envelope as `dd-preset-<slug>.json`. |
+| Delete | ✕ | `.is-danger` styling; prompts `window.confirm` before removing. |
+
+**Reset all settings button.** A text-button below the preset list that resets every captured setting to its framework default after a `window.confirm` prompt. Clears all `localStorage` preset-related keys and removes the active-preset tracking state.
+
+**Active state (`.is-active`):** accent border + accent background tint (10% opacity). Applied to the last-applied preset row. The row also carries `aria-current="true"` and an inline `"Active"` text badge (`.preset-active-badge`, `aria-hidden="true"`). **Note:** saving a new preset does NOT mark it active — only Apply sets the active indicator.
+
+**Badge dot.** The topbar bookmark button shows a filled dot (`presets-badge-dot`) when the saved list is non-empty; hidden otherwise.
 
 ---
 

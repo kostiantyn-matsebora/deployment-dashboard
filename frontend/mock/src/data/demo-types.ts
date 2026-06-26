@@ -13,6 +13,11 @@ export type DemoStatus =
 export interface DemoEvent {
   deployment_id: string;
   service: string;
+  /**
+   * Optional CI/CD namespace (e.g. GitHub org/owner).
+   * Null/absent = bare service name with no namespace prefix.
+   */
+  namespace?: string | null;
   environment: string;
   status: DemoStatus;
   elapsed_minutes: number;
