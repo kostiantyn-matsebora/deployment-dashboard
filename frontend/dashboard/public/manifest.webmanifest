@@ -1,0 +1,18 @@
+{
+  "name": "Deployment Dashboard",
+  "short_name": "Dashboard",
+  "description": "Real-time services × environments deployment matrix, sourced from your CI/CD pipeline events.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#0b0d14",
+  "background_color": "#0b0d14",
+  "icons": [
+    { "src": "assets/logo/icon-192.png",          "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/logo/icon-512.png",          "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/logo/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "assets/logo/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
