@@ -211,11 +211,12 @@ export class GithubRandomGenerator {
           const depId = nextId();
           deployIds.push(depId);
 
-          // Compute this stage's timestamp as chainStart + cumulative stage offset
+          // Compute this stage's timestamp as chainStart + cumulative stage offset,
+          // clamped to now so a late chain-start + large stage offset never drifts past now.
           const [minOff, maxOff] = STAGE_OFFSET_RANGE[env];
           // Spread the offset across the stage range with some randomness
           const offsetMs = randBetween(minOff, maxOff) * 60_000;
-          const depCreatedAt = new Date(chainStartMs + offsetMs).toISOString();
+          const depCreatedAt = new Date(Math.min(chainStartMs + offsetMs, Date.now())).toISOString();
 
           const deployment: GhDeployment = {
             id:          depId,
@@ -229,9 +230,9 @@ export class GithubRandomGenerator {
           repo.deployments.push(deployment);
 
           const isTerminal = idx === reachedStages.length - 1;
-          // Status is created ~5-20 minutes after deployment creation
+          // Status is created ~5-20 minutes after deployment creation, clamped to now.
           const statusDelayMs = randBetween(5, 20) * 60_000;
-          const statusCreatedAt = new Date(chainStartMs + offsetMs + statusDelayMs).toISOString();
+          const statusCreatedAt = new Date(Math.min(chainStartMs + offsetMs + statusDelayMs, Date.now())).toISOString();
 
           const statuses: GhDeploymentStatus[] = [];
 

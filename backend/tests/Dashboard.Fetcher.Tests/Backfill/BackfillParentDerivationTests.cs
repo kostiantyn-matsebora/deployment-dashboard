@@ -219,7 +219,7 @@ public sealed class BackfillParentDerivationTests
 
         var eventBuilder = new BackfillEventBuilder(
             githubClient, graphCache, versionResolver,
-            NullLogger<BackfillEventBuilder>.Instance);
+            WorkflowExcludeFilter.PassAll, NullLogger<BackfillEventBuilder>.Instance);
 
         var runner = new BackfillRunner(
             githubClient,

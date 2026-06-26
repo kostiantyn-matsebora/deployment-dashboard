@@ -57,7 +57,7 @@ jobs:
       docs:            ${{ steps.filter.outputs.docs }}
       scripts:         ${{ steps.filter.outputs.scripts }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Detect changes
         id: filter
@@ -73,7 +73,8 @@ jobs:
             extension:
               - 'frontend/extension/**'
               - '.github/workflows/extension.yml'
-              - 'scripts/Package-Extension.ps1'
+              - 'scripts/package_extension.py'
+              - 'testing/e2e/**'
             gateway:
               - 'gateway/**'
               - '.github/workflows/gateway.yml'
@@ -101,7 +102,10 @@ jobs:
             docs:
               - '**/*.md'
             scripts:
-              - 'scripts/**/*.ps1'
+              - 'scripts/**/*.py'
+              - 'scripts/**/pyproject.toml'
+              - 'scripts/**/*.sh'
+              - 'scripts/**/*.bats'
               - '.github/workflows/scripts.yml'
 
   # ── Area callers ─────────────────────────────────────────────────────────────
@@ -219,18 +223,18 @@ jobs:
       - ci-scripts
     steps:
       - name: Verify no required job failed
-        shell: pwsh
         env:
           NEEDS: ${{ toJSON(needs) }}
         run: |
-          $needs = $env:NEEDS | ConvertFrom-Json
-          $failed = $needs.PSObject.Properties |
-            Where-Object { $_.Value.result -in @('failure', 'cancelled') }
-          foreach ($p in $needs.PSObject.Properties) {
-            Write-Host ("{0,-22} {1}" -f $p.Name, $p.Value.result)
-          }
-          if ($failed) {
-            Write-Host "::error::Failed jobs: $($failed.Name -join ', ')"
-            exit 1
-          }
-          Write-Host "All required jobs passed or were skipped."
+          python3 - <<'EOF'
+          import json, os, sys
+          needs = json.loads(os.environ['NEEDS'])
+          failed = [name for name, v in needs.items()
+                    if v.get('result') in ('failure', 'cancelled')]
+          for name, v in needs.items():
+              print(f"{name:<22} {v.get('result', '')}")
+          if failed:
+              print(f"::error::Failed jobs: {', '.join(failed)}")
+              sys.exit(1)
+          print("All required jobs passed or were skipped.")
+          EOF

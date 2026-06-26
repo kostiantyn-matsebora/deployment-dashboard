@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "team-process/schemas/analysis.schema.json",
+  "title": "ANALYSIS",
+  "description": "analyst -> orch - delegated judgment hand-back. Produced by an analyst agent (owning role for in-domain judgment; a general analyst / Plan agent for cross-cutting or architectural decisions) at ANY stage that needs an evaluated recommendation: propose-solution, lane-map rationale, FINDING option-weighing, fix-loop layer-selection, human-in-the-loop iteration. Distinct from RESEARCH (discovery, carries NO verdict) and REVIEW (role-bar verdict). The orchestrator RATIFIES the recommendation and folds it into decisions[]; it never derives one in its own context. Optional 'role' names the owning role when one produced it. Canonical key order: type, question, evaluated, recommendation, rationale, confidence, risks, refs.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "question", "evaluated", "recommendation", "rationale"],
+  "properties": {
+    "type": { "enum": ["ANALYSIS"] },
+    "role": { "enum": ["contract", "backend", "frontend", "infrastructure", "testing", "docs"] },
+    "question": { "type": "string", "minLength": 1 },
+    "evaluated": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "option", "assessment"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "option": { "type": "string", "minLength": 1 },
+          "assessment": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "recommendation": { "type": "string", "minLength": 1 },
+    "rationale": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "confidence": { "enum": ["high", "medium", "low"] },
+    "risks": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+  }
+}

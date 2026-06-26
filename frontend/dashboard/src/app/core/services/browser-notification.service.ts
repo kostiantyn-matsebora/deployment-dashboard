@@ -112,7 +112,7 @@ export class BrowserNotificationService {
     if (this.hasSeen(ev.id)) return;
     this.markSeen(ev.id);
 
-    if (!this.prefs.shouldNotify(ev.status, ev.service, ev.environment)) return;
+    if (!this.prefs.shouldNotify(ev.status, ev.service, ev.environment, ev.namespace)) return;
     if (!this.isSupported()) return;
     if (Notification.permission !== 'granted') return;
 

@@ -108,7 +108,7 @@
           }
         </button>
         <p-popover #servicesPopover [dismissable]="true" appendTo="body" styleClass="glass-popover">
-          <div class="picker-content" style="min-width: 260px">
+          <div class="picker-content svc-filter-content">
             <span class="popover-title">SERVICES</span>
             <app-pattern-filter
               [mode]="serviceFilterMode()"
@@ -433,6 +433,211 @@
       </p-popover>
     </div>
     }
+
+    <!-- Presets button (⊙) — saves / applies / exports / imports named UI-settings snapshots ── -->
+    <div style="position: relative">
+      <button
+        class="icon-btn"
+        [class.is-active]="presetsPopoverOpen() || hasPresets()"
+        title="Presets — save and apply named settings snapshots"
+        aria-label="Presets — save and apply named settings snapshots"
+        aria-haspopup="true"
+        data-testid="presets-btn"
+        (click)="togglePresetsPopover($event)"
+      >
+        <span aria-hidden="true">⊙</span>
+        @if (hasPresets()) {
+          <span class="hidden-count-badge" aria-hidden="true">{{ savedPresets().length }}</span>
+        }
+      </button>
+      <p-popover #presetsPopover [dismissable]="true" appendTo="body" styleClass="glass-popover presets-popover">
+        <div class="picker-content presets-content" aria-label="Settings presets">
+          <span class="popover-title">PRESETS</span>
+
+          <!-- Feedback message (error / confirmation) -->
+          @if (presetsMsg()) {
+            <div class="presets-msg" role="status" aria-live="polite">{{ presetsMsg() }}</div>
+          }
+
+          <!-- Save-new-preset row -->
+          @if (!presetSaveOpen()) {
+            <div class="presets-actions-row">
+              <button
+                class="ext-btn"
+                type="button"
+                (click)="togglePresetSaveInput()"
+                aria-label="Save current settings as a new preset"
+                data-testid="presets-save-btn"
+              >Save current…</button>
+              <button
+                class="ext-btn"
+                type="button"
+                (click)="exportCurrentSettings()"
+                aria-label="Export current settings as a JSON file"
+                data-testid="presets-export-current-btn"
+              >Export current</button>
+              <button
+                class="ext-btn"
+                type="button"
+                (click)="triggerImportFile()"
+                aria-label="Import a preset from a JSON file"
+                data-testid="presets-import-btn"
+              >Import…</button>
+            </div>
+          } @else {
+            <!-- Name input for saving -->
+            <div class="presets-save-row">
+              <input
+                class="presets-name-input"
+                type="text"
+                placeholder="Preset name…"
+                maxlength="50"
+                autocomplete="off"
+                spellcheck="false"
+                [(ngModel)]="presetSaveName"
+                (keydown.enter)="confirmSavePreset()"
+                (keydown.escape)="togglePresetSaveInput()"
+                aria-label="New preset name"
+                data-testid="presets-name-input"
+              />
+              <button
+                class="ext-btn is-primary"
+                type="button"
+                (click)="confirmSavePreset()"
+                aria-label="Confirm save preset"
+                data-testid="presets-save-confirm-btn"
+              >Save</button>
+              <button
+                class="ext-btn"
+                type="button"
+                (click)="togglePresetSaveInput()"
+                aria-label="Cancel saving preset"
+              >×</button>
+            </div>
+          }
+
+          <!-- Preset list -->
+          @if (hasPresets()) {
+            <div class="presets-divider" aria-hidden="true"></div>
+            <ul class="presets-list" role="list" aria-label="Saved presets">
+              @for (p of savedPresets(); track p.name) {
+                <li
+                  class="presets-row"
+                  [class.is-active]="isPresetActive(p)"
+                  role="listitem"
+                  [attr.aria-current]="isPresetActive(p) ? 'true' : null"
+                  data-testid="preset-item"
+                >
+                  @if (renamingPreset() !== p) {
+                    <!-- Normal row -->
+                    <span class="presets-name" [title]="p.name">{{ p.name }}</span>
+                    @if (isPresetActive(p)) {
+                      <span
+                        class="preset-active-badge"
+                        aria-hidden="true"
+                        data-testid="preset-active-badge"
+                      >Active</span>
+                    }
+                    <div class="presets-row-actions" role="group" [attr.aria-label]="'Actions for ' + p.name">
+                      <button
+                        class="preset-action-btn"
+                        type="button"
+                        [title]="'Apply preset: ' + p.name"
+                        [attr.aria-label]="'Apply preset: ' + p.name"
+                        (click)="applyPreset(p)"
+                        data-testid="preset-apply-btn"
+                      >✓</button>
+                      <button
+                        class="preset-action-btn"
+                        type="button"
+                        [title]="'Export preset: ' + p.name"
+                        [attr.aria-label]="'Export preset: ' + p.name"
+                        (click)="exportPreset(p)"
+                        data-testid="preset-export-btn"
+                      >⬇</button>
+                      <button
+                        class="preset-action-btn"
+                        type="button"
+                        [title]="'Clone preset: ' + p.name"
+                        [attr.aria-label]="'Clone preset: ' + p.name"
+                        (click)="clonePreset(p)"
+                        data-testid="preset-clone-btn"
+                      >⊕</button>
+                      <button
+                        class="preset-action-btn"
+                        type="button"
+                        [title]="'Rename preset: ' + p.name"
+                        [attr.aria-label]="'Rename preset: ' + p.name"
+                        (click)="beginRenamePreset(p)"
+                        data-testid="preset-rename-btn"
+                      >✎</button>
+                      <button
+                        class="preset-action-btn"
+                        type="button"
+                        [title]="'Update this preset with current settings'"
+                        [attr.aria-label]="'Update preset ' + p.name + ' with current settings'"
+                        (click)="updatePreset(p)"
+                        data-testid="preset-update-btn"
+                      >↺</button>
+                      <button
+                        class="preset-action-btn is-danger"
+                        type="button"
+                        [title]="'Delete preset: ' + p.name"
+                        [attr.aria-label]="'Delete preset: ' + p.name"
+                        (click)="deletePreset(p)"
+                        data-testid="preset-delete-btn"
+                      >✕</button>
+                    </div>
+                  } @else {
+                    <!-- Rename inline input -->
+                    <input
+                      class="presets-name-input presets-rename-input"
+                      type="text"
+                      maxlength="50"
+                      autocomplete="off"
+                      spellcheck="false"
+                      [(ngModel)]="presetRenameValue"
+                      (keydown.enter)="confirmRenamePreset()"
+                      (keydown.escape)="cancelRenamePreset()"
+                      [attr.aria-label]="'New name for preset: ' + p.name"
+                      data-testid="preset-rename-input"
+                    />
+                    <div class="presets-row-actions">
+                      <button
+                        class="ext-btn is-primary"
+                        type="button"
+                        (click)="confirmRenamePreset()"
+                        aria-label="Confirm rename"
+                        data-testid="preset-rename-confirm-btn"
+                      >OK</button>
+                      <button
+                        class="ext-btn"
+                        type="button"
+                        (click)="cancelRenamePreset()"
+                        aria-label="Cancel rename"
+                      >×</button>
+                    </div>
+                  }
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="presets-empty-hint">No presets saved yet. Save the current settings to create one.</p>
+          }
+
+          <!-- Reset all settings -->
+          <div class="presets-divider" aria-hidden="true"></div>
+          <button
+            class="cols-reset-btn presets-reset-all-btn"
+            type="button"
+            (click)="resetAllSettings()"
+            aria-label="Reset all settings to defaults"
+            data-testid="presets-reset-all-btn"
+          >Reset all settings</button>
+
+        </div><!-- /presets-content -->
+      </p-popover>
+    </div>
 
     <!-- Notification bell — monochrome SVG, badge-dot when notifications enabled -->
     <div style="position: relative">

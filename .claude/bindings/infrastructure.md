@@ -9,4 +9,4 @@
   - Image — `docker build …` → surface error lines only
   - Stack — `docker compose -f compose/docker-compose.yaml up -d --build --wait`; diagnose via `docker compose logs --no-color <svc>` (slice, not all)
   - CI — check the run **status/conclusion** + pull only the failing job's log; don't stream
-- **Scripts:** PowerShell 7+ with sibling Pester suites (§Scripts); `-AsLibrary` switch. No secrets/env-specific values in committed files.
+- **Scripts:** Python 3.11+ with sibling pytest suites (§Scripts); the `if __name__ == "__main__"` guard. No secrets/env-specific values in committed files.

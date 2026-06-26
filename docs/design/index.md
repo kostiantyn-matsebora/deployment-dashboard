@@ -35,6 +35,7 @@ children:
 - [History Drawer](./components.md#history-drawer)
 - [Inspector Panel](./components.md#inspector-panel)
 - [Popovers](./components.md#popovers)
+  - [Presets Popover](./components.md#presets-popover)
 - [Extension Components](./components.md#extension-components)
   - [Toolbar Badge](./components.md#toolbar-badge)
   - [Notification Toast](./components.md#notification-toast)
@@ -44,6 +45,7 @@ children:
 ### `views.md`
 
 - [Matrix View Layout](./views.md#matrix-view-layout)
+  - [Presets Control (all views)](./views.md#presets-control-all-views)
 - [Swimlanes View Layout](./views.md#swimlanes-view-layout)
 - [Analytics View Layout](./views.md#analytics-view-layout)
 - [Extension View Layout](./views.md#extension-view-layout)
@@ -52,6 +54,7 @@ children:
 
 - [Field Rendering System](./behavior.md#field-rendering-system)
 - [Interactions](./behavior.md#interactions)
+- [Presets](./behavior.md#presets)
 - [Theme System](./behavior.md#theme-system)
 - [Extension Behavior](./behavior.md#extension-behavior)
 - [Responsive Rules](./behavior.md#responsive-rules)
@@ -64,6 +67,7 @@ children:
 - [KPIs & Derived Values](./data-model.md#kpis--derived-values)
 - [Extension Field Usage](./data-model.md#extension-field-usage)
 - [Analytics Derived Metrics](./data-model.md#analytics-derived-metrics)
+- [Presets Envelope](./data-model.md#presets-envelope)
 - [Derived Field Rendering](./data-model.md#derived-field-rendering)
 
 ### `libraries.md`

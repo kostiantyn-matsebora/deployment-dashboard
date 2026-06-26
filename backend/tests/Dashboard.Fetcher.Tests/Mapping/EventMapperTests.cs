@@ -1,6 +1,7 @@
 using Dashboard.Fetcher.GitHub.Mapping;
 using Dashboard.Fetcher.GitHub.Models;
 using Dashboard.Shared.Contracts;
+using Dashboard.Shared.Data;
 
 namespace Dashboard.Fetcher.Tests.Mapping;
 
@@ -109,6 +110,56 @@ public sealed class EventMapperTests
             DeploymentStatus.Success, new EventMappingContext(null, null, [], EmptyServiceMap));
 
         Assert.Equal("deploy-bot", ev.Actor);
+    }
+
+    // ── Namespace ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Map_SetsNamespaceToRepoShortName()
+    {
+        var (deployment, status) = MakeFixtures();
+        var ev = EventMapper.Map(deployment, status, "acme/api",
+            DeploymentStatus.Success, new EventMappingContext(null, null, [], EmptyServiceMap));
+
+        Assert.Equal("api", ev.Namespace);
+    }
+
+    [Fact]
+    public void Map_SingleSegmentRepo_NamespaceEqualsRepo()
+    {
+        var (deployment, status) = MakeFixtures();
+        var ev = EventMapper.Map(deployment, status, "standalone",
+            DeploymentStatus.Success, new EventMappingContext(null, null, [], EmptyServiceMap));
+
+        Assert.Equal("standalone", ev.Namespace);
+    }
+
+    // ── NamespaceParser ───────────────────────────────────────────────────────
+
+    [Theory]
+    // github.com web URL
+    [InlineData("https://github.com/acme/api/actions/runs/7/jobs/1", "api")]
+    [InlineData("https://github.com/my-org/my-repo/actions/runs/99", "my-repo")]
+    // REST / api.github.com URL (repos prefix)
+    [InlineData("https://api.github.com/repos/my-org/my-repo/actions/runs/99", "my-repo")]
+    // Local emulator URL (http + repos prefix)
+    [InlineData("http://github-emulator:3100/repos/demo-org/auth-bff/actions/runs/3300", "auth-bff")]
+    // GitHub Enterprise custom host
+    [InlineData("https://github.mycompany.com/acme/api/actions/runs/7", "api")]
+    public void NamespaceParser_ActionsRunUrl_ExtractsRepoName(string url, string expected)
+    {
+        Assert.Equal(expected, NamespaceParser.ParseFromRunUrl(url));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("https://jenkins.example.com/job/deploy/42")]
+    [InlineData("https://circleci.com/gh/org/repo/123")]
+    // Plain github.com repo URL without /actions/ segment yields null
+    [InlineData("https://github.com/owner/repo")]
+    public void NamespaceParser_NoActionsSegmentOrNull_ReturnsNull(string? url)
+    {
+        Assert.Null(NamespaceParser.ParseFromRunUrl(url));
     }
 
     // ── ExtractRunId ──────────────────────────────────────────────────────────

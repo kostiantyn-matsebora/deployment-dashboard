@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Dashboard.Fetcher.GitHub.Models;
 using Dashboard.Fetcher.GitHub.RateLimit;
 
 namespace Dashboard.Fetcher.GitHub;
@@ -182,6 +183,102 @@ public sealed class GithubClient(HttpClient http, RateLimitBudget rateLimitBudge
 
         var cutIndex = items.FindIndex(item => stopBefore(item));
         return cutIndex >= 0 ? items[..cutIndex] : null;
+    }
+
+    /// <summary>
+    /// Lists all repos accessible with the configured token, with optional owner scoping.
+    /// When <paramref name="owner"/> is non-null, lists that owner's repos (org or user);
+    /// when null, lists all repos accessible by the authenticated user.
+    /// Returns fully-qualified <c>owner/repo</c> strings.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> ListReposAsync(string? owner, CancellationToken ct)
+    {
+        var repos = new List<string>();
+
+        string path;
+        if (owner is null)
+        {
+            // All repos accessible by the token.
+            path = "/user/repos?type=all";
+        }
+        else
+        {
+            // Try org first; fall back to user endpoint only on 404 (not an org).
+            // A 200 with an empty list means the org exists with zero repos — do not fall back.
+            var orgItems = await TryListOwnerReposAsync($"/orgs/{owner}/repos", owner, ct);
+            if (orgItems is not null)
+                return orgItems;
+
+            path = $"/users/{owner}/repos?type=all";
+        }
+
+        await foreach (var item in GetPagedAsync<GhRepoItem>(path, ct))
+        {
+            if (!string.IsNullOrEmpty(item.FullName))
+                repos.Add(item.FullName);
+        }
+
+        return repos;
+    }
+
+    private async Task<IReadOnlyList<string>?> TryListOwnerReposAsync(
+        string path, string owner, CancellationToken ct)
+    {
+        // Probe the first page so we can distinguish HTTP 404 (not an org — fall back to
+        // /users/) from 200 + [] (org exists, zero repos — return empty, no fallback).
+        // GetPagedAsync is not usable here because it silently stops on both cases.
+        var firstResponse = await http.GetAsync(PagedUrl(path, page: 1), ct);
+        await rateLimitBudget.RecordAndWaitIfNeededAsync(firstResponse, ct);
+
+        if (firstResponse.StatusCode == HttpStatusCode.NotFound)
+            return null; // Not an org — signal caller to try /users/{owner}/repos.
+
+        firstResponse.EnsureSuccessStatusCode();
+
+        var repos = new List<string>();
+        var firstPage = await firstResponse.Content.ReadFromJsonAsync<List<GhRepoItem>>(ct);
+        AppendRepoNames(firstPage, repos);
+
+        if (firstPage is not null && firstPage.Count > 0 && HasNextPage(firstResponse))
+            await AppendRemainingOrgReposAsync(path, repos, startPage: 2, ct);
+
+        // A 200 from the org endpoint is authoritative — return even when the list is empty.
+        return repos;
+    }
+
+    private async Task AppendRemainingOrgReposAsync(
+        string path, List<string> repos, int startPage, CancellationToken ct)
+    {
+        var page = startPage;
+        while (!ct.IsCancellationRequested)
+        {
+            var response = await http.GetAsync(PagedUrl(path, page), ct);
+            await rateLimitBudget.RecordAndWaitIfNeededAsync(response, ct);
+
+            if (response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.NotModified)
+                break;
+
+            response.EnsureSuccessStatusCode();
+
+            var items = await response.Content.ReadFromJsonAsync<List<GhRepoItem>>(ct);
+            if (items is null || items.Count == 0)
+                break;
+
+            AppendRepoNames(items, repos);
+
+            if (!HasNextPage(response))
+                break;
+
+            page++;
+        }
+    }
+
+    private static void AppendRepoNames(IEnumerable<GhRepoItem>? items, List<string> repos)
+    {
+        if (items is null) return;
+        foreach (var item in items)
+            if (!string.IsNullOrEmpty(item.FullName))
+                repos.Add(item.FullName);
     }
 
     /// <summary>Downloads raw bytes (e.g. ZIP archive). Returns null on any non-2xx.</summary>

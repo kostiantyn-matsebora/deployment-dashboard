@@ -12,16 +12,15 @@ cutting tokens across agent turns.
 
 | Purpose | Primary server | Tools |
 |---|---|---|
-| **Research / explore / understand** code | **tokensave** | `tokensave_context` (NL query → symbols + snippets), `tokensave_search`, `tokensave_callers` / `tokensave_callees` / `tokensave_call_chain` |
-| **Impact / blast radius** before touching a shared symbol | **tokensave** | `tokensave_impact` / `tokensave_affected` / `tokensave_coupling`; cross-check refs with serena `find_referencing_symbols` / `find_implementations` |
+| **Research / explore / understand** code | **serena** | `get_symbols_overview` (file structure), `find_symbol` (locate + read a symbol), `find_referencing_symbols` (call sites) |
+| **Impact / blast radius** before touching a shared symbol | **code-review-graph** (+ serena) | graph `get_impact_radius` / `get_affected_flows`; cross-check refs with serena `find_referencing_symbols` / `find_implementations` |
 | **Symbol-level editing** | **serena** | `replace_symbol_body` / `insert_after_symbol` / `insert_before_symbol` / `rename_symbol` — LSP-accurate (C# / TS / PowerShell) |
-| **Code review** (change-scoped) | **code-review-graph** (+ tokensave + serena) | graph: `detect_changes` (risk-scored) / `get_review_context` / `get_impact_radius` / `get_affected_flows`; tokensave for deeper structure; serena to read exact symbol bodies |
-| **Architecture / structure overview** | **tokensave** or **code-review-graph** | tokensave `tokensave_outline` / `tokensave_health` / `tokensave_hotspots`; graph `get_architecture_overview` / `list_communities` |
+| **Code review** (change-scoped) | **code-review-graph** (+ serena) | graph: `detect_changes` (risk-scored) / `get_review_context` / `get_impact_radius` / `get_affected_flows`; serena to read exact symbol bodies |
+| **Architecture / structure overview** | **code-review-graph** | graph `get_architecture_overview` / `list_communities` |
 | **Docs (`.md`)** | **markdown** | see *Docs intelligence* below |
 | **External library / framework docs** (third-party, not this repo) | **context7** | `resolve-library-id` (name → Context7 ID) → `get-library-docs` |
 
 **Per-server notes.**
-- **tokensave** (`mcp__tokensave__*`). Code graph; start with `tokensave_context` for any exploration. Read-only discovery tools are parallel-safe. **4-call budget per question** — synthesize from what you have rather than exceed it. Report `tokensave_metrics:` savings to the user when present.
 - **serena** (`mcp__serena__*`). LSP retrieval + editing. `get_symbols_overview` → `find_symbol` (`depth=1` for members, `include_body` only when source needed). Owns surgical edits.
 - **code-review-graph** (`mcp__code-review-graph__*`). Persistent change-review graph; auto-updates via hooks but **rebuild after a branch switch** (it warns when stale).
 - **context7** (`mcp__context7__*`). External (internet) docs for third-party libraries/frameworks — NOT a local-repo server. `resolve-library-id` first (free-text name → Context7-ID), then `get-library-docs` (optionally scoped by `topic`). Use over memory-recalled APIs; never for this repo's own code. Free tier is rate-limited.

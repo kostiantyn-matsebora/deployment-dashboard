@@ -84,6 +84,9 @@ tags:
       (`AnalyticsWindow`: `days`, `from`, `to`, `retention_days`, `clamped`).
       Reads are unauthenticated (internal-only, same trust tier as the other reads)
       and carry a weak `ETag`; clients SHOULD send `If-None-Match`.
+      Subject to the deployment-wide `SERVICE_EXCLUDE` filter — events from excluded
+      services do not contribute to any aggregate (same read-surface filter as
+      `getMatrix`; filter semantics in `api-guidelines.md` §5).
   - name: stream
     description: Real-time SSE fan-out of deployment events.
   - name: fetcher
@@ -164,6 +167,19 @@ paths:
                 $ref: '#/components/schemas/DeploymentEvent'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: |
+            Excluded by the server-side `SERVICE_EXCLUDE` config (issue #348). The
+            event's opaque `namespace/service` identity matches a configured exclude
+            glob, so the write is refused and no row is appended. Patterns are globbed
+            against the identity (a slashless pattern matches the `service` segment
+            across all namespaces; a pattern with `/` matches the full
+            `namespace/service` composite, `*` spanning `/`) — see `getMatrix` for the
+            shared glob semantics. Empty `SERVICE_EXCLUDE` ⇒ nothing is refused. See
+            `api-guidelines.md` §5 (config) and §6 (status-code matrix).
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
         '422':
           description: |
             Payload validation failed — missing required field, bad enum,
@@ -192,8 +208,19 @@ paths:
 
         DAG correlation is **client-side** — this endpoint never derives parent
         relationships beyond the explicit `parent_deployments` array on the event.
+
+        Each event carries an optional `namespace` (see
+        `DeploymentEventIngest.namespace`); the Swimlanes view keys lanes by the
+        composite `(namespace, service)` so same-named services in different
+        namespaces become separate lanes (issue #353).
+
+        Subject to the **server-side `SERVICE_EXCLUDE` filter** (server config,
+        issue #348): events matching the configured exclude list are omitted from
+        every page — even rows already in storage are hidden. This is independent
+        of the `service` query param below (which targets a single identity). See
+        `getMatrix` and `api-guidelines.md` §5.
       parameters:
-        - { name: service,       in: query, schema: { type: string }, description: Filter by service identifier. }
+        - { name: service,       in: query, schema: { type: string }, description: "Filter by service identity. A value without `/` matches the `service` segment across all namespaces; a value containing `/` matches the full `namespace/service` composite (see `getMatrix` for the shared glob semantics)." }
         - { name: environment,   in: query, schema: { type: string }, description: Filter by environment identifier. }
         - { name: status,        in: query, schema: { $ref: '#/components/schemas/Status' }, description: Filter by status. }
         - { name: deployment_id, in: query, schema: { type: string }, description: Filter to all rows of a single logical deployment. }
@@ -214,6 +241,12 @@ paths:
       tags: [deployments]
       operationId: getDeployment
       summary: Fetch a single event row by surrogate id.
+      description: |
+        Subject to the **server-side `SERVICE_EXCLUDE` filter** (server config,
+        issue #348): a row whose `(namespace, service)` matches the configured
+        exclude list is **hidden** even though it remains in storage — this op
+        returns `404` for such an id, indistinguishable from an unknown id. See
+        `getMatrix` and `api-guidelines.md` §5.
       parameters:
         - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
       responses:
@@ -232,8 +265,8 @@ paths:
       operationId: getMatrix
       summary: Services × environments deployment matrix (denormalised).
       description: |
-        Returns one row per service. Each row contains a `slots` map keyed by
-        environment name. Each slot carries:
+        Returns one row per distinct **`(namespace, service)`** identity. Each
+        row contains a `slots` map keyed by environment name. Each slot carries:
 
           - `current` — the most recent **effective** event for that
             `(service, environment)`, where *effective* means `status` is one of
@@ -251,8 +284,42 @@ paths:
         The frontend resolves the **six box states** (SAD §7 / FR §"Box states (Matrix)")
         from `(current.status, last_successful presence)` — no server-side state
         field — and renders `next` (when present) as a secondary badge.
+
+        **Identity & re-keying (issue #353).** Rows are keyed by the composite
+        `(namespace, service)`, where `namespace` is the optional grouping
+        segment on each event (see `DeploymentEventIngest.namespace`). Two
+        distinct namespaces sharing a service name yield two distinct rows. The
+        label is `namespace/service` when `namespace` is present, else the bare
+        `service` (legacy / unprefixed).
+
+        **Glob filter semantics (services filter + notification prefs).** A
+        filter pattern is matched against the composite identity:
+          - a pattern **containing `/`** matches the full `namespace/service`
+            composite (e.g. `acme/*`, `*/checkout`);
+          - a pattern **without `/`** matches the **`service` segment only**,
+            across all namespaces — so every existing slashless saved pattern
+            keeps working unchanged.
+
+        **Server-side `SERVICE_EXCLUDE` filter (server config — issue #348).**
+        Independently of the `service` query param above, a single server-side
+        config var `SERVICE_EXCLUDE` (CSV of glob patterns) may hide a subset of
+        services. Patterns are matched as glob strings against the event's opaque
+        `namespace/service` identity, using the **same glob semantics as the
+        `service` filter above**: a slashless pattern matches the `service` segment
+        across all namespaces; a pattern containing `/` is globbed against the full
+        `namespace/service` composite, where `*` spans `/` (`namespace` is
+        emitter-supplied and opaque — it may itself contain `/`). It is **server
+        configuration, not a request parameter** — applied to every read surface
+        (`/api/services`, `/api/matrix`, `/api/deployments`,
+        `/api/deployments/{id}`, `/api/events/stream`) and to the write surface
+        (`POST /api/deployments` → `403`). An already-stored event for a
+        now-excluded service is **hidden** by this filter even though it remains in
+        storage (storage-clearing semantics are unchanged). Empty `SERVICE_EXCLUDE`
+        ⇒ exclude nothing. There is no include list and no request query param for
+        scope. Fetcher-side source scoping is a separate, provider-specific concern
+        (see the fetcher spec), not part of this contract. See `api-guidelines.md` §5.
       parameters:
-        - { name: service, in: query, schema: { type: string }, description: Filter to a single service (Matrix inline filter). }
+        - { name: service, in: query, schema: { type: string }, description: "Filter to a single service identity (Matrix inline filter). A value without `/` matches the `service` segment across all namespaces; a value containing `/` matches the full `namespace/service` composite." }
       responses:
         '200':
           description: The matrix snapshot.
@@ -270,6 +337,14 @@ paths:
       tags: [discovery]
       operationId: listServices
       summary: Distinct service identifiers derived from stored events.
+      description: |
+        Distinct service identities discovered from stored events.
+
+        Subject to the **server-side `SERVICE_EXCLUDE` filter** (server config,
+        issue #348): services whose opaque `namespace/service` identity matches the
+        configured exclude globs are hidden from this list. See `getMatrix` for the
+        cross-surface filter overview and the shared `namespace/service` glob
+        semantics, and `api-guidelines.md` §5 for the config and the empty default.
       responses:
         '200':
           description: Sorted list of distinct service identifiers.
@@ -518,6 +593,12 @@ paths:
 
         Backed by PostgreSQL `LISTEN/NOTIFY` — each API instance fans out only to
         its own connected clients (NFR-05 statelessness).
+
+        Subject to the **server-side `SERVICE_EXCLUDE` filter** (server config,
+        issue #348): events matching the configured exclude list are never emitted
+        on this stream — neither live nor on replay via `Last-Event-ID`. This is
+        independent of the optional `service` query param below. See `getMatrix`
+        and `api-guidelines.md` §5.
       parameters:
         - name: Last-Event-ID
           in: header
@@ -526,7 +607,12 @@ paths:
         - name: service
           in: query
           schema: { type: string }
-          description: Optional server-side filter on service identifier.
+          description: |
+            Optional server-side filter on service identity. A value without `/`
+            matches the `service` segment across all namespaces; a value
+            containing `/` matches the full `namespace/service` composite (see
+            `getMatrix` for the shared glob semantics). The `data` payload
+            carries the optional `namespace` (a `DeploymentEvent` field).
       responses:
         '200':
           description: SSE stream opened.
@@ -539,7 +625,7 @@ paths:
                     : ping
                     id: 01J9F4WZK3W9G2T6X4QH3DKQF5
                     event: deployment
-                    data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF5","deployment_id":"gh-9491-1","service":"service-a","environment":"prod","version":"1.4.2","status":"success","happened_at":"2026-05-28T10:14:02Z","actor":"alice","run_number":"9491","parent_deployments":["gh-9482-1"]}
+                    data: {"id":"01J9F4WZK3W9G2T6X4QH3DKQF5","deployment_id":"gh-9491-1","service":"service-a","namespace":"api","environment":"prod","version":"1.4.2","status":"success","happened_at":"2026-05-28T10:14:02Z","actor":"alice","run_number":"9491","parent_deployments":["gh-9482-1"]}
 
   # ───── Fetcher state ──────────────────────────────────────────────────────
   /api/fetcher/state/{adapter}:
@@ -1233,6 +1319,24 @@ components:
           maxLength: 128
           description: Service / component identifier.
           examples: [service-a]
+        namespace:
+          type: string
+          maxLength: 128
+          nullable: true
+          description: |
+            Optional CI/CD-agnostic grouping segment that scopes `service`
+            (the source-project / pipeline namespace — e.g. the repo half of a
+            GitHub `owner/repo`, an Azure DevOps project, a Jenkins folder).
+            **Not** tied to any specific CI/CD vendor and never named "repo".
+
+            **Identity** is `namespace/service` when present, and the bare
+            `service` when `null`/absent — so legacy rows with no namespace
+            render unprefixed (full backward compatibility). Read surfaces key
+            rows/lanes by the composite `(namespace, service)`: two distinct
+            namespaces sharing a service name become two distinct
+            matrix rows / swimlanes (the #353 fix). See the `getMatrix`
+            description for the full re-keying + glob-filter semantics.
+          examples: [api]
         environment:
           type: string
           minLength: 1
@@ -1350,9 +1454,21 @@ components:
     MatrixRow:
       type: object
       required: [service, slots]
+      description: |
+        One row per distinct `(namespace, service)` identity. Rows sharing a
+        `service` but differing in `namespace` are separate rows; rows with a
+        `null` namespace render under the bare `service`.
       properties:
         service:
           type: string
+        namespace:
+          type: string
+          nullable: true
+          description: |
+            Grouping segment of this row's identity (see `DeploymentEventIngest.namespace`).
+            `null`/absent ⇒ the row is identified by the bare `service`. Together
+            `(namespace, service)` is the row key; the displayed label is
+            `namespace/service` when present, else `service`.
         slots:
           type: object
           additionalProperties:
