@@ -16,7 +16,7 @@ Invoke when the session produced any of:
 
 2. **For each candidate, write one capture entry.** Run:
    ```
-   echo '{"content":"<one sentence>","suggestedDoc":"<relative-path-or-empty>"}' | pwsh -NoProfile -NonInteractive -File "${CLAUDE_PROJECT_DIR}/scripts/hooks/Invoke-DocsKeeperMaintenance.ps1" -AddCapture
+   echo '{"content":"<one sentence>","suggestedDoc":"<relative-path-or-empty>"}' | python3 "${CLAUDE_PROJECT_DIR}/scripts/hooks/invoke_docs_keeper_maintenance.py" --add-capture
    ```
    - `content` — one sentence, active voice, no filler. Max 80 chars.
    - `suggestedDoc` — nearest relevant doc path (e.g. `docs/SAD.md`), or `""` when unclear.

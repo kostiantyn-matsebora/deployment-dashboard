@@ -39,7 +39,7 @@ Thin, read-only cross-browser WebExtensions MV3 client for an existing dashboard
 | Test command | `npm test` |
 | Build command | `npm run build` |
 | Location | `frontend/extension/` |
-| Packaging | Per-browser zip via `scripts/Package-Extension.ps1` |
+| Packaging | Per-browser zip via `scripts/package_extension.py` |
 | CI | `.github/workflows/extension.yml`, gated through `_ci-green` |
 
 ---
@@ -212,7 +212,7 @@ Note: `latestChange` has been removed. The popup is stateless and re-fetches `GE
 |---|---|
 | Unit tests | `npm test` (Vitest) |
 | Production build | `npm run build` |
-| Per-browser zip | `scripts/Package-Extension.ps1` — outputs to `frontend/extension/dist-zips/`: `chrome.zip`, `edge.zip`, `firefox.zip` |
+| Per-browser zip | `scripts/package_extension.py` — outputs to `frontend/extension/dist-zips/`: `chrome.zip`, `edge.zip`, `firefox.zip` |
 | CI workflow | `.github/workflows/extension.yml` — test → build → package; gated through `_ci-green` branch protection |
 
 ---

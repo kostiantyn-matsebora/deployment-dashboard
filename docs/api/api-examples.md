@@ -16,11 +16,12 @@ X-Progress-Reporter: dashboard-fetcher/github-actions
 {
   "deployment_id":      "gh-9482-1",
   "service":            "service-a",
+  "namespace":          "api",
   "environment":        "dev",
   "version":            "1.4.2",
   "status":             "success",
   "happened_at":        "2026-05-28T09:42:17Z",
-  "run_url":            "https://github.com/acme/repo/actions/runs/9482",
+  "run_url":            "https://github.com/acme/api/actions/runs/9482",
   "run_number":         9482,
   "actor":              "alice",
   "ref":                "refs/heads/main",
@@ -49,6 +50,7 @@ X-Api-Key: ********
 {
   "deployment_id":      "gh-9491-1",
   "service":            "service-a",
+  "namespace":          "api",
   "environment":        "prod",
   "version":            "1.4.2",
   "status":             "in-progress",

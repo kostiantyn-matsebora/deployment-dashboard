@@ -10,9 +10,11 @@ namespace Dashboard.Fetcher.Orchestration;
 /// Cursor persisted only after all POSTs succeed — guarantees at-least-once delivery (F5).
 /// Supports pause / resume for the reset choreography (F17, §5.10.3).
 /// Updates <see cref="IFetcherReadinessIndicator"/> after every cycle when provided.
-/// When <paramref name="reportCycleAsync"/> is provided and the cycle produced a non-null
-/// snapshot, it is invoked after <see cref="IFetcherReadinessIndicator.RecordSuccess"/>
-/// (F18 / §5.11). The delegate is fire-and-swallow: a failure must not interrupt the loop.
+/// When <paramref name="reportCycleAsync"/> is provided and a chunk produced a non-null
+/// snapshot, it is invoked once per chunk inside <see cref="PollOnceAsync"/>
+/// (F18 / §5.11) — before <see cref="IFetcherReadinessIndicator.RecordSuccess"/>, which
+/// updates readiness once at the end of the cycle after all chunks complete.
+/// The delegate is fire-and-swallow: a failure must not interrupt the loop.
 /// </summary>
 public sealed class PollLoop(
     ICiCdAdapter adapter,
@@ -94,7 +96,7 @@ public sealed class PollLoop(
         try
         {
             var next = await PollOnceAsync(cursor, ct);
-            await RecordSuccessAsync(ct);
+            await RecordSuccessAsync();
             return (true, next);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -118,13 +120,23 @@ public sealed class PollLoop(
         }
     }
 
-    // Records a successful poll cycle: updates readiness and fires the optional per-cycle report.
-    private async Task RecordSuccessAsync(CancellationToken ct)
+    // Records a successful poll cycle: updates readiness indicator.
+    // The per-cycle rate-limit report (F18 / §5.11) is now emitted per-chunk inside
+    // PollOnceAsync so backfill cycles report after each (repo×env) chunk, not only once
+    // at the end of the entire enumeration.
+    private Task RecordSuccessAsync()
     {
         var snapshot = reporting?.RateLimitSnapshotFactory?.Invoke();
         reporting?.Readiness?.RecordSuccess(snapshot);
+        return Task.CompletedTask;
+    }
 
-        // F18 / §5.11 — per-cycle rate-limit report, gated on snapshot presence.
+    // F18 / §5.11 — per-chunk rate-limit report, gated on snapshot presence.
+    // Extracted so PollOnceAsync can fire it after every chunk (1 chunk for normal poll,
+    // N chunks for backfill).
+    private async Task ReportSnapshotIfPresentAsync(CancellationToken ct)
+    {
+        var snapshot = reporting?.RateLimitSnapshotFactory?.Invoke();
         if (reporting?.ReportCycleAsync is not null && snapshot is not null)
             await TryReportCycleAsync(snapshot, ct);
     }
@@ -200,6 +212,10 @@ public sealed class PollLoop(
                 await state.PutAsync(adapter.AdapterId, chunk.Cursor!, ct);
                 cursor = chunk.Cursor;
             }
+
+            // F18 / §5.11 — emit after each chunk so backfill cycles get per-(repo×env)
+            // quota visibility rather than a single report at the end of the enumeration.
+            await ReportSnapshotIfPresentAsync(ct);
         }
 
         return cursor;

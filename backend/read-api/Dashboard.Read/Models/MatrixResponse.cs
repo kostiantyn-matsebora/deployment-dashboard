@@ -13,11 +13,15 @@ public sealed record MatrixResponse(
     IReadOnlyList<MatrixRow> Rows);
 
 /// <summary>
-/// One row in the matrix — one service and its deployment slots per environment.
+/// One row in the matrix — one service (optionally qualified by namespace) and its deployment
+/// slots per environment. <see cref="Namespace"/> is omitted from JSON when <c>null</c>
+/// (global WhenWritingNull policy). Two rows with the same <see cref="Service"/> but different
+/// <see cref="Namespace"/> values are distinct rows.
 /// </summary>
 public sealed record MatrixRow(
     string Service,
-    IReadOnlyDictionary<string, MatrixSlot> Slots);
+    IReadOnlyDictionary<string, MatrixSlot> Slots,
+    string? Namespace = null);
 
 /// <summary>
 /// One cell in the matrix — the current effective event and (when applicable) the last

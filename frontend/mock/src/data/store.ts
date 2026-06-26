@@ -33,6 +33,11 @@ export interface DeploymentEvent {
   id: string;
   deployment_id: string;
   service: string;
+  /**
+   * Optional CI/CD namespace (e.g. GitHub org/owner).
+   * Null/absent = bare service name with no namespace prefix.
+   */
+  namespace?: string | null;
   environment: string;
   status: DemoStatus;
   happened_at: string;
@@ -164,18 +169,23 @@ class EventStore {
   matrix(serviceFilter?: string): {
     generated_at: string;
     environments: string[];
-    rows: Array<{ service: string; slots: Record<string, { current: DeploymentEvent; last_successful?: DeploymentEvent; next?: DeploymentEvent }> }>;
+    rows: Array<{ service: string; namespace?: string | null; slots: Record<string, { current: DeploymentEvent; last_successful?: DeploymentEvent; next?: DeploymentEvent }> }>;
   } {
     let rows = this.visible();
     if (serviceFilter) rows = rows.filter((e) => e.service === serviceFilter);
 
-    const serviceSet = new Set<string>();
-    const envSet = new Set<string>();
-    for (const e of rows) { serviceSet.add(e.service); envSet.add(e.environment); }
+    // Key by (namespace, service) pair to support namespace-aware rows (issue #353).
+    const rowKeys = new Map<string, { service: string; namespace: string | null }>();
+    const envSet  = new Set<string>();
+    for (const e of rows) {
+      const key = `${e.namespace ?? ''}|${e.service}`;
+      if (!rowKeys.has(key)) rowKeys.set(key, { service: e.service, namespace: e.namespace ?? null });
+      envSet.add(e.environment);
+    }
 
     const ENV_ORDER = ['dev', 'staging', 'qa', 'preprod', 'prod'];
     const EFFECTIVE_STATUSES = new Set(['success', 'in-progress', 'failure']);
-    const services = [...serviceSet].sort();
+    const rowIdentities = [...rowKeys.values()].sort((a, b) => a.service.localeCompare(b.service));
     const environments = [...envSet].sort((a, b) => {
       const ia = ENV_ORDER.indexOf(a), ib = ENV_ORDER.indexOf(b);
       if (ia !== -1 && ib !== -1) return ia - ib;
@@ -184,11 +194,11 @@ class EventStore {
       return a.localeCompare(b);
     });
 
-    const matrixRows = services.map((service) => {
+    const matrixRows = rowIdentities.map(({ service, namespace }) => {
       const slots: Record<string, { current: DeploymentEvent; last_successful?: DeploymentEvent; prev_failed?: boolean; next?: DeploymentEvent }> = {};
       for (const env of environments) {
         const slotEvents = rows
-          .filter((e) => e.service === service && e.environment === env)
+          .filter((e) => e.service === service && (e.namespace ?? null) === namespace && e.environment === env)
           .sort((a, b) => new Date(b.happened_at).getTime() - new Date(a.happened_at).getTime());
         if (slotEvents.length === 0) continue;
 
@@ -223,7 +233,11 @@ class EventStore {
           ...(next ? { next } : {}),
         };
       }
-      return { service, slots };
+      return {
+        service,
+        ...(namespace ? { namespace } : {}),
+        slots,
+      };
     });
 
     return { generated_at: new Date().toISOString(), environments, rows: matrixRows };

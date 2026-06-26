@@ -25,6 +25,13 @@ export interface DeploymentEvent {
   id: string;
   deployment_id: string;
   service: string;
+  /**
+   * Optional CI/CD namespace (e.g. GitHub org or repo owner).
+   * Null/absent = bare service name, no namespace prefix.
+   * Identity = `namespace/service` when present; bare `service` when null.
+   * Spec: docs/api/openapi.yaml — DeploymentEvent.namespace
+   */
+  namespace?: string | null;
   environment: string;
   version?: string;
   status: Status;
@@ -65,6 +72,11 @@ export interface MatrixSlot {
 /** One service row in the Matrix view. */
 export interface MatrixRow {
   service: string;
+  /**
+   * Optional CI/CD namespace (same as DeploymentEvent.namespace).
+   * Identity = `namespace/service` when present; bare `service` when null.
+   */
+  namespace?: string | null;
   /** Map of environment → slot. Missing keys = never deployed here. */
   slots: Record<string, MatrixSlot>;
 }

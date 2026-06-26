@@ -37,6 +37,8 @@ interface DeploymentFixture {
   creator:        string;
   created_at:     string;
   run_id:         number;
+  /** Explicit workflow id — resolves the owning workflow when a repo has multiple. */
+  workflow_id?:   number;
   /** Conclusion to record on the associated workflow run — e.g. "cancelled". */
   run_conclusion?: string | null;
   statuses:       StatusFixture[];
@@ -186,10 +188,15 @@ export class GithubFixtureLoader {
         }));
         repo.statuses.set(dep.id, statuses);
 
-        // Workflow run — match by workflow id first, fall back to first workflow.
+        // Workflow run — match by explicit workflow_id, then by wf.id === run_id, then first workflow.
+        // workflow_id is required when a repo owns multiple workflows so each run resolves
+        // to the correct service name. The run_id fallback is preserved for single-workflow repos.
         // If a run_conclusion is provided, it overrides the existing conclusion on the run.
         if (!repo.runs.has(dep.run_id)) {
-          const matchingWf = repoFixture.workflows.find(wf => wf.id === dep.run_id)
+          const matchingWf = (dep.workflow_id != null
+            ? repoFixture.workflows.find(wf => wf.id === dep.workflow_id)
+            : undefined)
+            ?? repoFixture.workflows.find(wf => wf.id === dep.run_id)
             ?? repoFixture.workflows[0];
 
           if (matchingWf) {

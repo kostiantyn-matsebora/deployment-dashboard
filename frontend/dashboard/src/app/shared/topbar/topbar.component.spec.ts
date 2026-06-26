@@ -34,12 +34,14 @@ import { ThemeService }     from '../../core/services/theme.service';
 import { NotificationPrefsService, NotifPrefs } from '../../core/services/notification-prefs.service';
 import { BrowserNotificationService } from '../../core/services/browser-notification.service';
 import {
+  Matrix,
   MatrixField,
   RateLimitReport,
   Status,
   SwimlaneField,
   Theme,
 } from '../../core/models/deployment.model';
+import { ServiceIdentity } from '../../core/services/app-state.service';
 
 // ── Minimal mock helpers ─────────────────────────────────────────────────────
 
@@ -78,7 +80,9 @@ describe('TopbarComponent — rate-limit indicator', () => {
       failuresOnly:           signal(false),
       serviceFilterMode:      signal('exclude' as const),
       servicePatterns:        signal([] as string[]),
-      visibleServices:        (svcs: string[]) => svcs,
+      visibleServices:            (svcs: string[]) => svcs,
+      visibleServiceIdentities:   (ids: Array<{ service: string; namespace: string | null | undefined }>) => ids,
+      buildServiceSuggestions:    (rows: Array<{ service: string }>) => rows.map(r => r.service),
       matrixVisibleFields:    signal(new Set<MatrixField>()),
       swimlaneVisibleFields:  signal(new Set<SwimlaneField>()),
       correlationPredicate:   signal('explicit parent' as const),
@@ -337,7 +341,9 @@ describe('TopbarComponent — legend popover guard', () => {
       failuresOnly:           signal(false),
       serviceFilterMode:      signal('exclude' as const),
       servicePatterns:        signal([] as string[]),
-      visibleServices:        (svcs: string[]) => svcs,
+      visibleServices:            (svcs: string[]) => svcs,
+      visibleServiceIdentities:   (ids: Array<{ service: string; namespace: string | null | undefined }>) => ids,
+      buildServiceSuggestions:    (rows: Array<{ service: string }>) => rows.map(r => r.service),
       matrixVisibleFields:    signal(new Set<MatrixField>()),
       swimlaneVisibleFields:  signal(new Set<SwimlaneField>()),
       correlationPredicate:   signal('explicit parent' as const),
@@ -536,7 +542,9 @@ describe('TopbarComponent — notification UX (#271)', () => {
       failuresOnly:           signal(false),
       serviceFilterMode:      signal('exclude' as const),
       servicePatterns:        signal([] as string[]),
-      visibleServices:        (svcs: string[]) => svcs,
+      visibleServices:            (svcs: string[]) => svcs,
+      visibleServiceIdentities:   (ids: Array<{ service: string; namespace: string | null | undefined }>) => ids,
+      buildServiceSuggestions:    (rows: Array<{ service: string }>) => rows.map(r => r.service),
       matrixVisibleFields:    signal(new Set<MatrixField>()),
       swimlaneVisibleFields:  signal(new Set<SwimlaneField>()),
       correlationPredicate:   signal('explicit parent' as const),
@@ -664,5 +672,186 @@ describe('TopbarComponent — notification UX (#271)', () => {
       priv<() => void>(component, 'toggleNotifEnabled').call(component);
       expect(priv<() => boolean>(component, 'notifEnabled')()).toBe(true);
     });
+  });
+});
+
+// ── TopbarComponent — svcHiddenCount / servicesCaption namespace identity (#353) ─
+//
+// Validates that badge count and caption text use distinct matrix-row identities
+// (namespace|service pairs) as the denominator, NOT the autocomplete suggestion list
+// which also contains bare names + namespaces + composites.
+
+describe('TopbarComponent — svcHiddenCount / servicesCaption namespace identity (#353)', () => {
+  let matrixDataSignal: ReturnType<typeof signal<Matrix | null>>;
+  let servicePatternsSignal: ReturnType<typeof signal<string[]>>;
+  let visibleServiceIdentitiesFn: (ids: ServiceIdentity[]) => ServiceIdentity[];
+  let component: TopbarComponent;
+
+  /** Build a minimal Matrix with namespaced rows. */
+  function mkMatrix(rows: Array<{ service: string; namespace?: string | null }>): Matrix {
+    return {
+      generated_at: '2026-06-18T00:00:00Z',
+      environments: ['dev'],
+      rows: rows.map(r => ({ ...r, slots: {} })),
+    };
+  }
+
+  async function buildComponent(
+    matrixRows: Array<{ service: string; namespace?: string | null }>,
+    patterns: string[],
+    filterMode: 'exclude' | 'include',
+    identitiesFilter: (ids: ServiceIdentity[]) => ServiceIdentity[],
+  ): Promise<TopbarComponent> {
+    matrixDataSignal        = signal<Matrix | null>(mkMatrix(matrixRows));
+    servicePatternsSignal   = signal<string[]>(patterns);
+    visibleServiceIdentitiesFn = identitiesFilter;
+
+    const mockState: Partial<AppStateService> = {
+      activeView:                 signal('matrix' as const),
+      serviceFilter:              signal(''),
+      failuresOnly:               signal(false),
+      serviceFilterMode:          signal(filterMode),
+      servicePatterns:            servicePatternsSignal,
+      visibleServices:            (svcs: string[]) => svcs,
+      visibleServiceIdentities:   identitiesFilter,
+      buildServiceSuggestions:    (rows: Array<{ service: string }>) => rows.map(r => r.service),
+      matrixVisibleFields:        signal(new Set<MatrixField>()),
+      swimlaneVisibleFields:      signal(new Set<SwimlaneField>()),
+      correlationPredicate:       signal('explicit parent' as const),
+      timeWindow:                 signal('1 day' as const),
+      sseConnected:               signal(false),
+      kpi:                        signal({ services: 0, environments: 0, inFlight: 0, failed: 0 }) as never,
+      rateLimitMap:               signal(new Map()),
+      matrixData:                 matrixDataSignal,
+      matrixColHidden:            signal(new Set<string>()),
+      matrixColOrder:             signal([] as string[]),
+      collapsedLanes:             signal(new Set<string>()),
+      autoScrollOnChange:         signal(true),
+      lastEffectiveEvent:         signal(null) as never,
+    };
+
+    const mockTheme: Partial<ThemeService> = {
+      theme: signal<Theme>('dark'),
+      setTheme: () => {},
+    };
+
+    const mockNotifPrefs: Partial<NotificationPrefsService> = {
+      prefs:        signal({ enabled: false, statuses: [], serviceMode: 'watch-all-except', serviceChips: [], envMode: 'watch-all-except', envChips: [] }) as never,
+      updatePrefs:  () => {},
+      shouldNotify: () => false,
+    };
+
+    const mockNotifService: Partial<BrowserNotificationService> = {
+      isSupported:       () => false,
+      requestPermission: () => Promise.resolve('denied' as const),
+      currentPermission: 'default' as const,
+    };
+
+    await TestBed.configureTestingModule({
+      imports:   [TopbarComponent, RouterModule.forRoot([])],
+      providers: [
+        { provide: AppStateService,            useValue: mockState        },
+        { provide: ThemeService,               useValue: mockTheme        },
+        { provide: NotificationPrefsService,   useValue: mockNotifPrefs   },
+        { provide: BrowserNotificationService, useValue: mockNotifService },
+      ],
+      schemas: [NO_ERRORS_SCHEMA],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(TopbarComponent);
+    component     = fixture.componentInstance;
+    fixture.detectChanges();
+    return component;
+  }
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  // ── (a) distinct identity count ──────────────────────────────────────────
+
+  it('svcHiddenCount uses matrix-row count as denominator, not suggestion list length', async () => {
+    // 2 rows: same service name "api" under two namespaces (team-a, team-b).
+    // Include filter matches only team-a/api → 1 visible, 1 hidden.
+    // A broken impl using allServiceNames would inflate the denominator by
+    // counting bare "api", "team-a", "team-b", and "team-a/api", "team-b/api".
+    const c = await buildComponent(
+      [
+        { service: 'api', namespace: 'team-a' },
+        { service: 'api', namespace: 'team-b' },
+      ],
+      ['team-a/api'],
+      'include',
+      (ids: ServiceIdentity[]) => ids.filter(i => i.namespace === 'team-a'),
+    );
+
+    const hidden = priv<() => number>(c, 'svcHiddenCount')();
+    // denominator = 2 rows; visible = 1 → hidden = 1
+    expect(hidden).toBe(1);
+  });
+
+  it('svcHiddenCount is 0 when all rows are visible (no patterns)', async () => {
+    const c = await buildComponent(
+      [
+        { service: 'api', namespace: 'team-a' },
+        { service: 'api', namespace: 'team-b' },
+      ],
+      [],
+      'exclude',
+      (ids: ServiceIdentity[]) => ids,
+    );
+
+    expect(priv<() => number>(c, 'svcHiddenCount')()).toBe(0);
+  });
+
+  // ── (b) servicesCaption text ─────────────────────────────────────────────
+
+  it('servicesCaption reports correct counts from row identities in exclude mode', async () => {
+    const c = await buildComponent(
+      [
+        { service: 'api',  namespace: 'team-a' },
+        { service: 'api',  namespace: 'team-b' },
+        { service: 'auth', namespace: 'team-a' },
+      ],
+      ['team-a/*'],
+      'exclude',
+      // exclude team-a: only team-b/api remains visible
+      (ids: ServiceIdentity[]) => ids.filter(i => i.namespace !== 'team-a'),
+    );
+
+    const caption = priv<() => string>(c, 'servicesCaption')();
+    // 3 total rows; 1 visible; hidden = 2
+    expect(caption).toBe('Hiding 2 of 3 · showing 1');
+  });
+
+  it('servicesCaption reports correct counts from row identities in include mode', async () => {
+    const c = await buildComponent(
+      [
+        { service: 'api',  namespace: 'team-a' },
+        { service: 'api',  namespace: 'team-b' },
+        { service: 'auth', namespace: 'team-a' },
+      ],
+      ['team-a/*'],
+      'include',
+      // include team-a: 2 rows visible
+      (ids: ServiceIdentity[]) => ids.filter(i => i.namespace === 'team-a'),
+    );
+
+    const caption = priv<() => string>(c, 'servicesCaption')();
+    // 3 total rows; 2 visible
+    expect(caption).toBe('Showing 2 of 3 services');
+  });
+
+  it('servicesCaption shows "all N services" when no patterns are set', async () => {
+    const c = await buildComponent(
+      [
+        { service: 'alpha', namespace: null },
+        { service: 'beta',  namespace: null },
+      ],
+      [],
+      'exclude',
+      (ids: ServiceIdentity[]) => ids,
+    );
+
+    const caption = priv<() => string>(c, 'servicesCaption')();
+    expect(caption).toBe('Showing all 2 services');
   });
 });

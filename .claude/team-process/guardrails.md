@@ -1,7 +1,6 @@
 # Standing guardrails & tool-output economy
 
-Binding for **every role and mode** — inherited via the role anchor. Pairs with the typed
-[communication protocol](protocol.md) and the orchestration playbook [`process.md`](process.md).
+Binding for **every role and mode** — inherited via the role anchor; pairs with [`protocol.md`](protocol.md) and [`process.md`](process.md).
 
 ## Standing guardrails — every role inherits these
 
@@ -31,6 +30,11 @@ Binding for **every role and mode** — inherited via the role anchor. Pairs wit
     "what jumps out" is not enough.
 11. **No-harm refactor.** Remedying one smell must not introduce or retain another — re-check the
     whole changed unit against the full bar (smell table + SOLID/DI), not just the target.
+12. **Delegate discovery + judgment (orchestrator).** The orchestrator never explores/greps source or evaluates options in its own context.
+    - Discovery → `Explore` (→ `RESEARCH`); judgment → analyst / owning role (→ `ANALYSIS` / `REVIEW`).
+    - It **ratifies, captures the decision, and routes** — it does not derive.
+    - Code-cognition (`Read`/`Grep`/`Glob` over source) is tool-blocked while a run is active (`invoke_orchestrator_read_guard.py`).
+    - See [`process.md`](process.md) → *Investigation and analysis are delegated*.
 
 ## Tool-output economy
 

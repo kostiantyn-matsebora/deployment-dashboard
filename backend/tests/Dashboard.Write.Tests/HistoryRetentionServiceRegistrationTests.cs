@@ -17,8 +17,9 @@ public sealed class HistoryRetentionServiceRegistrationTests
     {
         // Arrange
         var services = new ServiceCollection();
-        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
-        services.AddWriteServices();
+        var configuration = new ConfigurationBuilder().Build();
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddWriteServices(configuration);
 
         // Act: inspect registrations before building the provider so we avoid
         // attempting to resolve services that need a real DB connection string.

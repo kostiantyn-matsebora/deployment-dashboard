@@ -21,7 +21,7 @@ builder.AddDashboardDatabase();
 
 builder.Services.AddSingleton<IAppVersionProvider, AssemblyAppVersionProvider>();
 
-builder.Services.AddWriteServices();
+builder.Services.AddWriteServices(builder.Configuration);
 builder.Services.AddReadServices(builder.Configuration);
 builder.Services.AddControlServices();
 

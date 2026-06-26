@@ -28,6 +28,7 @@ public static partial class EventMapper
         {
             DeploymentId = $"gh-deploy-{deployment.Id}",
             Service = service,
+            Namespace = repo.Split('/').Last(),
             Environment = deployment.Environment,
             Version = context.Version,
             Status = contractStatus,
