@@ -59,8 +59,6 @@ Save, apply, share, and import named snapshots of your UI settings — filters, 
 
 The preset panel's **Import from URL** field lets you paste a public HTTPS link to a single preset or a multi-preset bundle. The SPA fetches client-side — no backend involved.
 
-<!-- TODO: capture screenshot of the Import from URL input in the preset panel once the UI is integrated (suggested assets: presets-import-url-dark.png / presets-import-url-light.png) -->
-
 [:octicons-arrow-right-24: Import from URL — accepted formats and boundaries](./ui-settings.md#import-from-url)
 
 ## :material-tune-variant: Demo control panel { #demo-control-panel }

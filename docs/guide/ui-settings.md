@@ -45,7 +45,7 @@ Import is always an explicit user action. There is no central registry and no sy
 !!! tip "Team starter kit"
     Commit a `presets/` directory to your repo with a `dd-preset-<name>.json` for each standard view (e.g. `dd-preset-prod-services.json`, `dd-preset-on-call.json`). New team members import them on first launch and are up to speed in seconds.
 
-### Import from URL
+### Import from URL { #import-from-url }
 
 The preset panel also accepts a public HTTPS URL. Paste a URL in the **Import from URL** field and click **Import** — the SPA fetches the JSON client-side, validates it, and imports using the same name-dedup rules as file import (`(2)`, `(3)`, … on collision).
 
