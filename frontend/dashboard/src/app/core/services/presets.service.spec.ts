@@ -1015,6 +1015,53 @@ describe('PresetsService — parseOrBundle()', () => {
     const result = service.parseOrBundle('{not-valid-json}');
     expect(typeof result).toBe('string');
   });
+
+  // ── prototype-pollution regression ────────────────────────────────────────
+  //
+  // Importing a settings object containing {"__proto__":{"polluted":true}} must
+  // NOT set Object.prototype.polluted — parseOrBundle strips the dangerous key
+  // before returning any envelope.
+
+  it('does not pollute Object.prototype when settings contain __proto__', () => {
+    const malicious = {
+      version: 1,
+      name: 'evil',
+      settings: JSON.parse('{"__proto__":{"polluted":true},"theme":"dark"}'),
+    };
+    const result = service.parseOrBundle(JSON.stringify(malicious));
+    // Must parse successfully (shape is valid)
+    expect(Array.isArray(result)).toBe(true);
+    // The dangerous key must NOT have been applied to Object.prototype
+    expect((({} as Record<string, unknown>)['polluted'])).toBeUndefined();
+    expect((Object.prototype as Record<string, unknown>)['polluted']).toBeUndefined();
+    // The safe settings key must still be present
+    const settings = (result as PresetEnvelope[])[0].settings;
+    expect(settings.theme).toBe('dark');
+  });
+
+  it('does not pollute Object.prototype via importFromUrl with __proto__ in settings', async () => {
+    // Save originalFetch for cleanup
+    const originalFetch = globalThis.fetch;
+    const malicious = {
+      version: 1,
+      name: 'evil-url',
+      settings: JSON.parse('{"__proto__":{"urlPolluted":true},"theme":"light"}'),
+    };
+    globalThis.fetch = () =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify(malicious)),
+      } as Response);
+    try {
+      const result = await service.importFromUrl('https://example.com/evil.json');
+      expect(typeof result).not.toBe('string');
+      expect((({} as Record<string, unknown>)['urlPolluted'])).toBeUndefined();
+      expect((Object.prototype as Record<string, unknown>)['urlPolluted']).toBeUndefined();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
 
 // ── importPresets ─────────────────────────────────────────────────────────────
@@ -1145,6 +1192,26 @@ describe('PresetsService — importFromUrl()', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it('rejects an unparseable URL with the invalid-URL error message', async () => {
+    const fetchSpy = vi.fn();
+    stubFetch(fetchSpy as unknown as typeof globalThis.fetch);
+
+    const result = await service.importFromUrl('  https://  ');
+    expect(typeof result).toBe('string');
+    expect(result as string).toContain('could not parse the address');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects a non-https URL (e.g. ftp:) via URL parse with the https-only error', async () => {
+    const fetchSpy = vi.fn();
+    stubFetch(fetchSpy as unknown as typeof globalThis.fetch);
+
+    const result = await service.importFromUrl('ftp://example.com/preset.json');
+    expect(typeof result).toBe('string');
+    expect(result as string).toContain('HTTPS');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it('returns a string error when fetch throws (network / CORS failure)', async () => {
     stubFetch(() => Promise.reject(new TypeError('Network error')));
     const result = await service.importFromUrl('https://example.com/preset.json');
@@ -1175,8 +1242,8 @@ describe('PresetsService — importFromUrl()', () => {
     );
     const result = await service.importFromUrl('https://example.com/preset.json');
     expect(typeof result).toBe('string');
-    // Should contain a parse-error message
-    expect(typeof result).toBe('string');
+    // parseOrBundle returns the real error string for unparseable content
+    expect(result as string).toContain('parse');
   });
 
   it('returns a string error for valid JSON with invalid shape', async () => {

@@ -514,7 +514,7 @@ export class PresetsService {
         envelopes.push({
           version:  1,
           name:     (e['name'] as string).trim(),
-          settings: e['settings'] as PresetSettings,
+          settings: this.sanitizeSettings(e['settings'] as Record<string, unknown>),
         });
       }
       return envelopes;
@@ -525,7 +525,7 @@ export class PresetsService {
     if (typeof result === 'string') {
       return result;
     }
-    return [result];
+    return [{ ...result, settings: this.sanitizeSettings(result.settings as unknown as Record<string, unknown>) }];
   }
 
   /**
@@ -582,8 +582,13 @@ export class PresetsService {
    */
   async importFromUrl(url: string): Promise<{ imported: string[] } | string> {
     const trimmed = url.trim();
-    if (!trimmed.startsWith('https://')) {
-      return 'Only HTTPS URLs are supported — HTTP and other schemes are blocked by browser mixed-content policy.';
+    try {
+      const u = new URL(trimmed);
+      if (u.protocol !== 'https:') {
+        return 'Only HTTPS URLs are supported — HTTP and other schemes are blocked by browser mixed-content policy.';
+      }
+    } catch {
+      return 'Invalid URL — could not parse the address.';
     }
 
     let response: Response;
@@ -680,6 +685,25 @@ export class PresetsService {
     } catch {
       return [];
     }
+  }
+
+  /**
+   * Return a copy of a settings object with dangerous prototype-pollution keys
+   * (`__proto__`, `constructor`, `prototype`) dropped.
+   *
+   * The copy is built via a plain for…in loop that skips the three dangerous
+   * key names entirely — bracket-assigning `__proto__` would itself re-trigger
+   * the Object prototype setter, so we NEVER do `safe[k] = v` for that key.
+   */
+  private sanitizeSettings(raw: Record<string, unknown>): PresetSettings {
+    const DANGEROUS = new Set(['__proto__', 'constructor', 'prototype']);
+    const safe: Record<string, unknown> = Object.create(null);
+    for (const k in raw) {
+      if (Object.prototype.hasOwnProperty.call(raw, k) && !DANGEROUS.has(k)) {
+        Object.defineProperty(safe, k, { value: raw[k], writable: true, enumerable: true, configurable: true });
+      }
+    }
+    return safe as unknown as PresetSettings;
   }
 
   private parseStringArray(value: unknown): string[] {
