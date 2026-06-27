@@ -60,6 +60,12 @@ export interface PresetEnvelope {
   settings: PresetSettings;
 }
 
+/**
+ * Parsed result from parseOrBundle(): either an array of envelopes (success)
+ * or a string error message (failure).
+ */
+export type ParseOrBundleResult = PresetEnvelope[] | string;
+
 /** Stored collection: array of envelopes. */
 type PresetsStore = PresetEnvelope[];
 
@@ -448,6 +454,164 @@ export class PresetsService {
     }
     const updated = [...existing, { ...envelope, name }];
     this.persist(updated);
+  }
+
+  /**
+   * Parse a raw JSON string as either a single preset (SINGLE) or a bundle
+   * (BUNDLE) and return an array of PresetEnvelopes.
+   *
+   * Accepted shapes:
+   *   SINGLE  {version:1, name:string, settings:{}} → [envelope]
+   *   BUNDLE  {version:1, presets:[{name,settings}, ...]} → [envelope, ...]
+   *
+   * Bare top-level arrays are rejected (backward-compat guard).
+   * Each bundle entry inherits version:1.
+   * Delegates single-envelope validation to validateImport so there is one
+   * validation sink (no new sinks, prototype-pollution-safe per #357).
+   *
+   * Returns ParseOrBundleResult: PresetEnvelope[] on success, string on error.
+   */
+  parseOrBundle(raw: string): ParseOrBundleResult {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return 'Invalid JSON — could not parse the content.';
+    }
+
+    if (Array.isArray(parsed)) {
+      return 'Invalid format — bare top-level arrays are not supported. Use a single preset envelope or a bundle object.';
+    }
+
+    if (!parsed || typeof parsed !== 'object') {
+      return 'Invalid format — expected a JSON object.';
+    }
+
+    const obj = parsed as Record<string, unknown>;
+
+    // BUNDLE: {version:1, presets:[...]}
+    if (Array.isArray(obj['presets'])) {
+      if (obj['version'] !== 1) {
+        return `Unsupported version: ${String(obj['version'])}. Only version 1 is supported.`;
+      }
+      const entries = obj['presets'] as unknown[];
+      if (entries.length === 0) {
+        return 'Invalid bundle — "presets" array is empty.';
+      }
+      const envelopes: PresetEnvelope[] = [];
+      for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i];
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+          return `Invalid bundle — presets[${i}] is not an object.`;
+        }
+        const e = entry as Record<string, unknown>;
+        if (typeof e['name'] !== 'string' || !(e['name'] as string).trim()) {
+          return `Invalid bundle — presets[${i}] has a missing or blank "name" field.`;
+        }
+        if (!e['settings'] || typeof e['settings'] !== 'object' || Array.isArray(e['settings'])) {
+          return `Invalid bundle — presets[${i}] has a missing or invalid "settings" field.`;
+        }
+        envelopes.push({
+          version:  1,
+          name:     (e['name'] as string).trim(),
+          settings: e['settings'] as PresetSettings,
+        });
+      }
+      return envelopes;
+    }
+
+    // SINGLE — delegate to validateImport (single validation sink).
+    const result = this.validateImport(raw);
+    if (typeof result === 'string') {
+      return result;
+    }
+    return [result];
+  }
+
+  /**
+   * Import an array of validated PresetEnvelopes (from parseOrBundle), appending
+   * each to the stored list with cross-bundle name deduplication: the dedup
+   * counter spans the entire existing store plus all previously appended entries
+   * in this batch, matching the mockup's importPresets() loop.
+   *
+   * Returns the array of final names assigned (after dedup).
+   */
+  importPresets(envelopes: PresetEnvelope[]): string[] {
+    const existing = this.presets();
+    const takenNames = new Set(existing.map((p) => p.name));
+    const added: PresetEnvelope[] = [];
+    const names: string[] = [];
+
+    for (const envelope of envelopes) {
+      let name = envelope.name;
+      if (takenNames.has(name)) {
+        let counter = 2;
+        while (takenNames.has(`${name} (${counter})`)) {
+          counter++;
+        }
+        name = `${name} (${counter})`;
+      }
+      takenNames.add(name);
+      added.push({ ...envelope, name });
+      names.push(name);
+    }
+
+    this.persist([...existing, ...added]);
+    return names;
+  }
+
+  /**
+   * Fetch a preset file from a URL and import all presets it contains.
+   *
+   * HTTPS-only — non-https URLs are rejected with a clear message about
+   * browser mixed-content restrictions.
+   *
+   * Note: private-repo raw URLs (e.g. raw.githubusercontent.com on a private
+   * repo) will fail with a CORS or 404 error by design — the SPA holds no
+   * secrets and cannot inject auth headers.
+   *
+   * Returns {imported: string[]} with the final preset names on success,
+   * or a string error message on failure.
+   *
+   * Error taxonomy (each returns a distinct user-readable string):
+   *   - Non-https URL
+   *   - Network / CORS failure (fetch() throws)
+   *   - Non-OK HTTP response (e.g. 404)
+   *   - Non-JSON body (response.json() throws)
+   *   - Invalid shape (delegates to parseOrBundle)
+   */
+  async importFromUrl(url: string): Promise<{ imported: string[] } | string> {
+    const trimmed = url.trim();
+    if (!trimmed.startsWith('https://')) {
+      return 'Only HTTPS URLs are supported — HTTP and other schemes are blocked by browser mixed-content policy.';
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(trimmed);
+    } catch {
+      // Network failure, CORS rejection, or DNS failure — no status available.
+      return 'Could not reach that URL — check the address or CORS policy (private-repo raw URLs require auth the browser cannot provide).';
+    }
+
+    if (!response.ok) {
+      return `HTTP ${response.status} — the server returned an error for that URL.`;
+    }
+
+    let text: string;
+    try {
+      text = await response.text();
+    } catch {
+      return 'Could not read the response body.';
+    }
+
+    const parseResult = this.parseOrBundle(text);
+    if (typeof parseResult === 'string') {
+      return parseResult;
+    }
+
+    const names = this.importPresets(parseResult);
+    return { imported: names };
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────

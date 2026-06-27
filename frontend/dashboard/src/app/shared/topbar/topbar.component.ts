@@ -107,6 +107,10 @@ export class TopbarComponent {
   protected presetRenameValue = '';
   /** Error / info message shown in the popover (clears on next action). */
   protected readonly presetsMsg = signal<string | null>(null);
+  /** URL input value for the import-from-URL row. */
+  protected presetImportUrl = '';
+  /** True while an import-from-URL fetch is in progress (disables the button). */
+  protected readonly presetUrlImporting = signal(false);
 
   // ── View tabs ─────────────────────────────────────────────
   protected readonly viewOptions: ViewOption[] = [
@@ -484,6 +488,7 @@ export class TopbarComponent {
       this.renamingPreset.set(null);
       this.presetRenameValue = '';
       this.presetsMsg.set(null);
+      this.presetImportUrl = '';
     }
   }
 
@@ -737,6 +742,32 @@ export class TopbarComponent {
       reader.readAsText(file);
     }, { once: true });
     input.click();
+  }
+
+  /**
+   * Import preset(s) from the URL entered in presetImportUrl.
+   * Calls PresetsService.importFromUrl() and shows success or error in presetsMsg.
+   */
+  protected async importPresetsFromUrl(): Promise<void> {
+    const url = this.presetImportUrl.trim();
+    if (!url) {
+      this.presetsMsg.set('Please enter a URL.');
+      return;
+    }
+    this.presetUrlImporting.set(true);
+    this.presetsMsg.set(null);
+    try {
+      const result = await this.presetsService.importFromUrl(url);
+      if (typeof result === 'string') {
+        this.presetsMsg.set(result);
+      } else {
+        const n = result.imported.length;
+        this.presetsMsg.set(`Imported ${n} preset${n === 1 ? '' : 's'}.`);
+        this.presetImportUrl = '';
+      }
+    } finally {
+      this.presetUrlImporting.set(false);
+    }
   }
 
 }

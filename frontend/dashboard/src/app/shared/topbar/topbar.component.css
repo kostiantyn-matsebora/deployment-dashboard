@@ -1105,6 +1105,18 @@
   align-items: center;
 }
 
+/* Import-from-URL input row */
+.presets-url-row {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+/* URL input — same base style as presets-name-input, full-width in the row */
+.presets-url-input {
+  min-width: 0;
+}
+
 /* Name input — used for both save and rename */
 .presets-name-input {
   flex: 1;

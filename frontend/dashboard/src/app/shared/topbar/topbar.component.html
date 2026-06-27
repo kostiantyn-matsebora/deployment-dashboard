@@ -484,6 +484,29 @@
                 data-testid="presets-import-btn"
               >Import…</button>
             </div>
+
+            <!-- Import from URL row -->
+            <div class="presets-url-row">
+              <input
+                class="presets-name-input presets-url-input"
+                type="url"
+                placeholder="Import from URL (https://…)"
+                autocomplete="off"
+                spellcheck="false"
+                [(ngModel)]="presetImportUrl"
+                (keydown.enter)="importPresetsFromUrl()"
+                aria-label="Preset JSON URL"
+                data-testid="presets-import-url-input"
+              />
+              <button
+                class="ext-btn is-primary"
+                type="button"
+                [disabled]="presetUrlImporting()"
+                (click)="importPresetsFromUrl()"
+                aria-label="Import preset(s) from URL"
+                data-testid="presets-import-url-btn"
+              >{{ presetUrlImporting() ? '…' : 'Import URL' }}</button>
+            </div>
           } @else {
             <!-- Name input for saving -->
             <div class="presets-save-row">
