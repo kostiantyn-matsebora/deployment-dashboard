@@ -1,1 +1,0 @@
-"""docs-keeper build tooling."""

@@ -104,8 +104,10 @@ __pycache__/
 .claude/scheduled_tasks.lock
 .claude/settings.local.json
 # docs-keeper runtime state: session trackers + capture files (per-machine, never source).
-# All per-session_id files live under this dir (session.<sid>.json, capture.<sid>.json).
-/.docs-keeper/
+# Ignore everything under .docs-keeper/ EXCEPT the committed shared config.json.
+/.docs-keeper/*
+!/.docs-keeper/config.json
+
 # worktree lifecycle markers: written by Invoke-WorktreeCleanup.ps1 at SessionEnd
 # when a worktree has uncommitted changes. Keyed by session id.
 .claude/.worktree-state*.json

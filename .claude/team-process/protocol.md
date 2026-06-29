@@ -42,6 +42,7 @@ Eight typed forms carry every cross-role message: REVIEW · RESULT · BRIEF · F
 
 `role` (in `RESULT`/`REVIEW`) is one of: `contract` · `backend` · `frontend` · `infrastructure` · `testing` · `docs`.
 `REVIEW.role` additionally accepts `security` — a **review-only** competency (a generic agent running the `security-review` skill); it never appears in `RESULT` and never implements.
+`docs` is **plugin-provided (opt-in)** — a legal `role` tag only when the docs-keeper plugin is installed; otherwise the docs role is unstaffed (see [`roles/docs.md`](roles/docs.md)).
 
 ---
 

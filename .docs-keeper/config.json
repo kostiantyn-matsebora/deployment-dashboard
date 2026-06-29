@@ -1,0 +1,6 @@
+{
+  "enforcement": "block",
+  "paths": [
+    "**/*.md"
+  ]
+}
