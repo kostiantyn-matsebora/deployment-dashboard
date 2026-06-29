@@ -3,7 +3,6 @@ title: API Contract
 shortTitle: API
 intro: 'HTTP API contract for `Dashboard.Api` — OpenAPI 3.1 spec plus human-readable companion guidelines.'
 children:
-  - /openapi.yaml
   - /api-guidelines
   - /api-examples
 ---

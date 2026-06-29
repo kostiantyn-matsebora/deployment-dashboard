@@ -5,7 +5,7 @@ It is an **opt-in integration slot** in team-process:
 
 - **Plugin installed** → the role is staffed and behaves exactly as before: the
   `docs-keeper` agent, the `/docs-keeper:*` commands
-  (`docs-index` · `docs-revise` · `docs-sweep` · `docs-registry-sync` · `docs-capture`),
+  (`/docs-keeper:index` · `:revise` · `:sweep` · `:registry-sync` · `:capture` · `:config` · `:setup`),
   the commit-time drift gate, and the session/capture hooks all auto-register. Routing,
   the `/feature-team` roster, and dispatch (below) engage unchanged.
 - **Plugin absent** → the docs role is simply **unstaffed**. The rest of team-process

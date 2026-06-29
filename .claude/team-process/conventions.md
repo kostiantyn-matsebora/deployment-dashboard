@@ -16,19 +16,6 @@ Route each change to the specialist that owns it (`api-architect` / `backend-dev
 
 Each agent is a **project-agnostic anchor** to its generic role in `roles/*` (mission, principles, guardrails, communication protocol, tool-output economy). The **project-specific bindings** in the host root prompt are the *only* place stack lives — agents carry no stack.
 
-## Sources of truth
-
-**Index-first navigation (binding).**
-1. Read the nearest `index.md`.
-2. Use `children:` to locate the target file.
-3. Use `## Contents` anchor links to reach the section.
-4. Load full document content only when the target section is absent from the TOC.
-
-| Type | Source | Role |
-|---|---|---|
-| `root-index` | [docs/index.md](docs/index.md) | Project documentation root — architecture spec, frontend requirements, and per-surface sub-trees. |
-| `team-process` | [.claude/team-process/process.md](.claude/team-process/process.md) | Agent-dispatch / specialist-routing convention — routing table, phases, session state, and guardrails. |
-
 ## Plan format (binding)
 
 Every plan file must follow this structure, in order:
