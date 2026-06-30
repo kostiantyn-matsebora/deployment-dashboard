@@ -92,7 +92,7 @@ backend/
 | Column | Type | Null | Notes |
 |---|---|---|---|
 | `id` | uuid PK | no | `Guid.CreateVersion7()` — surrogate **and** stream cursor (D2) |
-| `deployment_id` | text | no | correlation key; NOT unique, NO dedup |
+| `deployment_id` | text | no | correlation key; NOT unique (one row per status event); idempotent on natural key `(deployment_id, status, happened_at)` |
 | `service` | text | no | |
 | `namespace` | text | yes | ≤ 128; optional grouping segment scoping `service`. Identity = `namespace/service` when present, bare `service` when null. Two namespaces sharing a service name ⇒ two distinct rows/lanes (#353) |
 | `environment` | text | no | |
@@ -109,6 +109,7 @@ backend/
 
 **Indexes**
 - PK `(id)` — doubles as the SSE resume index (`id >` scan).
+- Unique `(deployment_id, status, happened_at)` — natural idempotency key; `POST /api/deployments` returns **200** on conflict (existing event, no new row, no SSE frame), **201** on insert.
 - `(service, environment, happened_at DESC, id DESC)` — Matrix `current`, history drawer, listing tiebreak.
 - partial `WHERE status='success'` on `(service, environment, happened_at DESC)` — Matrix `last_successful`.
 - `(happened_at DESC, id DESC)` — global listing + cursor.
@@ -191,7 +192,7 @@ Externally-persisted state for the reset state machine. **Single row** (fixed PK
 
 | Surface | Method · Path | Auth | Behaviour |
 |---|---|---|---|
-| ingest | `POST /api/deployments` | `X-Api-Key` | append 1 row → `NOTIFY deployment_events` → `201` + `Location`; **`403`** (problem+json) when event matches `SERVICE_EXCLUDE`; **`503` + `Retry-After`** during the reset data-clearing window (state `resetting`) |
+| ingest | `POST /api/deployments` | `X-Api-Key` | idempotent on `(deployment_id, status, happened_at)` — duplicate → **`200`** (existing event, no new row, no SSE frame); new event → append 1 row → `NOTIFY deployment_events` → **`201`** + `Location`; **`403`** (problem+json) when event matches `SERVICE_EXCLUDE`; **`503` + `Retry-After`** during the reset data-clearing window (state `resetting`) |
 | deployments | `GET /api/deployments` | none | cursor page, `happened_at DESC, id DESC`; filters: service/environment/status/deployment_id/since/until |
 | deployments | `GET /api/deployments/{id}` | none | single row / `404` |
 | matrix | `GET /api/matrix` | none | `current` (latest **effective**: `in-progress`/`success`/`failure`) + `last_successful` + optional `next` (latest **non-effective**: `pending`/`queued`/`waiting`/`cancelled`/`rejected`, only when newer than `current`) per slot; weak `ETag` + `If-None-Match` |
@@ -214,7 +215,7 @@ Externally-persisted state for the reset state machine. **Single row** (fixed PK
 |---|---|
 | **Auth** | `X-Api-Key` on write, fetcher, and component event POST. `X-Control-API-Key` on control reset and control stream. Both: missing/invalid → `401`. `X-Component-Id` on `POST /api/control/events`: missing/pattern-invalid → `422` (identity header, not an auth secret). Keys from env; never logged or echoed. |
 | **Validation** | Closed bodies (`additionalProperties:false`). Failures → `422` `application/problem+json` with `errors[]` (JSON-Pointer + message). |
-| **Errors** | RFC 9457 everywhere. No `409` on ingest (append-only). `Retry-After` reserved for `429`/`503`. |
+| **Errors** | RFC 9457 everywhere. No `409` on ingest (idempotent — duplicate returns `200`, not an error). `Retry-After` reserved for `429`/`503`. |
 | **CORS** | `CORS_ALLOWED_ORIGINS` (CSV). Empty → no CORS (gateway/same-origin). Set → policy over read GETs **and** the deployment SSE stream. Control stream is component-to-API only; CORS not required. |
 | **Statelessness (NFR-05)** | No in-memory cache of state; every read hits the DB. SSE fan-out only via per-instance `LISTEN`. No sticky sessions. |
 | **Secrets** | `X-Api-Key` and `X-Control-API-Key` never appear in any body, problem detail, or log line. `X-Component-Id` is not a secret — it is an identity token stored verbatim; never masked. Payloads/cursors stored verbatim, never parsed/logged. |

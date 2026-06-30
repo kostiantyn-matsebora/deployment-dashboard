@@ -39,13 +39,16 @@ info:
     component-initiated GET — the API emits into it, but the connection is inbound.
 
     **Event-store semantics.** The persistence model (SAD §11) is an append-only
-    log of deployment **events** — every `POST /api/deployments` appends one row.
-    A single logical deployment emits several rows during its lifecycle
-    (e.g. `in-progress` → `success`/`failure`), all sharing one `deployment_id`.
-    `deployment_id` is therefore an emitter-supplied **correlation key**, NOT a
-    row identity and NOT an idempotency key. Retries from a flaky CI step produce
-    additional rows; the read surface always reduces by `happened_at` (latest wins
-    per `(service, environment)` for the Matrix; full history for the drawer).
+    log of deployment **events**. `POST /api/deployments` is an idempotent append
+    on the natural key `(deployment_id, status, happened_at)`: a new triple inserts
+    one row and returns `201` (plus an SSE `NOTIFY`), while a duplicate triple — a
+    fetcher backfill replay or an at-least-once POST retry — inserts nothing and
+    returns `200` with no SSE event. A single logical deployment emits several rows
+    during its lifecycle (e.g. `in-progress` → `success`/`failure`), all sharing one
+    `deployment_id`. `deployment_id` is therefore an emitter-supplied **correlation
+    key**, NOT a row identity and NOT the idempotency key — the full triple is.
+    The read surface always reduces by `happened_at` (latest wins per
+    `(service, environment)` for the Matrix; full history for the drawer).
 
     **`happened_at` is emitter-supplied**, not server-assigned (SAD §11). It is
     the UTC wall-clock at which the deployment transitioned to the reported
@@ -125,13 +128,16 @@ paths:
       description: |
         Push a deployment-state event from a CI/CD pipeline (or the optional fetcher).
 
-        **Pure append-only.** Every accepted call inserts one row. There is no
-        server-side dedup: the server does not compare `(service, deployment_id)`,
-        payload hashes, or any other key against existing rows. A retried POST
-        produces a duplicate row — handling retries is the caller's concern.
+        **Idempotent append.** A new event inserts one row and returns `201`. The
+        natural key `(deployment_id, status, happened_at)` is deduplicated: a replay
+        carrying an already-stored triple (a fetcher backfill replay or an
+        at-least-once POST retry) inserts nothing and returns `200` with the existing
+        row. The server compares only this triple — not `service`, payload hashes, or
+        any other key.
 
-        On success the backend `NOTIFY`s the PostgreSQL `deployment_events` channel,
-        which fans out to every connected SSE client across all API instances.
+        On a new-row `201` the backend `NOTIFY`s the PostgreSQL `deployment_events`
+        channel, which fans out to every connected SSE client across all API
+        instances; an idempotent `200` replay emits no SSE event.
 
         **Reset window.** During the brief data-clearing phase of a system-state reset
         ingest is unavailable and returns `503` with `Retry-After`; clients retry after
@@ -155,6 +161,15 @@ paths:
               standaloneInProgress:
                 $ref: '#/components/examples/IngestInProgressNoParents'
       responses:
+        '200':
+          description: |
+            Event already ingested (idempotent replay); existing deployment event
+            returned. The natural key `(deployment_id, status, happened_at)` matched
+            a stored row, so nothing was inserted and no SSE event was emitted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeploymentEvent'
         '201':
           description: Event appended.
           headers:
