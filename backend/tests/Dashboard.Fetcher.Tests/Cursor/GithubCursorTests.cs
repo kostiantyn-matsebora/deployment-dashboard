@@ -282,4 +282,159 @@ public sealed class GithubCursorTests
             .WithBackfillEnvDone("acme/api", DateTimeOffset.UtcNow, "dev");
         Assert.False(cursor.IsEmpty);
     }
+
+    // ── OldestPending (WithRepoState / OldestPendingFor) ─────────────────────
+
+    [Fact]
+    public void OldestPendingFor_FreshCursor_ReturnsNull()
+    {
+        // No repo entry at all → null.
+        Assert.Null(new GithubCursor().OldestPendingFor("acme/api"));
+    }
+
+    [Fact]
+    public void OldestPendingFor_RepoKnownViaWithRepo_ReturnsNull()
+    {
+        // WithRepo sets only Since; OldestPending defaults to null in RepoCursor.
+        var cursor = new GithubCursor().WithRepo("acme/api", DateTimeOffset.UtcNow);
+        Assert.Null(cursor.OldestPendingFor("acme/api"));
+    }
+
+    [Fact]
+    public void OldestPendingFor_UnknownRepo_ReturnsNull()
+    {
+        var cursor = new GithubCursor().WithRepo("acme/api", DateTimeOffset.UtcNow);
+        Assert.Null(cursor.OldestPendingFor("other/repo"));
+    }
+
+    [Fact]
+    public void WithRepoState_SetsOldestPendingAndSince()
+    {
+        var since = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var oldest = new DateTimeOffset(2026, 5, 15, 12, 0, 0, TimeSpan.Zero);
+
+        var cursor = new GithubCursor().WithRepoState("acme/api", since, oldest);
+
+        Assert.Equal(oldest, cursor.OldestPendingFor("acme/api"));
+        Assert.Equal(since, cursor.SinceFor("acme/api", TimeSpan.FromDays(7), DateTimeOffset.UtcNow));
+    }
+
+    [Fact]
+    public void WithRepoState_NullOldestPending_OldestPendingForReturnsNull()
+    {
+        var since = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+
+        var cursor = new GithubCursor().WithRepoState("acme/api", since, null);
+
+        Assert.Null(cursor.OldestPendingFor("acme/api"));
+        Assert.Equal(since, cursor.SinceFor("acme/api", TimeSpan.FromDays(7), DateTimeOffset.UtcNow));
+    }
+
+    [Fact]
+    public void WithRepoState_EncodeAndDecode_PreservesOldestPending()
+    {
+        // Full encode/decode round-trip must preserve the oldest_pending value exactly.
+        var since = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var oldest = new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero);
+
+        var decoded = GithubCursor.Decode(
+            new GithubCursor().WithRepoState("acme/api", since, oldest).Encode());
+
+        Assert.Equal(oldest, decoded.OldestPendingFor("acme/api"));
+        Assert.Equal(since, decoded.SinceFor("acme/api", TimeSpan.FromDays(7), DateTimeOffset.UtcNow));
+    }
+
+    [Fact]
+    public void WithRepoState_NullOldestPending_EncodeAndDecode_ReturnsNullPending()
+    {
+        var since = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+
+        var decoded = GithubCursor.Decode(
+            new GithubCursor().WithRepoState("acme/api", since, null).Encode());
+
+        Assert.Null(decoded.OldestPendingFor("acme/api"));
+    }
+
+    /// <summary>
+    /// Backward-compat: cursors produced BEFORE the oldest_pending field was added contain a
+    /// RepoCursor JSON object with only the "since" key.  When decoded, OldestPendingFor must
+    /// return null (missing key → default null for nullable type).
+    /// </summary>
+    [Fact]
+    public void Decode_OldCursorJsonWithoutOldestPendingKey_ReturnsNullPending()
+    {
+        // Craft the pre-existing cursor JSON manually — no "oldest_pending" key present.
+        // String concatenation avoids raw-string brace-count ambiguity (CS9007).
+        const string since = "2026-05-01T00:00:00+00:00";
+        var oldJson = "{\"repos\":{\"acme/api\":{\"since\":\"" + since + "\"}}}";
+        var encoded = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(oldJson));
+
+        var decoded = GithubCursor.Decode(encoded);
+
+        Assert.Null(decoded.OldestPendingFor("acme/api"));
+        Assert.Equal(
+            new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero),
+            decoded.SinceFor("acme/api", TimeSpan.FromDays(7), DateTimeOffset.UtcNow));
+    }
+
+    [Fact]
+    public void WithRepoState_DoesNotMutateOriginal()
+    {
+        var original = new GithubCursor();
+        var since = DateTimeOffset.UtcNow;
+        var oldest = since.AddDays(-1);
+
+        _ = original.WithRepoState("acme/api", since, oldest);
+
+        // Original is unchanged.
+        Assert.Empty(original.Repos);
+        Assert.Null(original.OldestPendingFor("acme/api"));
+    }
+
+    [Fact]
+    public void WithRepoState_UpdatesExistingRepoEntry()
+    {
+        var since = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var oldest1 = since.AddDays(-5);
+        var oldest2 = since.AddDays(-10);
+
+        var cursor = new GithubCursor()
+            .WithRepoState("acme/api", since, oldest1)
+            .WithRepoState("acme/api", since, oldest2);
+
+        // Second call overwrites; oldest2 is the new floor.
+        Assert.Equal(oldest2, cursor.OldestPendingFor("acme/api"));
+    }
+
+    [Fact]
+    public void WithRepoState_PreservesBackfillSection()
+    {
+        var anchor = DateTimeOffset.UtcNow;
+        var since = anchor.AddDays(-1);
+        var oldest = anchor.AddDays(-2);
+
+        var cursor = new GithubCursor()
+            .WithBackfillEnvDone("acme/api", anchor, "dev")
+            .WithRepoState("acme/api", since, oldest);
+
+        // Backfill section must survive a WithRepoState call.
+        Assert.NotNull(cursor.BackfillFor("acme/api"));
+        Assert.Equal(oldest, cursor.OldestPendingFor("acme/api"));
+    }
+
+    [Fact]
+    public void WithRepoState_OtherReposUnaffected()
+    {
+        var since = new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        var oldest = since.AddDays(-1);
+        var otherSince = since.AddHours(-3);
+
+        var cursor = new GithubCursor()
+            .WithRepo("acme/web", otherSince)
+            .WithRepoState("acme/api", since, oldest);
+
+        Assert.Equal(otherSince, cursor.SinceFor("acme/web", TimeSpan.FromDays(7), DateTimeOffset.UtcNow));
+        Assert.Null(cursor.OldestPendingFor("acme/web"));
+        Assert.Equal(oldest, cursor.OldestPendingFor("acme/api"));
+    }
 }
