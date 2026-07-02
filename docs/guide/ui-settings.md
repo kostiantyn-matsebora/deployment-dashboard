@@ -2,6 +2,8 @@
 
 Presets are a client-side feature of the running dashboard — no server configuration, no env vars, no accounts. State lives in `localStorage` in the browser.
 
+Looking for the read-only, repo/CI-sourced presets that show up in a **PROVIDED** section of the same popover? See [Provided presets](./provided-presets.md) — a separate feature published by a source outside the browser, never edited or deleted from the UI.
+
 ## :material-bookmark-box-multiple-outline: UI settings presets { #ui-settings-presets }
 
 Presets are a **client-side feature** — no env vars, no backend, no accounts. State lives in `localStorage` in the browser. Nothing here needs to be configured on the server.

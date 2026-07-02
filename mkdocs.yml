@@ -108,6 +108,7 @@ nav:
           - Fetcher: guide/configuration/fetcher.md
           - Demo: guide/configuration/demo.md
       - UI settings: guide/ui-settings.md
+      - Provided presets: guide/provided-presets.md
       - Integrate your CI/CD: guide/send-events.md
       - Architecture overview: guide/architecture-overview.md
       - FAQ & troubleshooting: guide/faq.md

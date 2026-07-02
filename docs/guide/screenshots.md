@@ -62,6 +62,15 @@ The dashboard can be installed as a standalone Chromium app — a dedicated wind
 
 [:octicons-arrow-right-24: Install guide](./install-app.md){ .md-button }
 
+## :material-cloud-download-outline: Provided presets { #provided-presets }
+
+Read-only, repo/CI-sourced UI-settings presets published by a `owner/repo` source — either directly over the [push-mode REST recipe](./provided-presets.md#publishing-presets-push-mode) or automatically discovered by the Fetcher in pull mode. They appear in a **PROVIDED** section of the topbar presets popover, alongside any presets saved locally, with **Apply** and **Clone-to-edit** actions. Nothing here is ever written back — provided presets are never edited or deleted from the UI.
+
+![Provided presets in the topbar popover — dark](../_assets/screenshots/provided-presets-dark.png#only-dark){ .dd-shot }
+![Provided presets in the topbar popover — light](../_assets/screenshots/provided-presets-light.png#only-light){ .dd-shot }
+
+[:octicons-arrow-right-24: Provided presets guide](./provided-presets.md){ .md-button }
+
 ## :material-dock-bottom: Footer { #footer }
 
 A fixed glass footer persists across all views. The left side shows the running version (sourced from `GET /api/version`, prefixed `v`) and a **Documentation** link. The right side carries the copyright and MIT License attribution.
