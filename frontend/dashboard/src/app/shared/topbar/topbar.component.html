@@ -625,6 +625,56 @@
             <p class="presets-empty-hint">No presets saved yet. Save the current settings to create one.</p>
           }
 
+          <!-- Provided presets — read-only, repo/CI-sourced (issue #391) -->
+          @if (hasProvidedPresets()) {
+            <div class="presets-divider" aria-hidden="true"></div>
+            <span class="popover-title">PROVIDED</span>
+            <ul class="presets-list" role="list" aria-label="Provided presets">
+              @for (p of providedPresets(); track p.source + '/' + p.name) {
+                <li
+                  class="presets-row"
+                  [class.is-active]="isProvidedPresetActive(p)"
+                  role="listitem"
+                  [attr.aria-current]="isProvidedPresetActive(p) ? 'true' : null"
+                  data-testid="provided-preset-item"
+                >
+                  <div class="presets-name-col">
+                    <span class="presets-name" [title]="p.name">{{ p.name }}</span>
+                    <span
+                      class="presets-provided-by"
+                      data-testid="provided-preset-source"
+                    >{{ attributionLabel(p) }}</span>
+                  </div>
+                  @if (isProvidedPresetActive(p)) {
+                    <span
+                      class="preset-active-badge"
+                      aria-hidden="true"
+                      data-testid="preset-active-badge"
+                    >Active</span>
+                  }
+                  <div class="presets-row-actions" role="group" [attr.aria-label]="'Actions for ' + p.name">
+                    <button
+                      class="preset-action-btn"
+                      type="button"
+                      [title]="'Apply preset: ' + p.name"
+                      [attr.aria-label]="'Apply preset: ' + p.name"
+                      (click)="applyProvidedPreset(p)"
+                      data-testid="provided-preset-apply-btn"
+                    >✓</button>
+                    <button
+                      class="preset-action-btn"
+                      type="button"
+                      [title]="'Clone to edit: ' + p.name"
+                      [attr.aria-label]="'Clone to edit: ' + p.name"
+                      (click)="cloneProvidedPreset(p)"
+                      data-testid="provided-preset-clone-btn"
+                    >⊕</button>
+                  </div>
+                </li>
+              }
+            </ul>
+          }
+
           <!-- Reset all settings -->
           <div class="presets-divider" aria-hidden="true"></div>
           <button

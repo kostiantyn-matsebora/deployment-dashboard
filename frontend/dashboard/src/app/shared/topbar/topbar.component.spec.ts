@@ -33,9 +33,11 @@ import { AppStateService }  from '../../core/services/app-state.service';
 import { ThemeService }     from '../../core/services/theme.service';
 import { NotificationPrefsService, NotifPrefs } from '../../core/services/notification-prefs.service';
 import { BrowserNotificationService } from '../../core/services/browser-notification.service';
+import { PresetsService }   from '../../core/services/presets.service';
 import {
   Matrix,
   MatrixField,
+  ProvidedPreset,
   RateLimitReport,
   Status,
   SwimlaneField,
@@ -853,5 +855,195 @@ describe('TopbarComponent — svcHiddenCount / servicesCaption namespace identit
 
     const caption = priv<() => string>(c, 'servicesCaption')();
     expect(caption).toBe('Showing all 2 services');
+  });
+});
+
+// ── Provided presets (issue #391) ────────────────────────────────────────────
+//
+// Covers:
+//   - providedPresets()/hasProvidedPresets() reflect PresetsService.providedPresets()
+//   - attributionLabel(): "provided by {source}" formatting
+//   - applyProvidedPreset(): drives PresetsService.apply() via providedToEnvelope()
+//   - cloneProvidedPreset(): drives PresetsService.clone() into a new local preset
+//   - isProvidedPresetActive(): last-applied badge spans local + provided lists
+//
+// Strategy: same mock AppStateService/ThemeService/NotificationPrefsService as the
+// rate-limit indicator suite above. PresetsService itself is REAL (providedIn: 'root')
+// — its providedPresets signal is seeded directly (bypassing HTTP), matching how
+// PresetsService's own loader is already covered by presets.service.spec.ts.
+
+describe('TopbarComponent — provided presets (issue #391)', () => {
+  let component:     TopbarComponent;
+  let presetsService: PresetsService;
+
+  function mkProvided(overrides: Partial<ProvidedPreset> = {}): ProvidedPreset {
+    return {
+      source:     'acme/web',
+      name:       'ci-defaults',
+      version:    1,
+      settings:   { theme: 'dark', failOnly: true },
+      fetched_at: '2026-07-01T10:00:00Z',
+      ...overrides,
+    };
+  }
+
+  beforeEach(async () => {
+    const mockState: Partial<AppStateService> = {
+      activeView:             signal('matrix' as const),
+      serviceFilter:          signal(''),
+      failuresOnly:           signal(false),
+      serviceFilterMode:      signal('exclude' as const),
+      servicePatterns:        signal([] as string[]),
+      visibleServices:            (svcs: string[]) => svcs,
+      visibleServiceIdentities:   (ids: Array<{ service: string; namespace: string | null | undefined }>) => ids,
+      buildServiceSuggestions:    (rows: Array<{ service: string }>) => rows.map(r => r.service),
+      matrixVisibleFields:    signal(new Set<MatrixField>()),
+      swimlaneVisibleFields:  signal(new Set<SwimlaneField>()),
+      correlationPredicate:   signal('explicit parent' as const),
+      timeWindow:             signal('1 day' as const),
+      sseConnected:            signal(false),
+      kpi:                    signal({ services: 0, environments: 0, inFlight: 0, failed: 0 }) as never,
+      rateLimitMap:            signal(new Map()),
+      matrixData:              signal(null),
+      matrixColHidden:         signal(new Set<string>()),
+      matrixColOrder:          signal([] as string[]),
+      collapsedLanes:          signal(new Set<string>()),
+      autoScrollOnChange:      signal(true),
+      lastEffectiveEvent:      signal(null) as never,
+    };
+
+    const mockTheme: Partial<ThemeService> = {
+      theme: signal<Theme>('dark'),
+      setTheme: () => {},
+    };
+
+    const mockNotifPrefs: Partial<NotificationPrefsService> = {
+      prefs:        signal({ enabled: false, statuses: [], serviceMode: 'watch-all-except', serviceChips: [], envMode: 'watch-all-except', envChips: [] }) as never,
+      updatePrefs:  () => {},
+      shouldNotify: () => false,
+    };
+
+    const mockNotifService: Partial<BrowserNotificationService> = {
+      isSupported:       () => false,
+      requestPermission: () => Promise.resolve('denied' as const),
+      currentPermission: 'default' as const,
+    };
+
+    await TestBed.configureTestingModule({
+      imports:   [TopbarComponent],
+      providers: [
+        { provide: AppStateService,            useValue: mockState        },
+        { provide: ThemeService,               useValue: mockTheme        },
+        { provide: NotificationPrefsService,   useValue: mockNotifPrefs   },
+        { provide: BrowserNotificationService, useValue: mockNotifService },
+      ],
+      schemas: [NO_ERRORS_SCHEMA],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(TopbarComponent);
+    component      = fixture.componentInstance;
+    presetsService = TestBed.inject(PresetsService);
+    fixture.detectChanges();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  describe('providedPresets() / hasProvidedPresets()', () => {
+    it('hasProvidedPresets() is false before any provided preset has loaded', () => {
+      expect(priv<() => boolean>(component, 'hasProvidedPresets')()).toBe(false);
+    });
+
+    it('providedPresets() reflects PresetsService.providedPresets() once seeded', () => {
+      const item = mkProvided();
+      presetsService.providedPresets.set([item]);
+
+      const list = priv<() => ProvidedPreset[]>(component, 'providedPresets')();
+      expect(list).toEqual([item]);
+      expect(priv<() => boolean>(component, 'hasProvidedPresets')()).toBe(true);
+    });
+  });
+
+  describe('attributionLabel()', () => {
+    it('formats "provided by {source}"', () => {
+      const label = priv<(p: ProvidedPreset) => string>(component, 'attributionLabel')(
+        mkProvided({ source: 'octo-org/service-b' }),
+      );
+      expect(label).toBe('provided by octo-org/service-b');
+    });
+  });
+
+  describe('applyProvidedPreset() — apply-provided', () => {
+    it('applies the settings and sets activePresetName to the provided preset\'s name', () => {
+      const item = mkProvided({ name: 'from-ci', settings: { theme: 'light', failOnly: true } });
+      presetsService.providedPresets.set([item]);
+
+      priv<(p: ProvidedPreset) => void>(component, 'applyProvidedPreset').call(component, item);
+
+      expect(presetsService.activePresetName()).toBe('from-ci');
+    });
+
+    it('does not add the provided preset to the local presets() store', () => {
+      const item = mkProvided();
+      presetsService.providedPresets.set([item]);
+
+      priv<(p: ProvidedPreset) => void>(component, 'applyProvidedPreset').call(component, item);
+
+      expect(presetsService.presets()).toEqual([]);
+    });
+  });
+
+  describe('cloneProvidedPreset() — clone-provided-to-local', () => {
+    it('creates a new local preset named "{name} (copy)" with the same settings', () => {
+      const item = mkProvided({ name: 'ci-defaults', settings: { theme: 'light' } });
+      presetsService.providedPresets.set([item]);
+
+      priv<(p: ProvidedPreset) => void>(component, 'cloneProvidedPreset').call(component, item);
+
+      const local = presetsService.presets();
+      expect(local).toHaveLength(1);
+      expect(local[0].name).toBe('ci-defaults (copy)');
+      expect(local[0].settings).toEqual({ theme: 'light' });
+    });
+
+    it('the cloned local preset is independent of the source provided preset', () => {
+      const item = mkProvided({ settings: { theme: 'dark' } });
+      presetsService.providedPresets.set([item]);
+
+      priv<(p: ProvidedPreset) => void>(component, 'cloneProvidedPreset').call(component, item);
+
+      presetsService.presets()[0].settings.theme = 'light';
+      expect(item.settings['theme']).toBe('dark');
+    });
+  });
+
+  describe('isProvidedPresetActive() — active badge spans local + provided lists', () => {
+    it('is false before the provided preset has been applied', () => {
+      const item = mkProvided();
+      presetsService.providedPresets.set([item]);
+
+      expect(priv<(p: ProvidedPreset) => boolean>(component, 'isProvidedPresetActive').call(component, item)).toBe(false);
+    });
+
+    it('is true after applying the provided preset', () => {
+      const item = mkProvided({ name: 'ci-defaults' });
+      presetsService.providedPresets.set([item]);
+
+      priv<(p: ProvidedPreset) => void>(component, 'applyProvidedPreset').call(component, item);
+
+      expect(priv<(p: ProvidedPreset) => boolean>(component, 'isProvidedPresetActive').call(component, item)).toBe(true);
+    });
+
+    it('applying a LOCAL preset with the same name also marks the provided row active (name-keyed, matching local-vs-local behavior)', () => {
+      const item = mkProvided({ name: 'shared-name' });
+      presetsService.providedPresets.set([item]);
+      presetsService.save('shared-name');
+      const local = presetsService.presets().find((p) => p.name === 'shared-name')!;
+
+      presetsService.apply(local);
+
+      expect(priv<(p: ProvidedPreset) => boolean>(component, 'isProvidedPresetActive').call(component, item)).toBe(true);
+    });
   });
 });

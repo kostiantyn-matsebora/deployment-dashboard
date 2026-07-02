@@ -25,12 +25,15 @@
  */
 import { TestBed }      from '@angular/core/testing';
 import { DOCUMENT }     from '@angular/common';
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { vi }           from 'vitest';
 
 import { PresetsService, PresetEnvelope } from './presets.service';
 import { AppStateService }                from './app-state.service';
 import { ThemeService }                   from './theme.service';
 import { NotificationPrefsService }       from './notification-prefs.service';
+import { ProvidedPreset }                 from '../models/deployment.model';
 
 const STORAGE_KEY        = 'dd:presets';
 const ACTIVE_STORAGE_KEY = 'dd:presetActive';
@@ -876,6 +879,228 @@ describe('PresetsService', () => {
       const freshService = TestBed.inject(PresetsService);
 
       expect(freshService.presets()).toEqual([]);
+    });
+  });
+});
+
+// ── Provided presets (issue #391) ────────────────────────────────────────────
+//
+// Covers:
+//   - providedPresets() starts empty; PresetsService construction never
+//     requires an HttpClient provider (DeploymentApiService is resolved
+//     lazily inside loadProvidedPresets(), not at construction).
+//   - loadProvidedPresets(): GET /api/presets loader/signal — populates,
+//     replaces wholesale, never touches dd:presets localStorage, tolerates
+//     errors.
+//   - providedToEnvelope(): converts a ProvidedPreset into a version-1
+//     PresetEnvelope.
+//   - apply-provided: apply(providedToEnvelope(p)) drives the live signals
+//     and activePresetName — the same code path as a local preset.
+//   - clone-provided-to-local: clone(providedToEnvelope(p), name) creates a
+//     normal, persisted local preset.
+
+function makeProvidedPreset(overrides: Partial<ProvidedPreset> = {}): ProvidedPreset {
+  return {
+    source:     'acme/web',
+    name:       'ci-defaults',
+    version:    1,
+    settings:   { theme: 'dark', failOnly: true },
+    fetched_at: '2026-07-01T10:00:00Z',
+    ...overrides,
+  };
+}
+
+describe('PresetsService — provided presets (issue #391)', () => {
+  afterEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  describe('no-load state', () => {
+    it('providedPresets() is an empty array before loadProvidedPresets() is ever called', async () => {
+      await TestBed.configureTestingModule({
+        providers: [PresetsService, AppStateService, ThemeService, NotificationPrefsService, { provide: DOCUMENT, useValue: document }],
+      }).compileComponents();
+      const service = TestBed.inject(PresetsService);
+
+      expect(service.providedPresets()).toEqual([]);
+    });
+
+    it('constructing PresetsService never requires an HttpClient provider', async () => {
+      // No provideHttpClient()/provideHttpClientTesting() here — proves
+      // DeploymentApiService is resolved lazily, not eagerly at construction.
+      await TestBed.configureTestingModule({
+        providers: [PresetsService, AppStateService, ThemeService, NotificationPrefsService, { provide: DOCUMENT, useValue: document }],
+      }).compileComponents();
+
+      expect(() => TestBed.inject(PresetsService)).not.toThrow();
+    });
+  });
+
+  describe('loadProvidedPresets() — GET /api/presets loader/signal', () => {
+    let service: PresetsService;
+    let http:    HttpTestingController;
+
+    beforeEach(async () => {
+      await TestBed.configureTestingModule({
+        providers: [
+          PresetsService, AppStateService, ThemeService, NotificationPrefsService,
+          { provide: DOCUMENT, useValue: document },
+          provideHttpClient(),
+          provideHttpClientTesting(),
+        ],
+      }).compileComponents();
+      service = TestBed.inject(PresetsService);
+      http    = TestBed.inject(HttpTestingController);
+    });
+
+    afterEach(() => http.verify());
+
+    it('populates providedPresets() from a successful GET /api/presets response', () => {
+      const item = makeProvidedPreset();
+      service.loadProvidedPresets();
+
+      http.expectOne('/api/presets').flush({ items: [item] });
+
+      expect(service.providedPresets()).toEqual([item]);
+    });
+
+    it('replaces providedPresets() wholesale on each successful load (not appended)', () => {
+      service.loadProvidedPresets();
+      http.expectOne('/api/presets').flush({ items: [makeProvidedPreset({ name: 'first' })] });
+      expect(service.providedPresets()).toHaveLength(1);
+
+      service.loadProvidedPresets();
+      http.expectOne('/api/presets').flush({ items: [makeProvidedPreset({ name: 'second' })] });
+
+      expect(service.providedPresets()).toHaveLength(1);
+      expect(service.providedPresets()[0].name).toBe('second');
+    });
+
+    it('never writes to the dd:presets localStorage key', () => {
+      service.loadProvidedPresets();
+      http.expectOne('/api/presets').flush({ items: [makeProvidedPreset()] });
+
+      expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+      expect(service.presets()).toEqual([]);
+    });
+
+    it('leaves providedPresets() at its last known value on a request error', () => {
+      service.loadProvidedPresets();
+      http.expectOne('/api/presets').flush({ items: [makeProvidedPreset()] });
+      expect(service.providedPresets()).toHaveLength(1);
+
+      service.loadProvidedPresets();
+      http.expectOne('/api/presets').flush('boom', { status: 500, statusText: 'Server Error' });
+
+      expect(service.providedPresets()).toHaveLength(1);
+    });
+  });
+
+  describe('providedToEnvelope()', () => {
+    let service: PresetsService;
+
+    beforeEach(async () => {
+      await TestBed.configureTestingModule({
+        providers: [PresetsService, AppStateService, ThemeService, NotificationPrefsService, { provide: DOCUMENT, useValue: document }],
+      }).compileComponents();
+      service = TestBed.inject(PresetsService);
+    });
+
+    it("converts a ProvidedPreset into a version-1 PresetEnvelope carrying its name + settings", () => {
+      const provided = makeProvidedPreset({ name: 'from-ci', settings: { failOnly: true, view: 'swimlanes' } });
+
+      const envelope = service.providedToEnvelope(provided);
+
+      expect(envelope).toEqual({
+        version:  1,
+        name:     'from-ci',
+        settings: { failOnly: true, view: 'swimlanes' },
+      });
+    });
+  });
+
+  describe('apply-provided — apply() reused unchanged via providedToEnvelope()', () => {
+    let service:      PresetsService;
+    let state:         AppStateService;
+    let themeService:  ThemeService;
+
+    beforeEach(async () => {
+      await TestBed.configureTestingModule({
+        providers: [PresetsService, AppStateService, ThemeService, NotificationPrefsService, { provide: DOCUMENT, useValue: document }],
+      }).compileComponents();
+      service      = TestBed.inject(PresetsService);
+      state        = TestBed.inject(AppStateService);
+      themeService = TestBed.inject(ThemeService);
+    });
+
+    it("applies a provided preset's settings to the live signals", () => {
+      const provided = makeProvidedPreset({ settings: { theme: 'light', failOnly: true } });
+
+      service.apply(service.providedToEnvelope(provided));
+
+      expect(themeService.theme()).toBe('light');
+      expect(state.failuresOnly()).toBe(true);
+    });
+
+    it("sets activePresetName to the provided preset's name — active badge spans both lists", () => {
+      const provided = makeProvidedPreset({ name: 'ci-defaults' });
+
+      service.apply(service.providedToEnvelope(provided));
+
+      expect(service.activePresetName()).toBe('ci-defaults');
+    });
+
+    it('applying a provided preset does not add it to the local presets() store', () => {
+      const provided = makeProvidedPreset();
+
+      service.apply(service.providedToEnvelope(provided));
+
+      expect(service.presets()).toEqual([]);
+    });
+  });
+
+  describe('clone-provided-to-local — clone() reused unchanged via providedToEnvelope()', () => {
+    let service: PresetsService;
+
+    beforeEach(async () => {
+      await TestBed.configureTestingModule({
+        providers: [PresetsService, AppStateService, ThemeService, NotificationPrefsService, { provide: DOCUMENT, useValue: document }],
+      }).compileComponents();
+      service = TestBed.inject(PresetsService);
+    });
+
+    it('clones a provided preset into a new LOCAL editable preset under the given name', () => {
+      const provided = makeProvidedPreset({ name: 'ci-defaults', settings: { theme: 'light' } });
+
+      service.clone(service.providedToEnvelope(provided), 'ci-defaults (copy)');
+
+      expect(service.presets()).toHaveLength(1);
+      expect(service.presets()[0]).toEqual({
+        version:  1,
+        name:     'ci-defaults (copy)',
+        settings: { theme: 'light' },
+      });
+    });
+
+    it('persists the clone to dd:presets localStorage (the clone IS a local preset)', () => {
+      const provided = makeProvidedPreset();
+
+      service.clone(service.providedToEnvelope(provided), 'my-copy');
+
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]');
+      expect(stored).toHaveLength(1);
+      expect(stored[0].name).toBe('my-copy');
+    });
+
+    it('the clone is independent of the source provided preset (mutating the clone does not affect the source)', () => {
+      const provided = makeProvidedPreset({ settings: { theme: 'dark' } });
+
+      service.clone(service.providedToEnvelope(provided), 'independent-copy');
+      const clone = service.presets()[0];
+      clone.settings.theme = 'light';
+
+      expect(provided.settings['theme']).toBe('dark');
     });
   });
 });

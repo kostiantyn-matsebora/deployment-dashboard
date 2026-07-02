@@ -19,6 +19,7 @@ import {
   CorrelationPredicate,
   MATRIX_FIELDS,
   MatrixField,
+  ProvidedPreset,
   RateLimitReport,
   SWIMLANE_FIELDS,
   Status,
@@ -484,6 +485,11 @@ export class TopbarComponent {
       this.renamingPreset.set(null);
       this.presetRenameValue = '';
       this.presetsMsg.set(null);
+      // Refresh the read-only provided-preset catalog each time the
+      // popover opens (issue #391) — never on close.
+      if (this.presetsPopoverOpen()) {
+        this.presetsService.loadProvidedPresets();
+      }
     }
   }
 
@@ -737,6 +743,44 @@ export class TopbarComponent {
       reader.readAsText(file);
     }, { once: true });
     input.click();
+  }
+
+  // ── Provided presets (repo/CI-sourced, read-only — issue #391) ────────────
+
+  /** Reactive list of read-only provided presets from PresetsService. */
+  protected readonly providedPresets = computed(() => this.presetsService.providedPresets());
+
+  /** Whether any provided presets have loaded. */
+  protected readonly hasProvidedPresets = computed(() => this.providedPresets().length > 0);
+
+  /**
+   * True when the given provided preset is the last-applied one. Compares by
+   * name against the SAME activePresetName signal local presets use — the
+   * "active" badge spans both lists (issue #391 gate).
+   */
+  protected isProvidedPresetActive(p: ProvidedPreset): boolean {
+    return this.activePresetName() === p.name;
+  }
+
+  /** "provided by {source}" attribution line shown under a provided preset's name. */
+  protected attributionLabel(p: ProvidedPreset): string {
+    return `provided by ${p.source}`;
+  }
+
+  /** Apply a provided preset — converts to a PresetEnvelope and reuses apply() unchanged. */
+  protected applyProvidedPreset(p: ProvidedPreset): void {
+    this.presetsService.apply(this.presetsService.providedToEnvelope(p));
+    this.presetsMsg.set(`Applied "${p.name}".`);
+  }
+
+  /**
+   * Clone a provided preset into a new LOCAL editable preset (" (copy)"
+   * suffix) — reuses clone() unchanged. The clone is a normal local preset:
+   * renamable, updatable, deletable, exportable, persisted to dd:presets.
+   */
+  protected cloneProvidedPreset(p: ProvidedPreset): void {
+    this.presetsService.clone(this.presetsService.providedToEnvelope(p), `${p.name} (copy)`);
+    this.presetsMsg.set(`Cloned "${p.name}".`);
   }
 
 }

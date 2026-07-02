@@ -1,10 +1,11 @@
-import { inject, Injectable, signal } from '@angular/core';
+import { inject, Injectable, Injector, signal } from '@angular/core';
 
 import {
   CORRELATION_PREDICATES,
   CorrelationPredicate,
   MATRIX_FIELDS,
   MatrixField,
+  ProvidedPreset,
   SWIMLANE_FIELDS,
   SwimlaneField,
   Theme,
@@ -15,6 +16,7 @@ import {
   AppStateService,
   ServiceFilterMode,
 } from './app-state.service';
+import { DeploymentApiService } from './deployment-api.service';
 import {
   NOTIFICATION_STATUSES,
   NotifPrefs,
@@ -82,13 +84,26 @@ const ENVELOPE_VERSION   = 1 as const;
  * existing persistence effects in AppStateService handle re-saving to
  * localStorage automatically.  No parallel store.
  *
- * Spec: docs/design/mockup/index.html §presets
+ * Provided presets (issue #391): a SEPARATE providedPresets signal holds the
+ * read-only repo/CI-sourced catalog from GET /api/presets. It is fetched on
+ * demand via loadProvidedPresets() (never at construction — see the injector
+ * field below) and is NEVER written to the dd:presets localStorage store.
+ * apply()/clone() are reused unchanged via providedToEnvelope().
+ *
+ * Spec: docs/design/mockup/index.html §presets; docs/api/openapi.yaml (presets tag)
  */
 @Injectable({ providedIn: 'root' })
 export class PresetsService {
   private readonly state      = inject(AppStateService);
   private readonly themeService = inject(ThemeService);
   private readonly notifPrefs = inject(NotificationPrefsService);
+  /**
+   * Stored (not eagerly resolved) so that constructing PresetsService never
+   * requires an HttpClient provider. DeploymentApiService is only pulled from
+   * the injector inside loadProvidedPresets(), i.e. when a caller actually
+   * asks for the provided-preset catalog.
+   */
+  private readonly injector   = inject(Injector);
 
   /** Reactive list of saved presets; refreshed on every mutating operation. */
   readonly presets = signal<PresetEnvelope[]>(this.loadFromStorage());
@@ -98,8 +113,20 @@ export class PresetsService {
    * dd:presetActive.  null when no preset has been applied, or after the
    * active preset is deleted or all settings are reset.
    * Active = LAST APPLIED — not auto-cleared when the user changes settings.
+   * Also doubles as the "active" pointer for provided presets (issue #391):
+   * apply() sets it from envelope.name regardless of whether the envelope
+   * came from a local preset or a provided preset converted via
+   * providedToEnvelope().
    */
   readonly activePresetName = signal<string | null>(this.loadActiveFromStorage());
+
+  /**
+   * Read-only repo/CI-sourced provided presets fetched from GET /api/presets
+   * (issue #391). NEVER written to the dd:presets localStorage store — this
+   * signal is populated exclusively by loadProvidedPresets() and reset on
+   * each successful fetch. Empty until the first successful load.
+   */
+  readonly providedPresets = signal<ProvidedPreset[]>([]);
 
   // ── Capture ─────────────────────────────────────────────────────────────
 
@@ -261,6 +288,40 @@ export class PresetsService {
     };
     const updated = [...this.presets(), cloned];
     this.persist(updated);
+  }
+
+  // ── Provided presets (repo/CI-sourced, read-only — issue #391) ────────────
+
+  /**
+   * Fetch the merged provided-preset catalog from GET /api/presets and
+   * refresh providedPresets(). Safe to call repeatedly (e.g. every time the
+   * presets popover opens) — each successful response replaces the signal
+   * wholesale. On error, providedPresets() is left at its last known value
+   * (never persisted anywhere, so there is nothing to roll back).
+   */
+  loadProvidedPresets(): void {
+    const api = this.injector.get(DeploymentApiService);
+    api.getProvidedPresets().subscribe({
+      next: (res) => this.providedPresets.set(res.items),
+      error: () => {
+        // Network/API failure — keep the last successfully loaded catalog.
+      },
+    });
+  }
+
+  /**
+   * Convert a ProvidedPreset into a local-shaped PresetEnvelope so that
+   * apply() and clone() — which only read .name/.settings — work unchanged
+   * for provided presets. `settings` is opaque on the wire; the SPA trusts
+   * it as a PresetSettings payload, same as validateImport() does for
+   * imported files.
+   */
+  providedToEnvelope(provided: ProvidedPreset): PresetEnvelope {
+    return {
+      version: ENVELOPE_VERSION,
+      name: provided.name,
+      settings: provided.settings as PresetSettings,
+    };
   }
 
   // ── Rename ───────────────────────────────────────────────────────────────
