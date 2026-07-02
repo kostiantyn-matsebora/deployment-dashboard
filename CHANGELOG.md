@@ -7,6 +7,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 
+## [0.21.0] - 2026-07-02
+
+### Fixed
+
+- **Fetcher no longer misses a late `waiting → success` transition on approval-gated deployments (#407).** A deployment that sat non-terminal for longer than a day aged past the deployments-list window (`cutoff = since − 1 day`, early-stopped on `CreatedAt < cutoff`), was evicted, and was never re-polled — so an approval that finally succeeded was never recorded. The per-repo cursor now tracks the oldest still-pending deployment and lowers the list cutoff to `min(since − 1 day, oldest_pending)`, keeping non-terminal deployments inside the window until they reach a terminal status. (Already-stranded rows are not backfilled by this change — see the reconciliation runbook below.)
+
+### Changed
+
+- **Deployment ingest is now idempotent on its natural key (#407).** A unique key `(deployment_id, status, happened_at)` (`ux_de_dedup_natural_key`), added by a dedup-then-index migration, closes the latent at-least-once duplication hazard: re-ingesting the same event is swallowed, returns the existing row, and emits no duplicate SSE notification. The write endpoint now returns `200` for a duplicate and `201` for a newly-created event.
+
+### Added
+
+- **Reconciliation runbook for recovering already-stranded statuses (`docs/guide/reconcile-missed-statuses.md`) (#407).** Documents how to recover deployments that were already stranded before the re-poll fix, via a bounded backfill (raising `BACKFILL_DEPTH` / `BACKFILL_MAX_AGE`) — now safe to re-run thanks to idempotent ingest.
+
+
 ## [0.20.0] - 2026-06-26
 
 ### Added
