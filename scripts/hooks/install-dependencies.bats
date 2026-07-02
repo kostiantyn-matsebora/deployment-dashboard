@@ -98,6 +98,21 @@ PYSTUB
         printf '#!$BASH_BIN\nif [ "\$1" = "--list-sdks" ]; then\n  echo "10.0.109 [/usr/lib/dotnet/sdk]"\nelif [ "\$1" = "--version" ]; then\n  echo "10.0.109"\nfi\nexit 0\n' > "$SANDBOX/dotnet"
         chmod +x "$SANDBOX/dotnet"
         ;;
+      docker.io)
+        cat > "$SANDBOX/docker" << 'DKSTUB'
+#!BASH_BIN_PLACEHOLDER
+if [ "$1" = "compose" ] && [ "$2" = "version" ]; then
+  echo "Docker Compose version v2.29.0"
+  exit 0
+fi
+if [ "$1" = "--version" ]; then
+  echo "Docker version 27.0.0, build abc"
+fi
+exit 0
+DKSTUB
+        sed -i "s|BASH_BIN_PLACEHOLDER|$BASH_BIN|g" "$SANDBOX/docker"
+        chmod +x "$SANDBOX/docker"
+        ;;
     esac
   done
 fi
@@ -200,6 +215,20 @@ STUB
   # code-review-graph stub — pre-installs a working code-review-graph.
   printf '#!%s\nexit 0\n' "$BASH_BIN" > "$SANDBOX/code-review-graph"
   chmod +x "$SANDBOX/code-review-graph"
+
+  # docker stub — pre-installs a working docker with the compose v2 plugin.
+  cat > "$SANDBOX/docker" << STUB
+#!$BASH_BIN
+if [ "\$1" = "compose" ] && [ "\$2" = "version" ]; then
+  echo "Docker Compose version v2.29.0"
+  exit 0
+fi
+if [ "\$1" = "--version" ]; then
+  echo "Docker version 27.0.0, build abc"
+fi
+exit 0
+STUB
+  chmod +x "$SANDBOX/docker"
 
   # sed stub — delegates to the real sed binary.
   SED_BIN="$(command -v sed)"
@@ -770,4 +799,66 @@ STUB
 
   [ "$status" -eq 1 ]
   [[ "$output" == *"uv not found"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# 28. docker: idempotent — docker + compose plugin present, apt NOT invoked
+# ---------------------------------------------------------------------------
+
+@test "docker idempotent: docker with compose v2 plugin present exits 0 without invoking apt-get install" {
+  APT_INSTALL_LOG="$SANDBOX/apt-install.log"
+  cat > "$SANDBOX/apt-get" << STUB
+#!$BASH_BIN
+echo "apt-get" >> "$SENTINEL"
+if [ "\$1" = "install" ]; then
+  echo "\$@" >> "$APT_INSTALL_LOG"
+fi
+STUB
+  chmod +x "$SANDBOX/apt-get"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 0 ]
+  if [ -f "$APT_INSTALL_LOG" ] && grep -q "docker.io" "$APT_INSTALL_LOG"; then
+    echo "apt-get install docker.io was invoked despite docker + compose plugin already present"
+    return 1
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# 29. docker: install path — docker absent, apt-get present → installed, exit 0
+# ---------------------------------------------------------------------------
+
+@test "docker install: docker absent + apt-get present installs docker and exits 0" {
+  rm -f "$SANDBOX/docker"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 0 ]
+  grep -q "^apt-get$" "$SENTINEL"
+  [ -x "$SANDBOX/docker" ]
+  "$SANDBOX/docker" compose version
+}
+
+# ---------------------------------------------------------------------------
+# 30. docker: missing apt-get prereq → exit 1 with apt-get-not-found on stderr
+# ---------------------------------------------------------------------------
+
+@test "docker missing apt-get: docker absent + apt-get absent exits 1 with 'apt-get not found' on stderr" {
+  rm -f "$SANDBOX/docker"
+  rm -f "$SANDBOX/apt-get"
+
+  run env -i \
+    CLAUDE_CODE_REMOTE=1 \
+    PATH="$SANDBOX" \
+    "$BASH_BIN" "$SCRIPT"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"apt-get not found"* ]]
 }
