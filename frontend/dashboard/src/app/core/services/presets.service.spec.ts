@@ -1104,3 +1104,440 @@ describe('PresetsService — provided presets (issue #391)', () => {
     });
   });
 });
+
+// ── parseOrBundle ─────────────────────────────────────────────────────────────
+//
+// Covers:
+//   - single valid envelope → [envelope]
+//   - bundle valid → [envelope, ...] (N entries)
+//   - bare top-level array rejected
+//   - bundle with wrong/missing version rejected
+//   - bundle with empty presets array rejected
+//   - bundle entry with blank name rejected
+//   - bundle entry with missing settings rejected
+//   - single with bad version still rejected (via validateImport delegation)
+//   - single with blank name still rejected
+//   - single with missing settings still rejected
+//   - invalid JSON rejected
+
+describe('PresetsService — parseOrBundle()', () => {
+  let service: PresetsService;
+
+  beforeEach(async () => {
+    localStorage.clear();
+    await TestBed.configureTestingModule({
+      providers: [
+        PresetsService,
+        AppStateService,
+        ThemeService,
+        NotificationPrefsService,
+        { provide: DOCUMENT, useValue: document },
+      ],
+    }).compileComponents();
+    service = TestBed.inject(PresetsService);
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  it('parses a single valid envelope and returns a 1-element array', () => {
+    const env = makeEnvelope('Single');
+    const result = service.parseOrBundle(JSON.stringify(env));
+    expect(Array.isArray(result)).toBe(true);
+    expect((result as PresetEnvelope[]).length).toBe(1);
+    expect((result as PresetEnvelope[])[0].name).toBe('Single');
+  });
+
+  it('parses a bundle and returns an array with all entries', () => {
+    const bundle = {
+      version: 1,
+      presets: [
+        { name: 'Alpha', settings: {} },
+        { name: 'Beta',  settings: { theme: 'light' } },
+      ],
+    };
+    const result = service.parseOrBundle(JSON.stringify(bundle));
+    expect(Array.isArray(result)).toBe(true);
+    const envelopes = result as PresetEnvelope[];
+    expect(envelopes.length).toBe(2);
+    expect(envelopes[0].name).toBe('Alpha');
+    expect(envelopes[1].name).toBe('Beta');
+    expect(envelopes[0].version).toBe(1);
+    expect(envelopes[1].version).toBe(1);
+  });
+
+  it('trims whitespace from bundle entry names', () => {
+    const bundle = {
+      version: 1,
+      presets: [{ name: '  Trimmed  ', settings: {} }],
+    };
+    const result = service.parseOrBundle(JSON.stringify(bundle));
+    expect((result as PresetEnvelope[])[0].name).toBe('Trimmed');
+  });
+
+  it('rejects a bare top-level array', () => {
+    const result = service.parseOrBundle(JSON.stringify([{ version: 1, name: 'a', settings: {} }]));
+    expect(typeof result).toBe('string');
+    expect(result as string).toContain('array');
+  });
+
+  it('rejects a bundle with wrong version', () => {
+    const bundle = { version: 2, presets: [{ name: 'x', settings: {} }] };
+    const result = service.parseOrBundle(JSON.stringify(bundle));
+    expect(typeof result).toBe('string');
+    expect(result as string).toContain('version');
+  });
+
+  it('rejects a bundle with an empty presets array', () => {
+    const bundle = { version: 1, presets: [] };
+    const result = service.parseOrBundle(JSON.stringify(bundle));
+    expect(typeof result).toBe('string');
+    expect(result as string).toContain('empty');
+  });
+
+  it('rejects a bundle entry with a blank name', () => {
+    const bundle = { version: 1, presets: [{ name: '  ', settings: {} }] };
+    const result = service.parseOrBundle(JSON.stringify(bundle));
+    expect(typeof result).toBe('string');
+    expect(result as string).toContain('name');
+  });
+
+  it('rejects a bundle entry with missing settings', () => {
+    const bundle = { version: 1, presets: [{ name: 'NoSettings' }] };
+    const result = service.parseOrBundle(JSON.stringify(bundle));
+    expect(typeof result).toBe('string');
+    expect(result as string).toContain('settings');
+  });
+
+  it('rejects a bundle entry that is not an object', () => {
+    const raw = '{"version":1,"presets":["not-an-object"]}';
+    const result = service.parseOrBundle(raw);
+    expect(typeof result).toBe('string');
+  });
+
+  it('rejects a single envelope with wrong version (via validateImport delegation)', () => {
+    const bad = { version: 2, name: 'x', settings: {} };
+    const result = service.parseOrBundle(JSON.stringify(bad));
+    expect(typeof result).toBe('string');
+    expect(result as string).toContain('version');
+  });
+
+  it('rejects a single envelope with blank name (via validateImport delegation)', () => {
+    const bad = { version: 1, name: '', settings: {} };
+    const result = service.parseOrBundle(JSON.stringify(bad));
+    expect(typeof result).toBe('string');
+  });
+
+  it('rejects a single envelope missing settings (via validateImport delegation)', () => {
+    const bad = { version: 1, name: 'NoSettings' };
+    const result = service.parseOrBundle(JSON.stringify(bad));
+    expect(typeof result).toBe('string');
+  });
+
+  it('returns a string error for invalid JSON', () => {
+    const result = service.parseOrBundle('{not-valid-json}');
+    expect(typeof result).toBe('string');
+  });
+
+  // ── prototype-pollution regression ────────────────────────────────────────
+  //
+  // Importing a settings object containing {"__proto__":{"polluted":true}} must
+  // NOT set Object.prototype.polluted — parseOrBundle strips the dangerous key
+  // before returning any envelope.
+
+  it('does not pollute Object.prototype when settings contain __proto__', () => {
+    const malicious = {
+      version: 1,
+      name: 'evil',
+      settings: JSON.parse('{"__proto__":{"polluted":true},"theme":"dark"}'),
+    };
+    const result = service.parseOrBundle(JSON.stringify(malicious));
+    // Must parse successfully (shape is valid)
+    expect(Array.isArray(result)).toBe(true);
+    // The dangerous key must NOT have been applied to Object.prototype
+    expect((({} as Record<string, unknown>)['polluted'])).toBeUndefined();
+    expect((Object.prototype as Record<string, unknown>)['polluted']).toBeUndefined();
+    // The safe settings key must still be present
+    const settings = (result as PresetEnvelope[])[0].settings;
+    expect(settings.theme).toBe('dark');
+  });
+
+  it('does not pollute Object.prototype via importFromUrl with __proto__ in settings', async () => {
+    // Save originalFetch for cleanup
+    const originalFetch = globalThis.fetch;
+    const malicious = {
+      version: 1,
+      name: 'evil-url',
+      settings: JSON.parse('{"__proto__":{"urlPolluted":true},"theme":"light"}'),
+    };
+    globalThis.fetch = () =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify(malicious)),
+      } as Response);
+    try {
+      const result = await service.importFromUrl('https://example.com/evil.json');
+      expect(typeof result).not.toBe('string');
+      expect((({} as Record<string, unknown>)['urlPolluted'])).toBeUndefined();
+      expect((Object.prototype as Record<string, unknown>)['urlPolluted']).toBeUndefined();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+// ── importPresets ─────────────────────────────────────────────────────────────
+//
+// Covers:
+//   - appends all envelopes in one call
+//   - cross-bundle name deduplication (counter spans existing + batch)
+//   - names returned in order
+//   - persists to localStorage
+
+describe('PresetsService — importPresets()', () => {
+  let service: PresetsService;
+
+  beforeEach(async () => {
+    localStorage.clear();
+    await TestBed.configureTestingModule({
+      providers: [
+        PresetsService,
+        AppStateService,
+        ThemeService,
+        NotificationPrefsService,
+        { provide: DOCUMENT, useValue: document },
+      ],
+    }).compileComponents();
+    service = TestBed.inject(PresetsService);
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  it('appends all envelopes and returns assigned names', () => {
+    const names = service.importPresets([makeEnvelope('A'), makeEnvelope('B')]);
+    expect(names).toEqual(['A', 'B']);
+    expect(service.presets()).toHaveLength(2);
+  });
+
+  it('deduplicates names across existing presets', () => {
+    service.save('A');
+    const names = service.importPresets([makeEnvelope('A')]);
+    expect(names).toEqual(['A (2)']);
+    expect(service.presets()).toHaveLength(2);
+    expect(service.presets()[1].name).toBe('A (2)');
+  });
+
+  it('deduplicates names within the same batch (cross-bundle dedup)', () => {
+    const names = service.importPresets([makeEnvelope('X'), makeEnvelope('X')]);
+    expect(names).toEqual(['X', 'X (2)']);
+    expect(service.presets()).toHaveLength(2);
+  });
+
+  it('increments suffix counter past existing suffixed names', () => {
+    service.save('Z');
+    service.importPresets([makeEnvelope('Z')]); // creates 'Z (2)'
+    const names = service.importPresets([makeEnvelope('Z')]);
+    expect(names).toEqual(['Z (3)']);
+  });
+
+  it('persists all envelopes to localStorage', () => {
+    service.importPresets([makeEnvelope('P1'), makeEnvelope('P2')]);
+    const raw = localStorage.getItem('dd:presets');
+    expect(raw).not.toBeNull();
+    const parsed = JSON.parse(raw!);
+    expect(parsed.map((p: PresetEnvelope) => p.name)).toEqual(['P1', 'P2']);
+  });
+});
+
+// ── importFromUrl ──────────────────────────────────────────────────────────────
+//
+// Covers:
+//   - non-https URL rejected immediately (no fetch called)
+//   - network/CORS failure (fetch throws) → string error
+//   - non-OK HTTP response (404) → string error
+//   - non-JSON body → string error
+//   - invalid shape (valid JSON but wrong structure) → string error
+//   - valid single preset → imported, names returned
+//   - valid bundle (2 entries) → both imported, names returned
+//   - fetch is injectable via globalThis.fetch override pattern
+
+describe('PresetsService — importFromUrl()', () => {
+  let service: PresetsService;
+  let originalFetch: typeof globalThis.fetch;
+
+  beforeEach(async () => {
+    localStorage.clear();
+    originalFetch = globalThis.fetch;
+
+    await TestBed.configureTestingModule({
+      providers: [
+        PresetsService,
+        AppStateService,
+        ThemeService,
+        NotificationPrefsService,
+        { provide: DOCUMENT, useValue: document },
+      ],
+    }).compileComponents();
+    service = TestBed.inject(PresetsService);
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+    globalThis.fetch = originalFetch;
+    TestBed.resetTestingModule();
+  });
+
+  /** Helper: stub globalThis.fetch with a mock. */
+  function stubFetch(mockFn: typeof globalThis.fetch): void {
+    globalThis.fetch = mockFn;
+  }
+
+  it('rejects a non-https URL without calling fetch', async () => {
+    const fetchSpy = vi.fn();
+    stubFetch(fetchSpy as unknown as typeof globalThis.fetch);
+
+    const result = await service.importFromUrl('http://example.com/preset.json');
+    expect(typeof result).toBe('string');
+    expect(result as string).toContain('HTTPS');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects a bare non-URL without calling fetch', async () => {
+    const fetchSpy = vi.fn();
+    stubFetch(fetchSpy as unknown as typeof globalThis.fetch);
+
+    const result = await service.importFromUrl('not-a-url');
+    expect(typeof result).toBe('string');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unparseable URL with the invalid-URL error message', async () => {
+    const fetchSpy = vi.fn();
+    stubFetch(fetchSpy as unknown as typeof globalThis.fetch);
+
+    const result = await service.importFromUrl('  https://  ');
+    expect(typeof result).toBe('string');
+    expect(result as string).toContain('could not parse the address');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects a non-https URL (e.g. ftp:) via URL parse with the https-only error', async () => {
+    const fetchSpy = vi.fn();
+    stubFetch(fetchSpy as unknown as typeof globalThis.fetch);
+
+    const result = await service.importFromUrl('ftp://example.com/preset.json');
+    expect(typeof result).toBe('string');
+    expect(result as string).toContain('HTTPS');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('returns a string error when fetch throws (network / CORS failure)', async () => {
+    stubFetch(() => Promise.reject(new TypeError('Network error')));
+    const result = await service.importFromUrl('https://example.com/preset.json');
+    expect(typeof result).toBe('string');
+    expect(result as string).toContain('reach');
+  });
+
+  it('returns a string error for non-OK HTTP response (404)', async () => {
+    stubFetch(() =>
+      Promise.resolve({
+        ok:   false,
+        status: 404,
+        text: () => Promise.resolve('Not Found'),
+      } as Response),
+    );
+    const result = await service.importFromUrl('https://example.com/preset.json');
+    expect(typeof result).toBe('string');
+    expect(result as string).toContain('404');
+  });
+
+  it('returns a string error for non-JSON body', async () => {
+    stubFetch(() =>
+      Promise.resolve({
+        ok:   true,
+        status: 200,
+        text: () => Promise.resolve('<html>not json</html>'),
+      } as Response),
+    );
+    const result = await service.importFromUrl('https://example.com/preset.json');
+    expect(typeof result).toBe('string');
+    // parseOrBundle returns the real error string for unparseable content
+    expect(result as string).toContain('parse');
+  });
+
+  it('returns a string error for valid JSON with invalid shape', async () => {
+    stubFetch(() =>
+      Promise.resolve({
+        ok:   true,
+        status: 200,
+        text: () => Promise.resolve('{"version":1,"name":"","settings":{}}'),
+      } as Response),
+    );
+    const result = await service.importFromUrl('https://example.com/preset.json');
+    expect(typeof result).toBe('string');
+  });
+
+  it('imports a valid single preset and returns its name', async () => {
+    const env = makeEnvelope('Remote Preset');
+    stubFetch(() =>
+      Promise.resolve({
+        ok:   true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify(env)),
+      } as Response),
+    );
+    const result = await service.importFromUrl('https://example.com/preset.json');
+    expect(typeof result).not.toBe('string');
+    const r = result as { imported: string[] };
+    expect(r.imported).toEqual(['Remote Preset']);
+    expect(service.presets()).toHaveLength(1);
+    expect(service.presets()[0].name).toBe('Remote Preset');
+  });
+
+  it('imports a valid bundle and returns all names', async () => {
+    const bundle = {
+      version: 1,
+      presets: [
+        { name: 'Prod',     settings: {} },
+        { name: 'Staging',  settings: {} },
+      ],
+    };
+    stubFetch(() =>
+      Promise.resolve({
+        ok:   true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify(bundle)),
+      } as Response),
+    );
+    const result = await service.importFromUrl('https://example.com/bundle.json');
+    expect(typeof result).not.toBe('string');
+    const r = result as { imported: string[] };
+    expect(r.imported).toEqual(['Prod', 'Staging']);
+    expect(service.presets()).toHaveLength(2);
+  });
+
+  it('applies name deduplication when importing from URL collides with existing', async () => {
+    service.save('Existing');
+    const bundle = {
+      version: 1,
+      presets: [{ name: 'Existing', settings: {} }],
+    };
+    stubFetch(() =>
+      Promise.resolve({
+        ok:   true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify(bundle)),
+      } as Response),
+    );
+    const result = await service.importFromUrl('https://example.com/bundle.json');
+    expect(typeof result).not.toBe('string');
+    const r = result as { imported: string[] };
+    expect(r.imported).toEqual(['Existing (2)']);
+  });
+});

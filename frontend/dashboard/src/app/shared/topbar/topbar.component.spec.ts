@@ -1047,3 +1047,138 @@ describe('TopbarComponent — provided presets (issue #391)', () => {
     });
   });
 });
+
+// ── TopbarComponent — importPresetsFromUrl handler ────────────────────────────
+//
+// Covers:
+//   - blank URL → presetsMsg set to a prompt, presetUrlImporting stays false
+//   - successful import → presetsMsg shows count, presetImportUrl cleared
+//   - service returns string error → presetsMsg shows error
+//   - presetUrlImporting is true during the async call and false after
+
+describe('TopbarComponent — importPresetsFromUrl()', () => {
+  let component: TopbarComponent;
+  let importFromUrlSpy: ReturnType<typeof vi.fn>;
+
+  function buildMockState(): Partial<AppStateService> {
+    return {
+      activeView:               signal('matrix' as const),
+      serviceFilter:            signal(''),
+      failuresOnly:             signal(false),
+      serviceFilterMode:        signal('exclude' as const),
+      servicePatterns:          signal([] as string[]),
+      visibleServices:          (svcs: string[]) => svcs,
+      visibleServiceIdentities: (ids: Array<{ service: string; namespace: string | null | undefined }>) => ids,
+      buildServiceSuggestions:  (rows: Array<{ service: string }>) => rows.map(r => r.service),
+      matrixVisibleFields:      signal(new Set()),
+      swimlaneVisibleFields:    signal(new Set()),
+      correlationPredicate:     signal('explicit parent' as const),
+      timeWindow:               signal('1 day' as const),
+      sseConnected:             signal(false),
+      kpi:                      signal({ services: 0, environments: 0, inFlight: 0, failed: 0 }) as never,
+      rateLimitMap:             signal(new Map()),
+      matrixData:               signal(null),
+      matrixColHidden:          signal(new Set<string>()),
+      matrixColOrder:           signal([] as string[]),
+      collapsedLanes:           signal(new Set<string>()),
+      autoScrollOnChange:       signal(true),
+      lastEffectiveEvent:       signal(null) as never,
+    };
+  }
+
+  beforeEach(async () => {
+    importFromUrlSpy = vi.fn();
+
+    const mockPresetsService: Partial<PresetsService> = {
+      presets:          signal([]) as never,
+      activePresetName: signal(null) as never,
+      providedPresets:  signal([]) as never,
+      importFromUrl:    importFromUrlSpy as unknown as PresetsService['importFromUrl'],
+    };
+
+    const mockTheme: Partial<ThemeService> = {
+      theme:    signal<Theme>('dark'),
+      setTheme: () => {},
+    };
+    const mockNotifPrefs: Partial<NotificationPrefsService> = {
+      prefs:        signal({ enabled: false, statuses: [], serviceMode: 'watch-all-except', serviceChips: [], envMode: 'watch-all-except', envChips: [] }) as never,
+      updatePrefs:  () => {},
+      shouldNotify: () => false,
+    };
+    const mockNotifService: Partial<BrowserNotificationService> = {
+      isSupported:       () => false,
+      requestPermission: () => Promise.resolve('denied' as const),
+      currentPermission: 'default' as const,
+    };
+
+    await TestBed.configureTestingModule({
+      imports:   [TopbarComponent, RouterModule.forRoot([])],
+      providers: [
+        { provide: AppStateService,            useValue: buildMockState()   },
+        { provide: ThemeService,               useValue: mockTheme           },
+        { provide: NotificationPrefsService,   useValue: mockNotifPrefs      },
+        { provide: BrowserNotificationService, useValue: mockNotifService    },
+        { provide: PresetsService,             useValue: mockPresetsService  },
+      ],
+      schemas: [NO_ERRORS_SCHEMA],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(TopbarComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('sets presetsMsg when URL is blank and does not call importFromUrl', async () => {
+    (component as unknown as Record<string, unknown>)['presetImportUrl'] = '   ';
+    await priv<() => Promise<void>>(component, 'importPresetsFromUrl').call(component);
+    expect(importFromUrlSpy).not.toHaveBeenCalled();
+    expect(priv<() => string | null>(component, 'presetsMsg')()).toBeTruthy();
+  });
+
+  it('calls importFromUrl with the trimmed URL', async () => {
+    importFromUrlSpy.mockResolvedValue({ imported: ['My Preset'] });
+    (component as unknown as Record<string, unknown>)['presetImportUrl'] = '  https://example.com/p.json  ';
+    await priv<() => Promise<void>>(component, 'importPresetsFromUrl').call(component);
+    expect(importFromUrlSpy).toHaveBeenCalledWith('https://example.com/p.json');
+  });
+
+  it('sets presetsMsg to import count on success', async () => {
+    importFromUrlSpy.mockResolvedValue({ imported: ['A', 'B'] });
+    (component as unknown as Record<string, unknown>)['presetImportUrl'] = 'https://example.com/bundle.json';
+    await priv<() => Promise<void>>(component, 'importPresetsFromUrl').call(component);
+    const msg = priv<() => string | null>(component, 'presetsMsg')();
+    expect(msg).toContain('2');
+  });
+
+  it('clears presetImportUrl on success', async () => {
+    importFromUrlSpy.mockResolvedValue({ imported: ['X'] });
+    (component as unknown as Record<string, unknown>)['presetImportUrl'] = 'https://example.com/x.json';
+    await priv<() => Promise<void>>(component, 'importPresetsFromUrl').call(component);
+    expect((component as unknown as Record<string, unknown>)['presetImportUrl']).toBe('');
+  });
+
+  it('sets presetsMsg to error string when service returns an error', async () => {
+    importFromUrlSpy.mockResolvedValue('HTTP 404 — the server returned an error for that URL.');
+    (component as unknown as Record<string, unknown>)['presetImportUrl'] = 'https://example.com/missing.json';
+    await priv<() => Promise<void>>(component, 'importPresetsFromUrl').call(component);
+    const msg = priv<() => string | null>(component, 'presetsMsg')();
+    expect(typeof msg).toBe('string');
+    expect(msg).toContain('404');
+  });
+
+  it('presetUrlImporting is false after a successful import', async () => {
+    importFromUrlSpy.mockResolvedValue({ imported: ['Done'] });
+    (component as unknown as Record<string, unknown>)['presetImportUrl'] = 'https://example.com/done.json';
+    await priv<() => Promise<void>>(component, 'importPresetsFromUrl').call(component);
+    expect(priv<() => boolean>(component, 'presetUrlImporting')()).toBe(false);
+  });
+
+  it('presetUrlImporting is false after a failed import (error path)', async () => {
+    importFromUrlSpy.mockResolvedValue('Some error');
+    (component as unknown as Record<string, unknown>)['presetImportUrl'] = 'https://example.com/fail.json';
+    await priv<() => Promise<void>>(component, 'importPresetsFromUrl').call(component);
+    expect(priv<() => boolean>(component, 'presetUrlImporting')()).toBe(false);
+  });
+});
