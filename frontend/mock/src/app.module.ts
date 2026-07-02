@@ -7,6 +7,7 @@ import { EventsController } from './events/events.controller';
 import { FetcherController } from './fetcher/fetcher.controller';
 import { MockController } from './mock/mock.controller';
 import { AnalyticsController } from './analytics/analytics.controller';
+import { PresetsController } from './presets/presets.controller';
 @Module({
   controllers: [
     AppController,
@@ -17,6 +18,7 @@ import { AnalyticsController } from './analytics/analytics.controller';
     FetcherController,
     MockController,
     AnalyticsController,
+    PresetsController,
   ],
 })
 export class AppModule {}
