@@ -13,6 +13,22 @@ namespace Dashboard.Fetcher.GitHub;
 public readonly record struct ConditionalList<T>(bool NotModified, IReadOnlyList<T> Items, string? ETag);
 
 /// <summary>
+/// Result of a conditional single-page directory listing (issue #391 / §5.6.2 preset
+/// discovery). Unlike <see cref="ConditionalList{T}"/> (which mirrors
+/// <see cref="GithubClient.GetPagedAsync{T}"/> and folds 404 into "empty list" for
+/// list-of-events endpoints where that is safe), this type keeps <see cref="NotFound"/>
+/// distinct from a genuine 200-with-zero-entries response — callers need to tell "the
+/// directory does not exist" (skip, never prune) apart from "the directory exists and is
+/// empty" (an authoritative empty bundle, prune-all).
+/// </summary>
+/// <param name="NotModified">True on 304 — caller should reuse its last-known-good result.</param>
+/// <param name="NotFound">True on 404 — the path does not exist; caller must NOT treat this as an authoritative empty listing.</param>
+/// <param name="Items">Entries from a 200 response; empty when <see cref="NotModified"/> or <see cref="NotFound"/> is true.</param>
+/// <param name="ETag">ETag from the 200 response, or null when absent/not applicable.</param>
+public readonly record struct ConditionalDirectoryListing<T>(
+    bool NotModified, bool NotFound, IReadOnlyList<T> Items, string? ETag);
+
+/// <summary>
 /// Thin wrapper around the GitHub REST API HTTP client.
 /// Handles pagination, rate-limit recording, and common status codes (F8, F16).
 /// Authentication headers are set by the typed-client factory in DI.
@@ -279,6 +295,41 @@ public sealed class GithubClient(HttpClient http, RateLimitBudget rateLimitBudge
         foreach (var item in items)
             if (!string.IsNullOrEmpty(item.FullName))
                 repos.Add(item.FullName);
+    }
+
+    /// <summary>
+    /// Conditional single-page GET for a GitHub contents-API directory listing
+    /// (issue #391 / §5.6.2). Sends <c>If-None-Match</c> when <paramref name="ifNoneMatch"/>
+    /// is non-null. Not paginated — the contents-directory endpoint returns the full listing
+    /// in one response (unlike the events-style endpoints <see cref="GetPagedConditionalAsync{T}"/>
+    /// targets).
+    ///
+    /// Deliberately does NOT reuse <see cref="GetPagedConditionalAsync{T}"/>: that method folds
+    /// 404 into "empty list, no ETag" (safe for event lists), which would be indistinguishable
+    /// from a genuine empty directory here — exactly the ambiguity preset discovery must not
+    /// have (403/404/any-non-2xx must SKIP-and-never-prune; only a real 200 may prune).
+    /// </summary>
+    public async Task<ConditionalDirectoryListing<T>> GetDirectoryConditionalAsync<T>(
+        string path, string? ifNoneMatch, CancellationToken ct)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Get, path);
+        if (ifNoneMatch is not null && EntityTagHeaderValue.TryParse(ifNoneMatch, out var etv))
+            req.Headers.IfNoneMatch.Add(etv);
+
+        var response = await http.SendAsync(req, ct);
+        await rateLimitBudget.RecordAndWaitIfNeededAsync(response, ct);
+
+        if (response.StatusCode == HttpStatusCode.NotModified)
+            return new(NotModified: true, NotFound: false, Items: [], ETag: ifNoneMatch);
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+            return new(NotModified: false, NotFound: true, Items: [], ETag: null);
+
+        response.EnsureSuccessStatusCode();
+
+        var etag = response.Headers.ETag?.ToString();
+        var items = await response.Content.ReadFromJsonAsync<List<T>>(ct) ?? [];
+        return new(NotModified: false, NotFound: false, Items: items, ETag: etag);
     }
 
     /// <summary>Downloads raw bytes (e.g. ZIP archive). Returns null on any non-2xx.</summary>

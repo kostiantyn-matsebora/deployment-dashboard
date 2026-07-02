@@ -5,6 +5,14 @@ public sealed class FetcherOptions
 {
     public int PollIntervalSeconds { get; set; } = 30;
 
+    /// <summary>
+    /// Slow-cadence preset-discovery loop interval (issue #391 / §5.6.2) — SEPARATE from
+    /// <see cref="PollIntervalSeconds"/>. Discovery lists each configured repo's
+    /// <c>.deployment-dashboard</c> directory and publishes its preset bundle; it runs far
+    /// less often than the deployment poll loop. Default 3600 (1h).
+    /// </summary>
+    public int DiscoveryIntervalSeconds { get; set; } = 3600;
+
     /// <summary>Normal poll first-run window; also default for BackfillMaxAge (F7).</summary>
     public TimeSpan InitialLookback { get; set; } = TimeSpan.FromDays(7);
 
@@ -51,4 +59,7 @@ public sealed class FetcherOptions
     public DateTimeOffset UtcNow => NowOverride ?? DateTimeOffset.UtcNow;
 
     public TimeSpan PollInterval => TimeSpan.FromSeconds(PollIntervalSeconds);
+
+    /// <summary>Interval for the slow-cadence discovery loop (issue #391 / §5.6.2).</summary>
+    public TimeSpan DiscoveryInterval => TimeSpan.FromSeconds(DiscoveryIntervalSeconds);
 }

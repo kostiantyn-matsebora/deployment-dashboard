@@ -53,6 +53,21 @@ public sealed record GhWorkflowFileContent
     [JsonPropertyName("encoding")] public string Encoding { get; init; } = "";
 }
 
+/// <summary>
+/// One entry from <c>GET /repos/{owner}/{repo}/contents/{dir}</c> when <c>{dir}</c> is a
+/// directory (issue #391 / §5.6.2 preset discovery). Directory listing responses omit
+/// <c>content</c> — a follow-up <c>GET .../contents/{entry.Path}</c> (via
+/// <see cref="GhWorkflowFileContent"/>, same endpoint shape as the single-file fetch)
+/// is required to read a file's Base64 body.
+/// </summary>
+public sealed record GhContentEntry
+{
+    [JsonPropertyName("name")] public string Name { get; init; } = "";
+    [JsonPropertyName("path")] public string Path { get; init; } = "";
+    /// <summary>"file" | "dir" | "symlink" | "submodule".</summary>
+    [JsonPropertyName("type")] public string Type { get; init; } = "";
+}
+
 public sealed record GhWorkflow
 {
     [JsonPropertyName("id")] public long Id { get; init; }

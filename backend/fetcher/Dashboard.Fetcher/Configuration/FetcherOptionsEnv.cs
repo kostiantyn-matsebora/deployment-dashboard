@@ -23,6 +23,7 @@ public static class FetcherOptionsEnv
     public static void ApplyEnvOverrides(IConfiguration config, FetcherOptions options)
     {
         ApplyInt(config, "POLL_INTERVAL_SECONDS", v => options.PollIntervalSeconds = v);
+        ApplyInt(config, "DISCOVERY_INTERVAL_SECONDS", v => options.DiscoveryIntervalSeconds = v);
         ApplyTimeSpan(config, "INITIAL_LOOKBACK", v => options.InitialLookback = v);
         ApplyBool(config, "BACKFILL", v => options.Backfill = v);
         ApplyTimeSpan(config, "BACKFILL_MAX_AGE", v => options.BackfillMaxAge = v);
