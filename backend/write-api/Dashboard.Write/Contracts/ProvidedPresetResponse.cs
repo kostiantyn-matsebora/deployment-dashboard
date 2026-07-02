@@ -15,8 +15,11 @@ public sealed record ProvidedPresetResponse(
     JsonElement Settings,
     DateTimeOffset FetchedAt)
 {
-    internal static ProvidedPresetResponse FromEntity(ProvidedPreset e) =>
-        new(e.Source, e.Name, e.Version, JsonDocument.Parse(e.SettingsJson).RootElement.Clone(), e.FetchedAt);
+    internal static ProvidedPresetResponse FromEntity(ProvidedPreset e)
+    {
+        using var doc = JsonDocument.Parse(e.SettingsJson);
+        return new(e.Source, e.Name, e.Version, doc.RootElement.Clone(), e.FetchedAt);
+    }
 }
 
 /// <summary>

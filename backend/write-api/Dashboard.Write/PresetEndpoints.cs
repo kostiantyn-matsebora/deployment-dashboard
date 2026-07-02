@@ -1,9 +1,10 @@
-using System.Text;
 using System.Text.Json;
 using Dashboard.Shared.Entities;
+using Dashboard.Shared.Http;
 using Dashboard.Write.Contracts;
 using Dashboard.Write.Filters;
 using Dashboard.Write.Repositories;
+using Dashboard.Write.Validation;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -50,11 +51,19 @@ public static class PresetEndpoints
         string source,
         [FromBody] PresetBundle body,
         IProvidedPresetRepository repository,
+        IPresetBundleValidator validator,
         CancellationToken ct)
     {
         var sizeError = ValidateBundleSize(body);
         if (sizeError is not null)
             return sizeError;
+
+        // Duplicate names would otherwise reach EF's AddRange and violate the (source, name)
+        // composite key with an unhandled 500; name length is inert on the DTO (minimal-API
+        // model binding never runs DataAnnotations) so it must be enforced here too (issue #391 review).
+        var failures = validator.Validate(body);
+        if (failures.Count > 0)
+            return UnprocessableEntity(failures);
 
         var fetchedAt = DateTimeOffset.UtcNow;
         var entities = body.Presets
@@ -88,12 +97,26 @@ public static class PresetEndpoints
     private static IResult? ValidateBundleSize(PresetBundle body)
     {
         var json = JsonSerializer.Serialize(body);
-        if (Encoding.UTF8.GetByteCount(json) > MaxBundleBytes)
-            return Results.Problem(
-                title: "Bundle exceeds the size limit.",
-                detail: $"The request body must not exceed {MaxBundleBytes} bytes.",
-                statusCode: StatusCodes.Status413RequestEntityTooLarge);
+        var violation = SizeLimitGuard.EnsureWithinBytes(
+            json,
+            MaxBundleBytes,
+            title: "Bundle exceeds the size limit.",
+            detail: $"The request body must not exceed {MaxBundleBytes} bytes.");
 
-        return null;
+        return violation is { } v
+            ? Results.Problem(title: v.Title, detail: v.Detail, statusCode: StatusCodes.Status413RequestEntityTooLarge)
+            : null;
+    }
+
+    private static IResult UnprocessableEntity(IReadOnlyList<ValidationFailure> failures)
+    {
+        var errors = failures
+            .Select(f => new { pointer = f.Pointer, message = f.Message })
+            .ToArray();
+
+        return Results.Problem(
+            title: "One or more validation errors occurred.",
+            statusCode: StatusCodes.Status422UnprocessableEntity,
+            extensions: new Dictionary<string, object?> { ["errors"] = errors });
     }
 }

@@ -210,4 +210,78 @@ public sealed class PresetEndpointTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.UnprocessableEntity, res.StatusCode);
         Assert.Equal("application/problem+json", res.Content.Headers.ContentType?.MediaType);
     }
+
+    // ── PUT duplicate/invalid names (issue #391 review) ─────────────────────────
+    // Previously: EF's AddRange threw on the duplicate (source, name) composite key → unhandled 500.
+
+    [Fact]
+    public async Task PutPresetSource_DuplicateNameInBundle_Returns422ProblemJsonNotServerError()
+    {
+        var res = await _client.SendAsync(PutRequest(
+            "dup-name-owner/repo",
+            Bundle(
+                PresetItem("default", new { theme = "dark" }),
+                PresetItem("default", new { theme = "light" }))));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, res.StatusCode);
+        Assert.Equal("application/problem+json", res.Content.Headers.ContentType?.MediaType);
+
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+        var pointers = body.GetProperty("errors").EnumerateArray()
+            .Select(e => e.GetProperty("pointer").GetString())
+            .ToList();
+        Assert.Contains("/presets", pointers);
+    }
+
+    [Fact]
+    public async Task PutPresetSource_DuplicateNameInBundle_DoesNotPersistEitherPreset()
+    {
+        const string source = "dup-name-no-persist-owner/repo";
+
+        await _client.SendAsync(PutRequest(
+            source,
+            Bundle(
+                PresetItem("dup", new { x = 1 }),
+                PresetItem("dup", new { x = 2 }))));
+
+        var getRes = await _client.GetAsync("/api/presets");
+        var body = await getRes.Content.ReadFromJsonAsync<JsonElement>();
+        var namesForSource = body.GetProperty("items").EnumerateArray()
+            .Where(i => i.GetProperty("source").GetString() == source)
+            .ToList();
+
+        Assert.Empty(namesForSource);
+    }
+
+    [Fact]
+    public async Task PutPresetSource_EmptyName_Returns422ProblemJson()
+    {
+        var res = await _client.SendAsync(PutRequest(
+            "empty-name-owner/repo",
+            Bundle(PresetItem("", new { theme = "dark" }))));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, res.StatusCode);
+        Assert.Equal("application/problem+json", res.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
+    public async Task PutPresetSource_NameOver200Chars_Returns422ProblemJson()
+    {
+        var res = await _client.SendAsync(PutRequest(
+            "long-name-owner/repo",
+            Bundle(PresetItem(new string('x', 201), new { theme = "dark" }))));
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, res.StatusCode);
+        Assert.Equal("application/problem+json", res.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
+    public async Task PutPresetSource_NameExactly200Chars_Returns204()
+    {
+        var res = await _client.SendAsync(PutRequest(
+            "boundary-name-owner/repo",
+            Bundle(PresetItem(new string('x', 200), new { theme = "dark" }))));
+
+        Assert.Equal(HttpStatusCode.NoContent, res.StatusCode);
+    }
 }

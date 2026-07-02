@@ -20,6 +20,7 @@ public static class WriteServiceExtensions
         services.AddScoped<IDeploymentNotifier, PostgresDeploymentNotifier>();
         services.AddScoped<IDeploymentIngestService, DeploymentIngestService>();
         services.AddScoped<IIngestValidator, IngestValidator>();
+        services.AddScoped<IPresetBundleValidator, PresetBundleValidator>();
         services.AddScoped<IFetcherStateRepository, FetcherStateRepository>();
         services.AddScoped<IProvidedPresetRepository, ProvidedPresetRepository>();
 
