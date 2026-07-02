@@ -12,6 +12,7 @@ children:
   - /send-events
   - /architecture-overview
   - /faq
+  - /reconcile-missed-statuses
 ---
 
 Task-oriented guides for running and adopting Deployment Dashboard. New here? Start with the Quickstart, then wire your CI/CD.
@@ -122,3 +123,11 @@ Task-oriented guides for running and adopting Deployment Dashboard. New here? St
 - [Adoption](./faq.md#adoption)
 - [Troubleshooting](./faq.md#troubleshooting)
 - [Still stuck?](./faq.md#still-stuck)
+
+### `reconcile-missed-statuses.md`
+
+- [Purpose](./reconcile-missed-statuses.md#1-purpose)
+- [Prerequisites](./reconcile-missed-statuses.md#2-prerequisites)
+- [Steps](./reconcile-missed-statuses.md#3-steps)
+- [Verify](./reconcile-missed-statuses.md#4-verify)
+- [Revert to normal polling](./reconcile-missed-statuses.md#5-revert-to-normal-polling)

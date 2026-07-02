@@ -39,7 +39,7 @@ It is **just another pusher** — the backend treats fetcher traffic identically
 | F2 | **One abstraction — `ICiCdAdapter`.** The host/orchestrator depend only on it + the canonical DTO + an opaque cursor string. **Zero** tool-specifics leak out. | The headline requirement. Adding Azure DevOps / Jenkins = a new adapter, no host changes. |
 | F3 | **Adapter owns its cursor shape.** Persisted opaquely via `/api/fetcher/state/{adapter}`; host never parses it. | Matches openapi opaque-cursor contract. |
 | F4 | **GitHub adapter sources the Deployments + Deployment Statuses REST API.** `AdapterId = github-actions`. | Those endpoints carry `environment` + the status lifecycle the matrix needs (workflow-runs API lacks `environment`). |
-| F5 | **At-least-once delivery per chunk.** Cursor advances after all POSTs in a chunk succeed and the cursor is persisted; a throw mid-chunk leaves the cursor at the previous chunk → next loop re-delivers that chunk (dupes OK, append-only). | Store is append-only / no dedup — duplicates are acceptable, dropped events are not. |
+| F5 | **At-least-once delivery per chunk; idempotent ingest.** Cursor advances after all POSTs in a chunk succeed and the cursor is persisted; a throw mid-chunk leaves the cursor at the previous chunk → next loop re-delivers that chunk. Ingest is idempotent on `(deployment_id, status, happened_at)`: a duplicate POST returns **200** (existing event, no new row, no SSE frame); a new event returns **201**. Backfill replay and POST retries are safe — duplicates are de-duplicated, not appended. | Idempotent ingest makes at-least-once delivery safe without store-level accumulation; dropped events are still the only unacceptable outcome. |
 | F6 | **Single replica per adapter.** No leader election; the cursor is shared but unlocked. | Two replicas would double-post. The API (not the fetcher) is the horizontally-scaled tier. |
 | F7 | **Bounded initial backfill.** On a `404` (no cursor yet) the adapter starts from `now − INITIAL_LOOKBACK`, not from repo genesis. | Avoids flooding the store with full history on first run. |
 | F8 | **Adapter handles conditional requests + rate limits.** ETag / `If-None-Match`, `X-RateLimit-*`, `Retry-After`, backoff. | Keeps polling cheap and a good API citizen — internal to the adapter. |
@@ -131,7 +131,7 @@ while (!ct.IsCancellationRequested)
 }
 ```
 
-- Cursor is **persisted after each chunk** whose cursor advances (F5). A throw mid-chunk leaves the cursor at the last completed chunk → next loop re-delivers from that point (dupes OK, append-only).
+- Cursor is **persisted after each chunk** whose cursor advances (F5). A throw mid-chunk leaves the cursor at the last completed chunk → next loop re-delivers from that point; the idempotent ingest (F5) de-duplicates any re-posted events.
 - Zero-event completion markers (backfill repo-done) ARE persisted when they carry a new cursor.
 - The host references **no** `Dashboard.Fetcher.Adapters.GitHub` type — adapters are resolved via DI as `IEnumerable<ICiCdAdapter>`.
 
@@ -216,7 +216,7 @@ Base64 of compact JSON, forward-only, well under the 8 KiB limit.
 
 **Normal / post-backfill shape:**
 ```json
-{ "repos": { "acme/api": { "since": "2026-05-28T10:14:02Z" }, "acme/web": { "since": "2026-05-28T09:50:00Z" } } }
+{ "repos": { "acme/api": { "since": "2026-05-28T10:14:02Z", "oldest_pending": "2026-05-27T08:00:00Z" }, "acme/web": { "since": "2026-05-28T09:50:00Z" } } }
 ```
 
 **Mid-backfill shape (backfill section present while in progress):**
@@ -230,6 +230,7 @@ Base64 of compact JSON, forward-only, well under the 8 KiB limit.
 ```
 
 - `repos[repo].since` = high-water mark on `status.created_at`. Set only on backfill completion or normal poll advance. Never set mid-backfill.
+- `repos[repo].oldest_pending` = oldest `deployment.created_at` among this repo's deployments whose latest status is non-terminal (`waiting` / `pending` / `queued` / `in_progress`). Absent when no such deployments exist. Used to lower the deployments-list scan `cutoff` so a long-pending deployment is never evicted from the window (§5.5.3). `inactive` is terminal (superseded) and is never tracked here.
 - `backfill[repo].anchor` = UTC timestamp when this repo's backfill pass started. Stable across resumes (prevents scan-window drift on restart).
 - `backfill[repo].done_envs` = list of environment names whose per-env scan is complete and emitted. Used to skip already-processed envs on resume.
 - `backfill` key absent = no backfill in progress (old cursors decode safely with empty backfill).
@@ -289,6 +290,25 @@ Scope: **live poll only** (backfill unchanged). Applies to two endpoints per rep
 **Graceful degradation.** When the server omits the `ETag` header on a `200` response (e.g. the `github-emulator`), nothing is cached and every subsequent cycle is a normal unconditional fetch — correctness is unaffected.
 
 **Interplay with §5.5.1.** Both terminal-skip and ETag-`304` populate the same `reusedRunIds` map, which feeds the `envToDeploymentId` build in §5.6.4. Cross-cycle and cross-environment parent edges are preserved regardless of which path suppressed the status re-fetch.
+
+#### 5.5.3 Poll efficiency — pending-floor cutoff
+
+The deployments-list `stopBefore` predicate (§5.5.2) uses a `cutoff` computed each cycle as:
+
+```
+cutoff = min(since − 1 day, oldest_pending)
+```
+
+- `since − 1 day` — default lower bound: one day before the high-water mark ensures any deployment created up to a day before the last seen status event remains in scope.
+- `oldest_pending` — from the cursor (§5.4); the oldest `deployment.created_at` among still-pending deployments in this repo. When set, it extends the scan window back far enough to always include that deployment.
+
+**Without pending-floor.** A `waiting` deployment held for more than one day (e.g. awaiting manual approval) falls outside the default `since − 1 day` window. Its statuses are never re-fetched, so the eventual `success` is never ingested — the tile stays `waiting` indefinitely.
+
+**With pending-floor.** `cutoff` is lowered to `oldest_pending`, keeping the long-pending deployment inside the scan window every cycle until its latest status turns terminal. On termination: the deployment enters the terminal cache (§5.5.1); `oldest_pending` is advanced to the next-oldest still-pending deployment (or removed when none remain); the updated value is saved in the cursor on the next advance.
+
+Tracked non-terminal states: `waiting` / `pending` / `queued` / `in_progress`. `inactive` is terminal (superseded) and is never tracked.
+
+Scope: **live poll only**. Backfill is not affected — it uses `BACKFILL_MAX_AGE` as its hard time boundary.
 
 ### 5.6 Parent deployment derivation (F10)
 
@@ -583,7 +603,7 @@ A second long-lived task (alongside the poll loop) holds an open control stream:
 | Subscriber connection drops mid-cycle | Reconnect with `Last-Event-ID`; the server replays any missed events (including a missed `reset-completed`) within the 2 h window — recovery still fires. |
 | Fetcher down for the entire reset cycle | On next startup the poll loop sees an empty store + `404` cursor and **backfills anyway** (F14) — no event needed; the reset self-heals via the same null-cursor path. |
 | Ack POST fails | Stay paused; orchestrator proceeds on `AckTimeoutSeconds`. Recovery still triggers on the eventual `reset-completed`. |
-| `reset-completed` arrives while already running (duplicate/replay) | Idempotent: dropping an already-advanced cursor and re-checking state at worst re-backfills the most-recent slot per `(service, environment)` — duplicates are acceptable (F5, append-only). |
+| `reset-completed` arrives while already running (duplicate/replay) | Idempotent: dropping an already-advanced cursor and re-checking state at worst re-backfills the most-recent slot per `(service, environment)`; the idempotent ingest (F5) de-duplicates any re-posted events. |
 
 ---
 

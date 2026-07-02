@@ -78,36 +78,56 @@ public sealed class GithubActionsAdapter(
         foreach (var repo in options.RepoList)
         {
             var since = cursor.SinceFor(repo, fetcherOptions.InitialLookback, fetcherOptions.UtcNow);
-            var (events, maxSince) = await PollRepoAsync(repo, since, ct);
+            var prevPending = cursor.OldestPendingFor(repo);
+            var (events, maxSince, oldestPending) = await PollRepoAsync(repo, since, prevPending, ct);
             allEvents.AddRange(events);
 
-            if (maxSince > since)
-                newCursor = newCursor.WithRepo(repo, maxSince);
+            // newSince never regresses: advance only when a later high-water mark was observed.
+            var newSince = maxSince > since ? maxSince : since;
+
+            // Write the cursor entry when: the high-water mark advanced, there is a pending
+            // floor to store this cycle, or there was one last cycle that now needs clearing.
+            if (newSince > since || oldestPending is not null || prevPending is not null)
+                newCursor = newCursor.WithRepoState(repo, newSince, oldestPending);
         }
 
         allEvents.Sort((a, b) => a.HappenedAt.CompareTo(b.HappenedAt));
         return new FetchResult(allEvents, newCursor.Encode());
     }
 
-    private async Task<(List<DeploymentEventIngest> Events, DateTimeOffset MaxSince)> PollRepoAsync(
-        string repo, DateTimeOffset since, CancellationToken ct)
+    private async Task<(List<DeploymentEventIngest> Events, DateTimeOffset MaxSince, DateTimeOffset? OldestPending)> PollRepoAsync(
+        string repo, DateTimeOffset since, DateTimeOffset? oldestPending, CancellationToken ct)
     {
         var (owner, repoName) = SplitRepo(repo);
         var serviceMap = options.ServiceMapDict;
-        var cutoff = since - TimeSpan.FromDays(1);  // margin for delayed status events
+
+        // Base floor: 1 day before the high-water mark to cover delayed status events.
+        var floor = since - TimeSpan.FromDays(1);
+
+        // Extend the cutoff to include any deployment that was still pending last cycle —
+        // this prevents long-running approval-gated deployments from being evicted before
+        // their terminal status arrives (fix for GitHub issue #407).
+        var cutoff = oldestPending.HasValue && oldestPending.Value < floor ? oldestPending.Value : floor;
+
         var ctx = new RepoFetchContext(owner, repoName, repo, since);
 
         // Step 1: collect deployments in the window via conditional list request (F8 / §5.4).
         var deployments = await FetchDeploymentsWindowAsync(owner, repoName, repo, cutoff, ct);
 
         // Step 2: fetch statuses for each deployment (conditional for in-flight, skip for terminal).
-        var (reusedRunIds, allStatuses) = await FetchDeploymentStatusesAsync(owner, repoName, deployments, ct);
+        var (reusedRunIds, allStatuses, pendingCreatedAts) = await FetchDeploymentStatusesAsync(owner, repoName, deployments, ct);
 
         // Step 3: build envToDeploymentId for parent derivation (§5.6.4).
         var envMap = DeploymentStatusEventMapper.BuildEnvMap(deployments, reusedRunIds, allStatuses);
 
         // Step 4: map new status events (status.created_at > since).
-        return await statusEventMapper.MapStatusEventsAsync(ctx, serviceMap, deployments, reusedRunIds, allStatuses, envMap, ct);
+        var (events, maxSince) = await statusEventMapper.MapStatusEventsAsync(ctx, serviceMap, deployments, reusedRunIds, allStatuses, envMap, ct);
+
+        // Compute the new floor: the earliest created_at among still-pending deployments this
+        // cycle.  Null = all in-window deployments are terminal — clear the stored floor.
+        var newOldestPending = pendingCreatedAts.Count > 0 ? pendingCreatedAts.Min() : (DateTimeOffset?)null;
+
+        return (events, maxSince, newOldestPending);
     }
 
     /// <summary>
@@ -140,9 +160,11 @@ public sealed class GithubActionsAdapter(
     /// <summary>
     /// Fetches statuses for each deployment: skips terminal (cache hit), reuses ETag-304 hits,
     /// and issues a conditional HTTP request for in-flight deployments.
-    /// Returns the reused-run-id map and the freshly-fetched status lists.
+    /// Returns the reused-run-id map, the freshly-fetched status lists, and the list of
+    /// <c>created_at</c> timestamps for deployments that are still non-terminal this cycle
+    /// (used to compute the pending-floor cursor entry — §5.4 / fix for issue #407).
     /// </summary>
-    private async Task<(Dictionary<long, long?> ReusedRunIds, Dictionary<long, List<GhDeploymentStatus>> AllStatuses)>
+    private async Task<(Dictionary<long, long?> ReusedRunIds, Dictionary<long, List<GhDeploymentStatus>> AllStatuses, List<DateTimeOffset> PendingCreatedAts)>
         FetchDeploymentStatusesAsync(
             string owner, string repoName,
             List<GhDeployment> deployments, CancellationToken ct)
@@ -153,11 +175,16 @@ public sealed class GithubActionsAdapter(
         var reusedRunIds = new Dictionary<long, long?>();
         var allStatuses = new Dictionary<long, List<GhDeploymentStatus>>();
 
+        // PendingCreatedAts: created_at of every non-terminal deployment in the window.
+        // A deployment with zero statuses is NOT considered pending to avoid leaking a
+        // stale floor; the 1-day base floor already covers brand-new deployments.
+        var pendingCreatedAts = new List<DateTimeOffset>();
+
         foreach (var d in deployments)
         {
             if (_terminalCache.TryGet(d.Id, out var terminalRunId))
             {
-                // Already terminal: skip HTTP entirely; retain for parent map.
+                // Already terminal: skip HTTP entirely; retain for parent map. NOT pending.
                 reusedRunIds[d.Id] = terminalRunId;
                 continue;
             }
@@ -169,8 +196,10 @@ public sealed class GithubActionsAdapter(
 
             if (result.NotModified)
             {
-                // Statuses unchanged: reuse the cached run_id for the env map; emit no events.
+                // Statuses byte-identical: reuse cached run_id for the env map; emit no events.
+                // Reached only when NOT terminal-cached → the deployment is still non-terminal.
                 reusedRunIds[d.Id] = cached.RunId;
+                pendingCreatedAts.Add(d.CreatedAt);
                 continue;
             }
 
@@ -187,10 +216,19 @@ public sealed class GithubActionsAdapter(
                 _statusEtagCache.Set(d.Id, (result.ETag, extractedRunId));
 
             if (latestStatus is not null && TerminalDeploymentCache.IsTerminalState(latestStatus.State))
+            {
+                // Latest status is terminal — record in terminal cache. NOT pending.
                 _terminalCache.Record(d.Id, extractedRunId);
+            }
+            else if (latestStatus is not null)
+            {
+                // Non-terminal latest status — deployment is still pending.
+                pendingCreatedAts.Add(d.CreatedAt);
+            }
+            // else: zero statuses (latestStatus null) → NOT pending; 1-day floor covers new deployments.
         }
 
-        return (reusedRunIds, allStatuses);
+        return (reusedRunIds, allStatuses, pendingCreatedAts);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
