@@ -3,11 +3,12 @@ using System.Net.Http.Json;
 namespace Dashboard.Fetcher.Ingest;
 
 /// <summary>
-/// HTTP client for <c>PUT /api/presets/sources/{source}</c> (issue #391 / §5.6.2).
-/// X-Api-Key is added by the typed-client factory in DI (mirrors <see cref="FetcherStateClient"/>).
-/// The PUT payload is an anonymous object per-project convention — no shared DTO
-/// (docs/api/openapi.yaml <c>PresetBundle</c> / <c>Preset</c> are the wire contract; this
-/// project owns only its own request shape).
+/// HTTP client for <c>PUT /api/presets/sources/{source}</c> (issue #391 — preset discovery;
+/// docs/api/openapi.yaml <c>presets</c> tag, docs/API_SPECIFICATION.md <c>provided_presets</c>,
+/// FETCHER_SPECIFICATION.md "Preset discovery"). X-Api-Key is added by the typed-client
+/// factory in DI (mirrors <see cref="FetcherStateClient"/>). The PUT payload is an anonymous
+/// object per-project convention — no shared DTO (docs/api/openapi.yaml <c>PresetBundle</c> /
+/// <c>Preset</c> are the wire contract; this project owns only its own request shape).
 /// </summary>
 public sealed class PresetIngestClient(HttpClient http) : IPresetIngestClient
 {

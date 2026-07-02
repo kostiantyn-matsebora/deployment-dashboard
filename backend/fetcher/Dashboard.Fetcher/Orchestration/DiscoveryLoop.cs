@@ -3,7 +3,8 @@ using Microsoft.Extensions.Logging;
 namespace Dashboard.Fetcher.Orchestration;
 
 /// <summary>
-/// Tool-agnostic slow-cadence loop (issue #391 / §5.6.2), sibling to <see cref="PollLoop"/> but
+/// Tool-agnostic slow-cadence loop (issue #391 — preset discovery; see
+/// FETCHER_SPECIFICATION.md "Preset discovery"), sibling to <see cref="PollLoop"/> but
 /// independent of it — separate cadence, no cursor, no pause/resume. Runs
 /// <paramref name="runOnceAsync"/> on <paramref name="interval"/>, swallowing per-cycle
 /// exceptions so one bad cycle never stops the loop (same at-least-tries philosophy as

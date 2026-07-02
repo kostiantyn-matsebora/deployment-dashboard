@@ -51,7 +51,9 @@ builder.Services.AddHttpClient<IFetcherStateClient, FetcherStateClient>(c =>
     c.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
 });
 
-// Preset-discovery publisher — PUT /api/presets/sources/{source} (issue #391 / §5.6.2).
+// Preset-discovery publisher — PUT /api/presets/sources/{source} (issue #391 — preset
+// discovery; docs/api/openapi.yaml `presets` tag, docs/API_SPECIFICATION.md
+// `provided_presets`, FETCHER_SPECIFICATION.md "Preset discovery").
 builder.Services.AddHttpClient<IPresetIngestClient, PresetIngestClient>(c =>
 {
     c.BaseAddress = new Uri(apiBaseUrl);
@@ -193,8 +195,9 @@ builder.Services.AddSingleton<IReadOnlyList<PollLoop>>(sp =>
         .AsReadOnly();
 });
 
-// Slow-cadence preset discovery (issue #391 / §5.6.2) — separate cadence from the poll
-// loops above; runs inside FetcherWorker alongside them (own DiscoveryIntervalSeconds).
+// Slow-cadence preset discovery (issue #391 — see FETCHER_SPECIFICATION.md
+// "Preset discovery") — separate cadence from the poll loops above; runs inside
+// FetcherWorker alongside them (own DiscoveryIntervalSeconds).
 builder.Services.AddSingleton<PresetDiscoveryRunner>();
 builder.Services.AddSingleton<DiscoveryLoop>(sp =>
 {

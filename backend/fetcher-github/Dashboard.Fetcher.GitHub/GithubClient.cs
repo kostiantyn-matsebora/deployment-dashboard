@@ -13,8 +13,10 @@ namespace Dashboard.Fetcher.GitHub;
 public readonly record struct ConditionalList<T>(bool NotModified, IReadOnlyList<T> Items, string? ETag);
 
 /// <summary>
-/// Result of a conditional single-page directory listing (issue #391 / §5.6.2 preset
-/// discovery). Unlike <see cref="ConditionalList{T}"/> (which mirrors
+/// Result of a conditional single-page directory listing (issue #391 — preset discovery;
+/// contract: docs/api/openapi.yaml <c>presets</c> tag (<c>PUT /api/presets/sources/{source}</c>),
+/// docs/API_SPECIFICATION.md <c>provided_presets</c>, FETCHER_SPECIFICATION.md
+/// "Preset discovery"). Unlike <see cref="ConditionalList{T}"/> (which mirrors
 /// <see cref="GithubClient.GetPagedAsync{T}"/> and folds 404 into "empty list" for
 /// list-of-events endpoints where that is safe), this type keeps <see cref="NotFound"/>
 /// distinct from a genuine 200-with-zero-entries response — callers need to tell "the
@@ -298,8 +300,11 @@ public sealed class GithubClient(HttpClient http, RateLimitBudget rateLimitBudge
     }
 
     /// <summary>
-    /// Conditional single-page GET for a GitHub contents-API directory listing
-    /// (issue #391 / §5.6.2). Sends <c>If-None-Match</c> when <paramref name="ifNoneMatch"/>
+    /// Conditional single-page GET for a GitHub contents-API directory listing (issue #391 —
+    /// preset discovery; contract: docs/api/openapi.yaml <c>presets</c> tag
+    /// (<c>PUT /api/presets/sources/{source}</c>), docs/API_SPECIFICATION.md
+    /// <c>provided_presets</c>, FETCHER_SPECIFICATION.md "Preset discovery"). Sends
+    /// <c>If-None-Match</c> when <paramref name="ifNoneMatch"/>
     /// is non-null. Not paginated — the contents-directory endpoint returns the full listing
     /// in one response (unlike the events-style endpoints <see cref="GetPagedConditionalAsync{T}"/>
     /// targets).

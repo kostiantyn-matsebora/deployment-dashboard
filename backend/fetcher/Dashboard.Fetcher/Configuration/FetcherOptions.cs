@@ -6,10 +6,13 @@ public sealed class FetcherOptions
     public int PollIntervalSeconds { get; set; } = 30;
 
     /// <summary>
-    /// Slow-cadence preset-discovery loop interval (issue #391 / §5.6.2) — SEPARATE from
+    /// Slow-cadence preset-discovery loop interval (issue #391 — preset discovery; see
+    /// FETCHER_SPECIFICATION.md "Preset discovery") — SEPARATE from
     /// <see cref="PollIntervalSeconds"/>. Discovery lists each configured repo's
-    /// <c>.deployment-dashboard</c> directory and publishes its preset bundle; it runs far
-    /// less often than the deployment poll loop. Default 3600 (1h).
+    /// <c>.deployment-dashboard</c> directory and publishes its preset bundle (contract:
+    /// docs/api/openapi.yaml <c>presets</c> tag, docs/API_SPECIFICATION.md
+    /// <c>provided_presets</c>); it runs far less often than the deployment poll loop.
+    /// Default 3600 (1h).
     /// </summary>
     public int DiscoveryIntervalSeconds { get; set; } = 3600;
 
@@ -60,6 +63,7 @@ public sealed class FetcherOptions
 
     public TimeSpan PollInterval => TimeSpan.FromSeconds(PollIntervalSeconds);
 
-    /// <summary>Interval for the slow-cadence discovery loop (issue #391 / §5.6.2).</summary>
+    /// <summary>Interval for the slow-cadence discovery loop (issue #391 — see
+    /// FETCHER_SPECIFICATION.md "Preset discovery").</summary>
     public TimeSpan DiscoveryInterval => TimeSpan.FromSeconds(DiscoveryIntervalSeconds);
 }

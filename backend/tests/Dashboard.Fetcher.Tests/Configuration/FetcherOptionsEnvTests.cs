@@ -41,6 +41,43 @@ public sealed class FetcherOptionsEnvTests
         Assert.Equal(30, options.PollIntervalSeconds);
     }
 
+    // ── DISCOVERY_INTERVAL_SECONDS (issue #391 — preset discovery; see
+    // FETCHER_SPECIFICATION.md "Preset discovery") ──────────────────────────
+
+    [Fact]
+    public void DiscoveryIntervalSeconds_OverridesDefault_WhenKeyPresent()
+    {
+        var options = new FetcherOptions();
+        var config = BuildConfig(new Dictionary<string, string?> { ["DISCOVERY_INTERVAL_SECONDS"] = "60" });
+
+        FetcherOptionsEnv.ApplyEnvOverrides(config, options);
+
+        Assert.Equal(60, options.DiscoveryIntervalSeconds);
+    }
+
+    [Fact]
+    public void DiscoveryIntervalSeconds_KeepsDefault_WhenKeyAbsent()
+    {
+        var options = new FetcherOptions();
+        var config = BuildConfig(new Dictionary<string, string?>());
+
+        FetcherOptionsEnv.ApplyEnvOverrides(config, options);
+
+        Assert.Equal(3600, options.DiscoveryIntervalSeconds);
+    }
+
+    [Fact]
+    public void DiscoveryIntervalSeconds_KeepsDefault_WhenValueUnparseable()
+    {
+        var options = new FetcherOptions();
+        var config = BuildConfig(new Dictionary<string, string?> { ["DISCOVERY_INTERVAL_SECONDS"] = "garbage" });
+
+        var exception = Record.Exception(() => FetcherOptionsEnv.ApplyEnvOverrides(config, options));
+
+        Assert.Null(exception);
+        Assert.Equal(3600, options.DiscoveryIntervalSeconds);
+    }
+
     // ── BACKFILL_MAX_AGE ─────────────────────────────────────────────────────
 
     [Fact]
@@ -206,6 +243,7 @@ public sealed class FetcherOptionsEnvTests
         FetcherOptionsEnv.ApplyEnvOverrides(config, options);
 
         Assert.Equal(30, options.PollIntervalSeconds);
+        Assert.Equal(3600, options.DiscoveryIntervalSeconds);
         Assert.Equal(TimeSpan.FromDays(7), options.InitialLookback);
         Assert.False(options.Backfill);
         Assert.Equal(TimeSpan.Zero, options.BackfillMaxAge);

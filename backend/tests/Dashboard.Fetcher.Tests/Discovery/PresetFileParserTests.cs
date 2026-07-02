@@ -4,7 +4,9 @@ namespace Dashboard.Fetcher.Tests.Discovery;
 
 /// <summary>
 /// Unit tests for <see cref="PresetFileParser"/> — SINGLE-OR-BUNDLE parsing of
-/// <c>.deployment-dashboard/*.json</c> files (issue #391 / §5.6.2).
+/// <c>.deployment-dashboard/*.json</c> files (issue #391 — see FETCHER_SPECIFICATION.md
+/// "Preset discovery"; contract: docs/api/openapi.yaml <c>presets</c> tag,
+/// docs/API_SPECIFICATION.md <c>provided_presets</c>).
 /// </summary>
 public sealed class PresetFileParserTests
 {

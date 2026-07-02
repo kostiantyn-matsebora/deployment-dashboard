@@ -5,7 +5,8 @@ namespace Dashboard.Fetcher.Host.Workers;
 
 /// <summary>
 /// BackgroundService that runs every registered <see cref="PollLoop"/> concurrently (§3),
-/// plus the slow-cadence <see cref="DiscoveryLoop"/> (issue #391 / §5.6.2) — a separate
+/// plus the slow-cadence <see cref="DiscoveryLoop"/> (issue #391 — preset discovery; see
+/// FETCHER_SPECIFICATION.md "Preset discovery") — a separate
 /// loop with its own cadence, independent of the deployment poll loops.
 /// Single replica per adapter — no leader election (F6).
 /// Loops are shared singletons so <see cref="ControlStreamListener"/> can pause / resume them.

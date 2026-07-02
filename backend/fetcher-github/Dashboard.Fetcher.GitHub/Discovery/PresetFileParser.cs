@@ -4,13 +4,16 @@ using Dashboard.Fetcher.Ingest;
 namespace Dashboard.Fetcher.GitHub.Discovery;
 
 /// <summary>
-/// Parses one <c>.deployment-dashboard/*.json</c> file as SINGLE-OR-BUNDLE
-/// (issue #391 / §5.6.2): either a single preset envelope <c>{version,name,settings}</c>
-/// or a bundle <c>{version,presets:[...]}</c> of the same envelopes.
+/// Parses one <c>.deployment-dashboard/*.json</c> file as SINGLE-OR-BUNDLE (issue #391 —
+/// preset discovery): either a single preset envelope <c>{version,name,settings}</c>
+/// or a bundle <c>{version,presets:[...]}</c> of the same envelopes. Contract:
+/// docs/api/openapi.yaml <c>presets</c> tag (<c>PUT /api/presets/sources/{source}</c>),
+/// docs/API_SPECIFICATION.md <c>provided_presets</c>, FETCHER_SPECIFICATION.md
+/// "Preset discovery".
 ///
 /// Throws <see cref="FormatException"/> (or lets a <see cref="JsonException"/> propagate) on
 /// malformed JSON or a shape matching neither form. Callers treat any exception as a
-/// parse-error — per §5.6.2 discovery semantics that means the whole source is SKIPPED
+/// parse-error — per "Preset discovery" semantics that means the whole source is SKIPPED
 /// (never partially applied, never pruned) — see <see cref="PresetDiscoveryRunner"/>.
 /// </summary>
 public static class PresetFileParser

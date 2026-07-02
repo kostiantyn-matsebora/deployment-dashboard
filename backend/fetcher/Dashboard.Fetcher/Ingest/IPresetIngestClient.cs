@@ -1,7 +1,10 @@
 namespace Dashboard.Fetcher.Ingest;
 
 /// <summary>
-/// Publishes the authoritative preset bundle for one source (issue #391 / §5.6.2).
+/// Publishes the authoritative preset bundle for one source (issue #391 — preset discovery).
+/// Contract: docs/api/openapi.yaml <c>presets</c> tag (<c>PUT /api/presets/sources/{source}</c>),
+/// docs/API_SPECIFICATION.md <c>provided_presets</c>, FETCHER_SPECIFICATION.md
+/// "Preset discovery".
 /// </summary>
 public interface IPresetIngestClient
 {

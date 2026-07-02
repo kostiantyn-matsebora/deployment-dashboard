@@ -7,7 +7,9 @@ namespace Dashboard.Fetcher.Tests.Ingest;
 
 /// <summary>
 /// Unit tests for <see cref="PresetIngestClient"/> — the PUT /api/presets/sources/{source}
-/// HTTP client (issue #391 / §5.6.2). No real network — an in-memory
+/// HTTP client (issue #391 — see FETCHER_SPECIFICATION.md "Preset discovery"; contract:
+/// docs/api/openapi.yaml <c>presets</c> tag, docs/API_SPECIFICATION.md
+/// <c>provided_presets</c>). No real network — an in-memory
 /// <see cref="HttpMessageHandler"/> captures the request.
 /// </summary>
 public sealed class PresetIngestClientTests

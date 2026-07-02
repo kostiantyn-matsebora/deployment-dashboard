@@ -13,7 +13,9 @@ namespace Dashboard.Fetcher.Tests.Discovery;
 
 /// <summary>
 /// Tests for <see cref="PresetDiscoveryRunner"/> — the slow-cadence preset-discovery step
-/// (issue #391 / FETCHER_SPECIFICATION §5.6.2). Covers: discover→PUT for single-shape and
+/// (issue #391 — see FETCHER_SPECIFICATION.md "Preset discovery"; contract:
+/// docs/api/openapi.yaml <c>presets</c> tag, docs/API_SPECIFICATION.md
+/// <c>provided_presets</c>). Covers: discover→PUT for single-shape and
 /// bundle-shape files (and aggregation across both in one directory), 304 → no re-PUT,
 /// 403/404 → skip with no prune, and a per-file parse error aborting the WHOLE source
 /// (no partial publish, no prune). No mocks — a fake in-memory HTTP handler and a fake

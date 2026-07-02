@@ -6,8 +6,10 @@ using Microsoft.Extensions.Logging;
 namespace Dashboard.Fetcher.GitHub.Discovery;
 
 /// <summary>
-/// Slow-cadence GitHub preset-discovery step (issue #391 / FETCHER_SPECIFICATION §5.6.2) —
-/// SEPARATE from the deployment poll loop (own cadence via <see cref="Orchestration.DiscoveryLoop"/>).
+/// Slow-cadence GitHub preset-discovery step (issue #391). Contract: docs/api/openapi.yaml
+/// <c>presets</c> tag (<c>PUT /api/presets/sources/{source}</c>), docs/API_SPECIFICATION.md
+/// <c>provided_presets</c>, and FETCHER_SPECIFICATION.md "Preset discovery" — SEPARATE from
+/// the deployment poll loop (own cadence via <see cref="Orchestration.DiscoveryLoop"/>).
 ///
 /// Per configured <c>owner/repo</c> (<see cref="GithubAdapterOptions.RepoList"/>):
 /// <list type="number">
@@ -49,6 +51,10 @@ public sealed class PresetDiscoveryRunner(
             try
             {
                 await DiscoverSourceAsync(source, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -93,7 +99,8 @@ public sealed class PresetDiscoveryRunner(
             if (parsed is null)
             {
                 // Any single file's fetch/parse failure aborts the WHOLE source — never a
-                // partial publish, never a prune (§5.6.2 keep-last-known-good).
+                // partial publish, never a prune (FETCHER_SPECIFICATION.md "Preset discovery"
+                // keep-last-known-good).
                 logger.LogWarning(
                     "[Discovery] {Source}: file {File} fetch/parse failed — skipping source, no prune",
                     source, entry.Path);
@@ -121,10 +128,13 @@ public sealed class PresetDiscoveryRunner(
             if (file is null)
                 return null;
 
-            var json = Encoding.UTF8.GetString(
-                Convert.FromBase64String(file.Content.Replace("\n", "")));
+            var json = Encoding.UTF8.GetString(file.DecodeUtf8());
 
             return PresetFileParser.Parse(json);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch
         {

@@ -51,12 +51,22 @@ public sealed record GhWorkflowFileContent
 {
     [JsonPropertyName("content")] public string Content { get; init; } = "";  // Base64
     [JsonPropertyName("encoding")] public string Encoding { get; init; } = "";
+
+    /// <summary>
+    /// Decodes <see cref="Content"/> to raw UTF-8 bytes. GitHub's contents API wraps the
+    /// Base64 payload with a newline every 60 characters — strip it before decoding.
+    /// Shared by every caller of this model (workflow-graph YAML fetch, §5.6.2; preset-file
+    /// fetch, issue #391 "Preset discovery") so the decode idiom lives in one place.
+    /// </summary>
+    public byte[] DecodeUtf8() => Convert.FromBase64String(Content.Replace("\n", ""));
 }
 
 /// <summary>
 /// One entry from <c>GET /repos/{owner}/{repo}/contents/{dir}</c> when <c>{dir}</c> is a
-/// directory (issue #391 / §5.6.2 preset discovery). Directory listing responses omit
-/// <c>content</c> — a follow-up <c>GET .../contents/{entry.Path}</c> (via
+/// directory (issue #391 — preset discovery; contract: docs/api/openapi.yaml <c>presets</c>
+/// tag (<c>PUT /api/presets/sources/{source}</c>), docs/API_SPECIFICATION.md
+/// <c>provided_presets</c>, FETCHER_SPECIFICATION.md "Preset discovery"). Directory listing
+/// responses omit <c>content</c> — a follow-up <c>GET .../contents/{entry.Path}</c> (via
 /// <see cref="GhWorkflowFileContent"/>, same endpoint shape as the single-file fetch)
 /// is required to read a file's Base64 body.
 /// </summary>

@@ -5,8 +5,9 @@ namespace Dashboard.Fetcher.Tests.Orchestration;
 
 /// <summary>
 /// Tests for <see cref="DiscoveryLoop"/> — the slow-cadence discovery loop wrapper
-/// (issue #391 / §5.6.2), sibling to <see cref="PollLoop"/> but with its own cadence and
-/// no cursor/pause semantics. Plain delegate injected — no mocking needed.
+/// (issue #391 — see FETCHER_SPECIFICATION.md "Preset discovery"), sibling to
+/// <see cref="PollLoop"/> but with its own cadence and no cursor/pause semantics.
+/// Plain delegate injected — no mocking needed.
 /// </summary>
 public sealed class DiscoveryLoopTests
 {
