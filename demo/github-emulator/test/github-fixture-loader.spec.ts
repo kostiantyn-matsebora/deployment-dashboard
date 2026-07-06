@@ -418,6 +418,50 @@ describe('GithubFixtureLoader', () => {
     });
   });
 
+  // ── Provided presets (issue #391) — .deployment-dashboard/*.json fixtures ──
+  // Verifies the curated demo fixture seeds the generic `files` store consumed
+  // by the Contents API directory listing (github-rest.controller.ts
+  // getContents), matching the demo BRIEF: storefront gets a BUNDLE file,
+  // platform gets a SINGLE envelope file, and repos without a
+  // .deployment-dashboard/ fixture load with an empty files map (so the
+  // emulator 404s and the fetcher's preset-discovery skips them, no prune).
+
+  describe('provided presets (issue #391 — .deployment-dashboard fixtures)', () => {
+    it('storefront has a BUNDLE preset file under .deployment-dashboard/', () => {
+      const r = store.getRepo('demo-org', 'storefront')!;
+      const raw = r.files.get('.deployment-dashboard/presets.json');
+      expect(raw).toBeDefined();
+
+      const parsed = JSON.parse(raw!);
+      expect(parsed.version).toBe(1);
+      expect(Array.isArray(parsed.presets)).toBe(true);
+      expect(parsed.presets.length).toBeGreaterThanOrEqual(2);
+      for (const p of parsed.presets) {
+        expect(typeof p.name).toBe('string');
+        expect(typeof p.settings).toBe('object');
+      }
+    });
+
+    it('platform has a SINGLE preset envelope file under .deployment-dashboard/', () => {
+      const r = store.getRepo('demo-org', 'platform')!;
+      const raw = r.files.get('.deployment-dashboard/ops-focus.json');
+      expect(raw).toBeDefined();
+
+      const parsed = JSON.parse(raw!);
+      expect(parsed.version).toBe(1);
+      expect(typeof parsed.name).toBe('string');
+      expect(typeof parsed.settings).toBe('object');
+      expect(Array.isArray(parsed.presets)).toBe(false);
+    });
+
+    it('repos without a .deployment-dashboard fixture load with an empty files map', () => {
+      const operations   = store.getRepo('demo-org', 'operations')!;
+      const dataPipeline = store.getRepo('demo-org', 'data-pipeline')!;
+      expect(operations.files.size).toBe(0);
+      expect(dataPipeline.files.size).toBe(0);
+    });
+  });
+
   describe('graceful degradation', () => {
     it('does not throw when scenariosDir does not exist', () => {
       const fresh = new GithubStore();

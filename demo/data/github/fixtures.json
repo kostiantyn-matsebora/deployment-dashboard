@@ -55,6 +55,42 @@
           "yaml": "name: order-svc\non:\n  push:\n    branches: [main]\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n\n  deploy-dev:\n    needs: build\n    runs-on: ubuntu-latest\n    environment: dev\n    steps:\n      - run: echo deploying to dev\n\n  deploy-staging:\n    needs: build\n    runs-on: ubuntu-latest\n    environment: staging\n    steps:\n      - run: echo deploying to staging\n\n  deploy-qa:\n    needs: [deploy-dev, deploy-staging]\n    runs-on: ubuntu-latest\n    environment: qa\n    steps:\n      - run: echo deploying to qa\n\n  deploy-preprod:\n    needs: deploy-qa\n    runs-on: ubuntu-latest\n    environment: preprod\n    steps:\n      - run: echo deploying to preprod\n\n  deploy-prod:\n    needs: deploy-preprod\n    runs-on: ubuntu-latest\n    environment: prod\n    steps:\n      - run: echo deploying to prod\n"
         }
       ],
+      "files": [
+        {
+          "path": ".deployment-dashboard/presets.json",
+          "json": {
+            "version": 1,
+            "presets": [
+              {
+                "name": "Prod Watch \u2014 Payments",
+                "settings": {
+                  "view": "matrix",
+                  "failOnly": true,
+                  "svcFilterMode": "include",
+                  "svcPatterns": ["payments-api"],
+                  "timeWindow": "1 day"
+                }
+              },
+              {
+                "name": "Swimlanes \u2014 All Services",
+                "settings": {
+                  "view": "swimlanes",
+                  "theme": "dark",
+                  "correlation": "explicit parent",
+                  "timeWindow": "7 days"
+                }
+              },
+              {
+                "name": "Analytics \u2014 Weekly Rollup",
+                "settings": {
+                  "view": "analytics",
+                  "timeWindow": "7 days"
+                }
+              }
+            ]
+          }
+        }
+      ],
       "environments": ["dev", "staging", "qa", "preprod", "prod"],
       "deployments": [
         {
@@ -343,6 +379,24 @@
           "name": "platform-proxy",
           "path": ".github/workflows/platform-proxy.yml",
           "yaml": "name: platform-proxy\non:\n  push:\n    branches: [main]\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n\n  deploy-dev:\n    needs: build\n    runs-on: ubuntu-latest\n    environment: dev\n    steps:\n      - run: echo deploying to dev\n\n  deploy-staging:\n    needs: deploy-dev\n    runs-on: ubuntu-latest\n    environment: staging\n    steps:\n      - run: echo deploying to staging\n"
+        }
+      ],
+      "files": [
+        {
+          "path": ".deployment-dashboard/ops-focus.json",
+          "json": {
+            "version": 1,
+            "name": "Ops Focus \u2014 Platform",
+            "settings": {
+              "view": "matrix",
+              "svcFilterMode": "exclude",
+              "svcPatterns": ["catalog-edge"],
+              "failOnly": false,
+              "theme": "light",
+              "notifEnabled": true,
+              "notifStatuses": ["failure"]
+            }
+          }
         }
       ],
       "environments": ["dev", "staging", "qa", "preprod", "prod"],
