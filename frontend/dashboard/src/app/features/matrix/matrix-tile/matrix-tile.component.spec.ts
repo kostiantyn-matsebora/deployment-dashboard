@@ -361,6 +361,49 @@ describe('MatrixTileComponent — never-deployed: version visible when present',
   });
 });
 
+// ── Change-emphasis flash — isFlashing input (#398) ────────────────────────
+
+describe('MatrixTileComponent — isFlashing input (#398)', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('defaults to false: .is-flashing class absent when isFlashing is not set', async () => {
+    const slot: MatrixSlot = { current: mkEvent('success') };
+    const fixture = await createTile(slot);
+    const el = fixture.debugElement.query(By.css('.slot'));
+    expect(el.classes['is-flashing']).toBeFalsy();
+  });
+
+  it('applies .is-flashing when isFlashing() is true', async () => {
+    const slot: MatrixSlot = { current: mkEvent('success') };
+    const fixture = await createTile(slot);
+    fixture.componentRef.setInput('isFlashing', true);
+    fixture.detectChanges();
+    const el = fixture.debugElement.query(By.css('.slot'));
+    expect(el.classes['is-flashing']).toBe(true);
+  });
+
+  it('removes .is-flashing when isFlashing() flips back to false', async () => {
+    const slot: MatrixSlot = { current: mkEvent('success') };
+    const fixture = await createTile(slot);
+    fixture.componentRef.setInput('isFlashing', true);
+    fixture.detectChanges();
+    fixture.componentRef.setInput('isFlashing', false);
+    fixture.detectChanges();
+    const el = fixture.debugElement.query(By.css('.slot'));
+    expect(el.classes['is-flashing']).toBeFalsy();
+  });
+
+  it('.is-flashing composes with an existing box-state class (e.g. s-running-only + breathe)', async () => {
+    const slot: MatrixSlot = { current: mkEvent('in-progress') };
+    const fixture = await createTile(slot);
+    fixture.componentRef.setInput('isFlashing', true);
+    fixture.detectChanges();
+    const el = fixture.debugElement.query(By.css('.slot'));
+    expect(el.classes['s-running-only']).toBe(true);
+    expect(el.classes['is-flashing']).toBe(true);
+  });
+});
+
 describe('MatrixTileComponent — never-deployed does NOT affect existing effective states', () => {
   afterEach(() => TestBed.resetTestingModule());
 
