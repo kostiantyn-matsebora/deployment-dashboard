@@ -206,6 +206,33 @@ public sealed class DeploymentIngestServiceTests : IDisposable
         Assert.Equal(2, await _ctx.DeploymentEvents.CountAsync());
     }
 
+    [Fact]
+    public async Task IngestAsync_SameSlotSameHappenedAt_LaterIngestReceivesGreaterId()
+    {
+        // Two events for the SAME slot (service/environment) sharing HappenedAt, differing only
+        // by Status so both persist. The per-slot "latest wins" tiebreak in
+        // DeploymentReadRepository.LatestPerSlot picks the greatest-id row, so the later ingest
+        // must mint a strictly greater id even when minted within the same millisecond
+        // (regression for issue #330 — non-monotonic Guid.CreateVersion7()).
+        var happenedAt = DateTimeOffset.UtcNow;
+        var bodyA = new DeploymentEventIngest
+        {
+            DeploymentId = "gh-slot-tiebreak",
+            Service = "checkout-api",
+            Environment = "prod",
+            Status = "in-progress",
+            HappenedAt = happenedAt,
+        };
+        var bodyB = bodyA with { Status = "success" };
+
+        var r1 = await _service.IngestAsync(bodyA, null, CancellationToken.None);
+        var r2 = await _service.IngestAsync(bodyB, null, CancellationToken.None);
+
+        Assert.True(
+            r2.Event.Id.CompareTo(r1.Event.Id) > 0,
+            "The later ingest must receive a greater id so the per-slot latest-wins tiebreak is correct.");
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private sealed class CapturingNotifier : IDeploymentNotifier
