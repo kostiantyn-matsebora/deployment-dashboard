@@ -666,6 +666,7 @@ Non-fatal. Transport errors and non-2xx responses are logged at `Warning` level 
 | `CONTROL_API_KEY` | *(secret)* | `X-Control-API-Key` for the control stream subscription (`GET /api/control/stream`); distinct from `API_KEY` (§5.10.2) |
 | `COMPONENT_ID` | `dashboard-fetcher` | `X-Component-Id` on component-event posts; MUST match the API's `ExpectedComponents` (§5.10.1) |
 | `POLL_INTERVAL_SECONDS` | `30` | loop cadence (integration uses `1`) |
+| `DISCOVERY_INTERVAL_SECONDS` | `3600` | cadence of the slow-cadence preset-discovery loop (§8) — separate from `POLL_INTERVAL_SECONDS`; default 1h |
 | `INITIAL_LOOKBACK` | `7.00:00:00` | normal poll first-run window (F7); also the default for `BACKFILL_MAX_AGE` when unset |
 | `BACKFILL` | `false` | set `true` to force a backfill run regardless of cursor state (F14) |
 | `BACKFILL_MAX_AGE` | `30.00:00:00` | how far back backfill scans per environment; defaults to `INITIAL_LOOKBACK` |
@@ -808,7 +809,65 @@ Real fetcher-host against the `github-emulator` + real `Dashboard.Api` + Postgre
 
 ---
 
-## 8. Out of scope
+## 8. Preset discovery (issue #391)
+
+A **slow-cadence, sibling process** to the deployment poll loop (§4) — same GitHub adapter, own cadence, no cursor, no pause/resume. Publishes repo/CI-sourced UI-settings presets so the SPA can offer them read-only; see [`docs/guide/provided-presets.md`](guide/provided-presets.md) for the adopter-facing convention, the push-mode `curl PUT` alternative, and the three permission tiers. Contract: [`docs/api/openapi.yaml`](api/openapi.yaml) `presets` tag; [`docs/API_SPECIFICATION.md`](API_SPECIFICATION.md) `provided_presets`.
+
+### 8.1 Loop shape
+
+`DiscoveryLoop` (`Dashboard.Fetcher.Orchestration`) runs `PresetDiscoveryRunner.RunOnceAsync` on `DiscoveryInterval` (`DISCOVERY_INTERVAL_SECONDS`, default 3600 — §6), swallowing per-cycle exceptions so one bad cycle never stops the loop — the same at-least-tries philosophy as `PollLoop`'s retry-next-interval behaviour. It runs alongside the per-adapter poll loops inside the same host process, sharing the singleton `GithubClient` / `RateLimitBudget` (§5.9) — discovery requests are counted against the **same** rate-limit budget as deployment polling, not a separate one.
+
+**Repo list.** Reuses `GITHUB_REPOS` (`GithubAdapterOptions.RepoList`) unchanged — the same, already glob-expanded `owner/repo` list the deployment poll loop uses. There is no separate discovery-only repo variable.
+
+### 8.2 Per-source discovery cycle (`PresetDiscoveryRunner`)
+
+For each configured `owner/repo` source:
+
+1. `GET /repos/{owner}/{repo}/contents/.deployment-dashboard`, ETag-conditional (`If-None-Match` from the previous cycle's response `ETag`, per source).
+2. `304 Not Modified` → reuse; **no re-`PUT`**, cycle ends here for this source.
+3. `404` → the directory doesn't exist on this repo → skip, no `PUT`, no prune.
+4. Any other non-2xx (`403`, `5xx`, transport error) → skip, no `PUT`, no prune.
+5. `200` → for every entry that is a file and whose name ends `.json`: fetch + Base64-decode its content, then parse it **single-or-bundle** (§8.3). A fetch or parse failure on **any** file aborts discovery for the **whole source** for this cycle (no partial publish, no prune) — the directory-listing ETag is **not** advanced, so the next cycle retries the same directory state rather than adopting a partial read as "known."
+6. All parsed presets across all files in the directory are aggregated into one list and `PUT /api/presets/sources/{source}` (via `IPresetIngestClient` — `PresetIngestClient`, `Dashboard.Fetcher.Ingest`). The directory-listing `ETag` is recorded **only after** a successful parse-and-`PUT`.
+7. Non-`.json` files and sub-directories in `.deployment-dashboard` are ignored.
+
+Per-source failures are caught and logged inside `RunOnceAsync` — one bad source never blocks discovery for the others in the same cycle.
+
+### 8.3 Single-or-bundle parsing (`PresetFileParser`)
+
+Each `.deployment-dashboard/*.json` file is one of two shapes:
+
+| Shape | Root object | Result |
+|---|---|---|
+| Single envelope | `{version, name, settings}` | One preset. |
+| Bundle | `{version, presets: [{version, name, settings}, …]}` | Every entry in `presets`. |
+
+A root object that is neither shape (missing `name`+`settings` and no `presets` array), a non-object root, a non-array `presets`, an entry missing `name`/`settings`, or a blank `name` → throws — treated as a parse error (§8.2 step 5: aborts the whole source, no prune). `settings` is stored opaque (`JsonElement`, cloned) — the fetcher never interprets its shape.
+
+### 8.4 Semantics — replace-by-source, prune only on an authoritative empty read
+
+`PUT /api/presets/sources/{source}` is **authoritative-replace** (API-side — `IProvidedPresetRepository.ReplaceForSourceAsync`: delete-then-insert for that source). Discovery's own contribution is deciding **when** to call it:
+
+| Directory-listing outcome this cycle | Discovery action |
+|---|---|
+| `200`, ≥ 1 valid `.json` file | `PUT` the aggregated bundle — replaces the source's prior presets. |
+| `200`, 0 `.json` files (empty/removed directory) | `PUT` an empty `presets: []` bundle — **prunes** every preset this source previously published. |
+| `304` | No `PUT` — reuses the last-published bundle. |
+| `403` / `404` / other non-2xx / network error / any per-file fetch-or-parse error | **Skip — no `PUT`, no prune.** The source keeps whatever it last successfully published (keep-last-known-good). |
+
+This makes a temporary `Contents:read` grant safe to revoke after bootstrapping: the grant lets one cycle publish the bundle (row 1); revoking it turns the next cycle's directory listing into a `403`, which is a **skip** (row 4), never a prune. The presets stay published until either the grant returns or a source explicitly `PUT`s an empty bundle (or a push-mode `curl PUT` — [`docs/guide/provided-presets.md`](guide/provided-presets.md) — replaces them).
+
+### 8.5 Testing
+
+| Layer | Cases |
+|---|---|
+| `DiscoveryLoopTests` | Invokes the delegate on each interval tick; a cycle throw does not stop the loop; cancellation returns cleanly. |
+| `PresetFileParserTests` | Single-envelope shape; bundle shape; malformed JSON; neither-shape root; missing `name`/`settings`; blank `name`. |
+| `PresetDiscoveryRunnerTests` | Single-shape file → aggregates and `PUT`s; bundle-shape file → aggregates and `PUT`s; mixed single+bundle files in one directory aggregate together (non-`.json` and sub-dir entries ignored); empty directory → `PUT`s an empty bundle (prune); directory `304` → no re-`PUT`, `If-None-Match` sent on the second cycle; directory `403`/`404` → skip, no `PUT`; a per-file parse error or non-2xx fetch aborts the **whole** source, no partial publish, no prune; one source failing does not block another configured source from publishing; GitHub calls route through the shared rate-limit budget. |
+
+---
+
+## 9. Out of scope
 
 - Horizontal scaling of the fetcher (single replica per adapter — F6).
 - Adapters other than GitHub (the abstraction is the deliverable; ADO/Jenkins are future drop-ins).

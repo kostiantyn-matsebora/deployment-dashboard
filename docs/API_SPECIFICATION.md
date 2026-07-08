@@ -122,6 +122,20 @@ backend/
 | `cursor` | text | opaque blob, ≤ 8 KiB → else `413` |
 | `updated_at` | timestamptz | latest write wins |
 
+### `provided_presets` (non-append, authoritative-replace per source, #391)
+
+Repo/CI-sourced setting presets. `PUT /api/presets/sources/{source}` replaces **all** rows for a source with the posted bundle (delete-then-insert / upsert-and-prune); an empty bundle prunes every row for that source. `GET /api/presets` reads the merged catalog across sources.
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| `source` | text | no | publisher `owner/repo`; **MAY contain `/`** → catch-all route key; part of PK |
+| `name` | text | no | preset name; unique within a source → PK `(source, name)` |
+| `version` | smallint | no | envelope schema version; always `1` |
+| `settings_json` | jsonb | no | opaque SPA settings payload, stored verbatim |
+| `fetched_at` | timestamptz | no | when this source's bundle was last published/stored |
+
+**Size cap** — the `PUT` request body is capped at 256 KiB (262144 bytes) → else `413`. **Not append-only**; not history — exempt from `HISTORY_RETENTION_DAYS` and not truncated by a reset.
+
 ### `control_stream_events` (append-only log, 2 h retention)
 
 Persists events emitted on the control SSE stream; enables `Last-Event-ID` replay for reconnecting components.
@@ -206,6 +220,8 @@ Externally-persisted state for the reset state machine. **Single row** (fixed PK
 | control-events-stream | `GET /api/control/events/stream` | none | SSE; `event: component`; `id:` = row id (UUIDv7); `Last-Event-ID` replay from `component_events` (2 h window); `: ping`/15 s; fresh connect = live only; no query filters |
 | ops | `GET /healthz`, `GET /readyz` | none | liveness / readiness (DB reachable + all four LISTEN channels attached: `deployment_events`, `control_events`, `component_acks`, `component_events` — D10, D12) |
 | meta | `GET /api/version` | none | deployed build version → `{ version }`; baked into the API assembly at image-build time, reflecting how the image was built — release images (`:X.Y.Z`) → `vX.Y.Z` (e.g. `v0.13.1`), CI / `:latest` / `main` → `main+<short-sha>` (e.g. `main+a947098`), `0.0.0-dev` only for genuinely local / unstamped builds; free-form, never parsed by the client; for the SPA footer |
+| presets | `PUT /api/presets/sources/{source}` | `X-Api-Key` | authoritative-replace of a source's preset bundle (`PresetBundle{version:1, presets[]}`); `{source}` is `owner/repo` and **contains a slash** → catch-all route; empty `presets:[]` prunes all for the source; `413` > 256 KiB body → `204` |
+| presets | `GET /api/presets` | none | merged provided-preset catalog across all sources → `ProvidedPresets{items[]}` where item = `{source, name, version, settings, fetched_at}`; public read (SPA) |
 
 ---
 

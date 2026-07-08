@@ -19,6 +19,7 @@ import {
   CorrelationPredicate,
   MATRIX_FIELDS,
   MatrixField,
+  ProvidedPreset,
   RateLimitReport,
   SWIMLANE_FIELDS,
   Status,
@@ -107,6 +108,10 @@ export class TopbarComponent {
   protected presetRenameValue = '';
   /** Error / info message shown in the popover (clears on next action). */
   protected readonly presetsMsg = signal<string | null>(null);
+  /** URL input value for the import-from-URL row. */
+  protected presetImportUrl = '';
+  /** True while an import-from-URL fetch is in progress (disables the button). */
+  protected readonly presetUrlImporting = signal(false);
 
   // ── View tabs ─────────────────────────────────────────────
   protected readonly viewOptions: ViewOption[] = [
@@ -484,6 +489,12 @@ export class TopbarComponent {
       this.renamingPreset.set(null);
       this.presetRenameValue = '';
       this.presetsMsg.set(null);
+      // Refresh the read-only provided-preset catalog each time the
+      // popover opens (issue #391) — never on close.
+      if (this.presetsPopoverOpen()) {
+        this.presetsService.loadProvidedPresets();
+      }
+      this.presetImportUrl = '';
     }
   }
 
@@ -624,9 +635,29 @@ export class TopbarComponent {
     this.presetsMsg.set(`Saved "${name}".`);
   }
 
+  /**
+   * Run `fn`, then re-align the router if it changed the active view. The
+   * rendered view is route-driven (App.syncActiveView maps URL →
+   * state.activeView); state-mutating operations like PresetsService.apply()
+   * only set the signal, so without this the view switcher flips while
+   * RouterOutlet keeps rendering the previous view.
+   */
+  private withViewRealign(fn: () => void): void {
+    const viewBefore = this.state.activeView();
+    fn();
+    if (this.state.activeView() !== viewBefore) {
+      this.router.navigate(['/' + this.state.activeView()]);
+    }
+  }
+
+  /** Apply a preset envelope, re-aligning the router if the view changed. */
+  private applyEnvelope(envelope: PresetEnvelope): void {
+    this.withViewRealign(() => this.presetsService.apply(envelope));
+  }
+
   /** Apply a saved preset. */
   protected applyPreset(p: PresetEnvelope): void {
-    this.presetsService.apply(p);
+    this.applyEnvelope(p);
     this.presetsMsg.set(`Applied "${p.name}".`);
   }
 
@@ -704,7 +735,7 @@ export class TopbarComponent {
   /** Reset all settings to framework defaults after native confirm. */
   protected resetAllSettings(): void {
     if (!confirm('Reset ALL settings to defaults?\nThis will clear all filters, field choices, and preferences.')) return;
-    this.presetsService.resetAllSettings();
+    this.withViewRealign(() => this.presetsService.resetAllSettings());
     this.presetsMsg.set('All settings reset to defaults.');
   }
 
@@ -737,6 +768,70 @@ export class TopbarComponent {
       reader.readAsText(file);
     }, { once: true });
     input.click();
+  }
+
+  // ── Provided presets (repo/CI-sourced, read-only — issue #391) ────────────
+
+  /** Reactive list of read-only provided presets from PresetsService. */
+  protected readonly providedPresets = computed(() => this.presetsService.providedPresets());
+
+  /** Whether any provided presets have loaded. */
+  protected readonly hasProvidedPresets = computed(() => this.providedPresets().length > 0);
+
+  /**
+   * True when the given provided preset is the last-applied one. Compares by
+   * name against the SAME activePresetName signal local presets use — the
+   * "active" badge spans both lists (issue #391 gate).
+   */
+  protected isProvidedPresetActive(p: ProvidedPreset): boolean {
+    return this.activePresetName() === p.name;
+  }
+
+  /** "provided by {source}" attribution line shown under a provided preset's name. */
+  protected attributionLabel(p: ProvidedPreset): string {
+    return `provided by ${p.source}`;
+  }
+
+  /** Apply a provided preset — converts to a PresetEnvelope and reuses applyEnvelope() unchanged. */
+  protected applyProvidedPreset(p: ProvidedPreset): void {
+    this.applyEnvelope(this.presetsService.providedToEnvelope(p));
+    this.presetsMsg.set(`Applied "${p.name}".`);
+  }
+
+  /**
+   * Clone a provided preset into a new LOCAL editable preset (" (copy)"
+   * suffix) — reuses clone() unchanged. The clone is a normal local preset:
+   * renamable, updatable, deletable, exportable, persisted to dd:presets.
+   */
+  protected cloneProvidedPreset(p: ProvidedPreset): void {
+    this.presetsService.clone(this.presetsService.providedToEnvelope(p), `${p.name} (copy)`);
+    this.presetsMsg.set(`Cloned "${p.name}".`);
+  }
+
+  /**
+   * Import preset(s) from the URL entered in presetImportUrl.
+   * Calls PresetsService.importFromUrl() and shows success or error in presetsMsg.
+   */
+  protected async importPresetsFromUrl(): Promise<void> {
+    const url = this.presetImportUrl.trim();
+    if (!url) {
+      this.presetsMsg.set('Please enter a URL.');
+      return;
+    }
+    this.presetUrlImporting.set(true);
+    this.presetsMsg.set(null);
+    try {
+      const result = await this.presetsService.importFromUrl(url);
+      if (typeof result === 'string') {
+        this.presetsMsg.set(result);
+      } else {
+        const n = result.imported.length;
+        this.presetsMsg.set(`Imported ${n} preset${n === 1 ? '' : 's'}.`);
+        this.presetImportUrl = '';
+      }
+    } finally {
+      this.presetUrlImporting.set(false);
+    }
   }
 
 }

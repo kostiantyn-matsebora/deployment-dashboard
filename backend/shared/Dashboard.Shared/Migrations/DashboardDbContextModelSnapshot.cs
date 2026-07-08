@@ -229,6 +229,34 @@ namespace Dashboard.Shared.Migrations
                     b.ToTable("fetcher_state", (string)null);
                 });
 
+            modelBuilder.Entity("Dashboard.Shared.Entities.ProvidedPreset", b =>
+                {
+                    b.Property<string>("Source")
+                        .HasColumnType("text")
+                        .HasColumnName("source");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<DateTimeOffset>("FetchedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("fetched_at");
+
+                    b.Property<string>("SettingsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("settings_json");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Source", "Name");
+
+                    b.ToTable("provided_presets", (string)null);
+                });
+
             modelBuilder.Entity("Dashboard.Shared.Entities.ResetCycle", b =>
                 {
                     b.Property<short>("Id")

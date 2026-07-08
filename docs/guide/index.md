@@ -6,6 +6,7 @@ children:
   - /quickstart
   - /screenshots
   - /ui-settings
+  - /provided-presets
   - /install
   - /install-app
   - /configuration
@@ -32,8 +33,9 @@ Task-oriented guides for running and adopting Deployment Dashboard. New here? St
 - [Swimlanes](./screenshots.md#swimlanes)
 - [History drawer](./screenshots.md#history-drawer)
 - [Analytics](./screenshots.md#analytics)
-- [Install as an app](./screenshots.md#install-as-an-app)
 - [Demo control panel](./screenshots.md#demo-control-panel)
+- [Install as an app](./screenshots.md#install-as-an-app)
+- [Provided presets](./screenshots.md#provided-presets)
 - [Footer](./screenshots.md#footer)
 
 ### `ui-settings.md`
@@ -42,6 +44,14 @@ Task-oriented guides for running and adopting Deployment Dashboard. New here? St
 - [What a preset saves](./ui-settings.md#what-a-preset-saves)
 - [Working with presets](./ui-settings.md#working-with-presets)
 - [File-based sharing](./ui-settings.md#file-based-sharing)
+
+### `provided-presets.md`
+
+- [The `.deployment-dashboard/*.json` convention](./provided-presets.md#the-deployment-dashboardjson-convention)
+- [Publishing — the push-mode REST recipe](./provided-presets.md#publishing-presets-push-mode)
+- [Automatic discovery (pull mode)](./provided-presets.md#automatic-discovery-pull-mode)
+- [Three permission tiers](./provided-presets.md#three-permission-tiers)
+- [Replace-by-source and keep-last-known-good](./provided-presets.md#replace-by-source-and-keep-last-known-good)
 
 ### `install/` — Install & deploy
 

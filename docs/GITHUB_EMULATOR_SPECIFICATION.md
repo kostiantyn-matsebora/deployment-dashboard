@@ -9,7 +9,7 @@ Standalone service that emulates the GitHub REST API surface the fetcher consume
 | Source | Owns |
 |---|---|
 | [`docs/FETCHER_SPECIFICATION.md`](FETCHER_SPECIFICATION.md) §5 | GitHub REST endpoint contracts, field mapping, status mapping, parent-derivation, version/artifact, backfill, rate-limit — authoritative spec for the surface this service emulates. |
-| [`demo/data/github/`](../demo/data/github/) | Curated demo fixture files (workflow YAML, deployment seeds). |
+| [`demo/data/github/`](../demo/data/github/) | Curated demo fixture files (workflow YAML, deployment seeds, `.deployment-dashboard/` preset files — issue #391). |
 | [`docs/diagrams/github-emulation.md`](diagrams/github-emulation.md) | Visual reference for demo-mode topology and seed→backfill→poll sequence. |
 
 ---
@@ -70,6 +70,7 @@ Per-repo shape:
 | workflow YAML (keyed by `path` + `ref`) | Raw YAML string |
 | environments | List of `{ name }` objects |
 | artifacts (per `run_id`) | Artifact metadata + content (`id`, `name`, `expired`, version string) |
+| repo files (keyed by full path, e.g. `.deployment-dashboard/presets.json`) | Arbitrary UTF-8 repo file content — not ref-scoped. Backs the Contents API directory-listing + preset-file fetch (issue #391 — preset discovery, §5.1); parallel to, and independent of, workflow YAML. |
 
 ---
 
@@ -95,7 +96,9 @@ Paths are served at the service root (no prefix). The fetcher points `GITHUB_BAS
 | `GET` | `/repos/{owner}/{repo}/deployments/{id}/statuses` | Array of status objects (`id`, `state`, `target_url`, `creator.login`, `created_at`); newest-first. | §5.1 |
 | `GET` | `/repos/{owner}/{repo}/deployments/{id}/reviews` | Array of review objects (`state`, `user.login`, `submitted_at`); empty array when no reviews. Used by `ResolveFailureStatusAsync` to detect `rejected`. | §5.3 |
 | `GET` | `/repos/{owner}/{repo}/actions/runs/{run_id}` | Run metadata (`id`, `name`, `path`, `head_sha`, `conclusion`). `conclusion` is `null` while in-progress; `"cancelled"` | `"success"` | `"failure"` etc. when finished. Used by `ResolveFailureStatusAsync` to detect `cancelled`. | §5.3, §5.6.2 |
-| `GET` | `/repos/{owner}/{repo}/contents/{path}?ref={sha}` | `{ content: "<base64 workflow YAML>", encoding: "base64" }`. | §5.6.2 |
+| `GET` | `/repos/{owner}/{repo}/contents/{path}?ref={sha}` | Workflow-YAML single-file fetch (unchanged): `{ content: "<base64 YAML>", encoding: "base64" }`. | §5.6.2 |
+| `GET` | `/repos/{owner}/{repo}/contents/{dir}` | Preset-discovery directory listing (issue #391) when `{dir}` resolves to a directory (e.g. `.deployment-dashboard`): a JSON array of `GhContentEntry` (`{name, path, type:"file"}`). ETag-conditional — `304` on a matching `If-None-Match`. `404` when the repo has no files under `{dir}`. | Preset discovery |
+| `GET` | `/repos/{owner}/{repo}/contents/{dir}/{file}.json` | Preset-file fetch (issue #391): same `{content, encoding:"base64"}` shape as the workflow-YAML row above — one response shape serves both. | Preset discovery |
 | `GET` | `/repos/{owner}/{repo}/actions/workflows?per_page=100` | `{ total_count, workflows: [{ id, name, path, state }] }`. | §5.8.2 |
 | `GET` | `/repos/{owner}/{repo}/environments` | `{ total_count, environments: [{ name }] }`. | §5.8.2 |
 | `GET` | `/repos/{owner}/{repo}/actions/runs/{run_id}/artifacts` | `{ total_count, artifacts: [{ id, name, expired }] }`. | §5.7.2 |
@@ -108,6 +111,7 @@ Paths are served at the service root (no prefix). The fetcher points `GITHUB_BAS
 - List endpoints carry a `Link: <...>; rel="next"` header while more pages remain. Drives the fetcher's pagination loop.
 - Unknown repo / deployment / run / path → GitHub-shaped `404` (NOT RFC 9457 — this surface emulates GitHub, not the dashboard API).
 - Auth headers (`Authorization: Bearer`, `Accept`, `X-GitHub-Api-Version`) are accepted but NOT validated (internal demo service).
+- The Contents endpoint checks the repo-files store (exact path, then directory-prefix listing) BEFORE falling back to the workflow-YAML store — the two are independent maps, so adding `.deployment-dashboard/*.json` files never disturbs the existing `.github/workflows/*.yml` single-file behavior (§5.6.2 / #389 identity + workflow-graph).
 
 ---
 
@@ -171,6 +175,15 @@ The fixture files loaded when `dataset: "demo"` is requested. They MUST cover:
 | `cancelled` | `ledger-projector` | id 1831001, run 1831, env prod | `failure` status + `run_conclusion: "cancelled"` → `ResolveFailureStatusAsync` reads `run.conclusion` |
 | `rejected` | `catalog-edge` | id 5161001, run 5161, env prod | `failure` status + `reviews: [{state:"rejected"}]` → `ResolveFailureStatusAsync` reads `/deployments/{id}/reviews` |
 
+**Provided presets (issue #391 — preset discovery, Path A demo).** Two repos additionally seed a `files` fixture array, loaded into the repo-files store (§3) and served under `.deployment-dashboard/` by the Contents API directory listing (§5):
+
+| Repo | File | Shape | Purpose |
+|---|---|---|---|
+| `demo-org/storefront` | `.deployment-dashboard/presets.json` | BUNDLE `{version:1, presets:[...]}` — 3 entries | Demonstrates a multi-preset bundle from one file. |
+| `demo-org/platform` | `.deployment-dashboard/ops-focus.json` | SINGLE envelope `{version:1, name, settings}` | Demonstrates the single-envelope form alongside the bundle form. |
+
+`demo-org/operations` and `demo-org/data-pipeline` have no `.deployment-dashboard/` fixture — the emulator 404s that directory for them, so the fetcher's preset-discovery skips those sources (never prunes). All `settings` keys are valid `PresetSettings` fields (`frontend/dashboard/src/app/core/services/presets.service.ts`) so applying a provided preset visibly changes the SPA (view, service/environment filters, `failOnly`, theme, notifications, etc.). Attribution in the SPA reads `demo-org/storefront` / `demo-org/platform` as the preset source.
+
 ---
 
 ## 8. Random set + periodic emit
@@ -206,10 +219,10 @@ When `SEED_ON_STARTUP=true` the emulator is immediately ready for the fetcher wi
 | Layer | File | Scope |
 |---|---|---|
 | Unit | `github-store.spec.ts` | Store CRUD (seed / clear / emit); per-request rate-limit decrement + hourly rollover; store independent of API data |
-| Unit | `github-rest.controller.spec.ts` | Each emulated endpoint returns the correct shape; `X-RateLimit-*` headers on every response; `Link: rel="next"` when more pages; unknown repo/deployment/run/path returns GitHub-shaped `404`; `GET .../reviews` returns review objects (empty array when none); `GET .../runs/:id` emits `conclusion` field |
+| Unit | `github-rest.controller.spec.ts` | Each emulated endpoint returns the correct shape; `X-RateLimit-*` headers on every response; `Link: rel="next"` when more pages; unknown repo/deployment/run/path returns GitHub-shaped `404`; `GET .../reviews` returns review objects (empty array when none); `GET .../runs/:id` emits `conclusion` field; `GET .../contents/.deployment-dashboard` returns `GhContentEntry[]` (`{name,path,type}`), sets a stable ETag with `304` on matching `If-None-Match`, `404`s when a repo has no such directory, and a listed file resolves via the existing `{content,encoding}` shape without disturbing workflow-YAML fetches (issue #391) |
 | Unit | `control.controller.spec.ts` | `seed` / `clear` / `emit` / `status` endpoints correct; seed + clear mutate the store; emit toggle works |
 | Unit | `github-random-generator.spec.ts` | Generated workflow YAML includes a 5-stage `needs` chain (dev→staging→qa→preprod→prod); per-stage attrition produces fewer deployments at later stages; timestamps fall within the trailing 14-day window; ≈15 % terminal failures present; all required fields present; `count` controls chain count, repos always 10 |
-| Unit | `github-fixture-loader.spec.ts` | Curated demo fixture loads without error; covers F10 (dev→staging→prod `needs` chain) and F15 (artifact-sourced version); loaded dataset matches `GithubStoreStatus` counters; all 5 new-status fixtures present (pending/queued/waiting/cancelled/rejected) with correct run conclusions and review records |
+| Unit | `github-fixture-loader.spec.ts` | Curated demo fixture loads without error; covers F10 (dev→staging→prod `needs` chain) and F15 (artifact-sourced version); loaded dataset matches `GithubStoreStatus` counters; all 5 new-status fixtures present (pending/queued/waiting/cancelled/rejected) with correct run conclusions and review records; provided-preset fixtures load into the repo-files store — storefront BUNDLE, platform SINGLE envelope, repos without a fixture get an empty files map (issue #391) |
 | Integration | `fetcher-emulation.e2e.spec.ts` | Start emulator + seed demo set (`POST /_github/seed {dataset:"demo"}`); run the real fetcher-host against `http://github-emulator:3100`; real `Dashboard.Api` + Postgres; assert the dashboard shows the expected services, a non-trivial `parent_deployments` chain, and an artifact-sourced version. Realizes FETCHER_SPEC §7.2. |
 
 ---
@@ -245,7 +258,7 @@ npm run start:dev
 
 ## 13. Out of scope
 
-- ETag/`304` conditional-request emulation (the fetcher tolerates its absence — FETCHER_SPEC §5.5).
+- ETag/`304` conditional-request emulation beyond the deployments listing, statuses listing, and preset-discovery directory listing (§5) — the fetcher tolerates its absence elsewhere (FETCHER_SPEC §5.5). Single-file content fetches (workflow YAML, preset files) always return a plain `200`.
 - Dynamic editing of individual seeded fixtures beyond `/_github/seed`, `/_github/clear`, and `/_github/emit`.
 - Emulating GitHub APIs the fetcher does not consume (e.g. issues, pull requests, checks).
 - Authentication or access control (internal-only service).
