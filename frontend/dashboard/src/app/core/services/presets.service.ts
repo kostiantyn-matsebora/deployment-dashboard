@@ -190,6 +190,9 @@ export class PresetsService {
    * Apply a saved preset by writing its settings to the live signals.
    * Fields not present in the preset (undefined) are left at their current
    * value — unknown/missing fields fall back to the current app default.
+   * Intentionally does NOT navigate: the rendered view is router-driven
+   * (App.syncActiveView maps URL → activeView), so a caller surfacing a
+   * `view` change must re-align the router itself (TopbarComponent.applyEnvelope does).
    */
   apply(envelope: PresetEnvelope): void {
     const s = envelope.settings;

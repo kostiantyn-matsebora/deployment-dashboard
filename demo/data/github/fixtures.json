@@ -64,27 +64,76 @@
               {
                 "name": "Prod Watch \u2014 Payments",
                 "settings": {
+                  "theme": "dark",
+                  "notifEnabled": true,
+                  "notifStatuses": ["failure", "rejected", "cancelled"],
+                  "notifServiceMode": "watch-only",
+                  "notifServiceChips": ["payments-api"],
+                  "notifEnvMode": "watch-all-except",
+                  "notifEnvChips": [],
                   "view": "matrix",
-                  "failOnly": true,
+                  "svcFilter": "",
                   "svcFilterMode": "include",
                   "svcPatterns": ["payments-api"],
-                  "timeWindow": "1 day"
+                  "failOnly": true,
+                  "matFields": ["version", "run_url", "sha", "run_number", "ref", "actor", "happened_at"],
+                  "swFields": ["environment", "version", "run_url", "sha", "run_number", "ref", "actor", "happened_at"],
+                  "colOrder": [],
+                  "colHidden": [],
+                  "swimCollapsed": [],
+                  "swimAutoScroll": true,
+                  "timeWindow": "1 day",
+                  "correlation": "explicit parent"
                 }
               },
               {
-                "name": "Swimlanes \u2014 All Services",
+                "name": "Release Day \u2014 Storefront",
                 "settings": {
-                  "view": "swimlanes",
                   "theme": "dark",
-                  "correlation": "explicit parent",
-                  "timeWindow": "7 days"
+                  "notifEnabled": true,
+                  "notifStatuses": ["success", "failure", "waiting", "rejected"],
+                  "notifServiceMode": "watch-all-except",
+                  "notifServiceChips": [],
+                  "notifEnvMode": "watch-all-except",
+                  "notifEnvChips": [],
+                  "view": "swimlanes",
+                  "svcFilter": "",
+                  "svcFilterMode": "include",
+                  "svcPatterns": [],
+                  "failOnly": false,
+                  "matFields": ["version", "run_url", "sha", "run_number", "ref", "actor", "happened_at"],
+                  "swFields": ["environment", "version", "run_url", "sha", "run_number", "ref", "actor", "happened_at"],
+                  "colOrder": [],
+                  "colHidden": [],
+                  "swimCollapsed": [],
+                  "swimAutoScroll": true,
+                  "timeWindow": "1 day",
+                  "correlation": "same run_number"
                 }
               },
               {
-                "name": "Analytics \u2014 Weekly Rollup",
+                "name": "Weekly Review \u2014 All Teams",
                 "settings": {
+                  "theme": "light",
+                  "notifEnabled": false,
+                  "notifStatuses": ["success", "failure"],
+                  "notifServiceMode": "watch-all-except",
+                  "notifServiceChips": [],
+                  "notifEnvMode": "watch-all-except",
+                  "notifEnvChips": [],
                   "view": "analytics",
-                  "timeWindow": "7 days"
+                  "svcFilter": "",
+                  "svcFilterMode": "include",
+                  "svcPatterns": [],
+                  "failOnly": false,
+                  "matFields": ["version", "run_url", "sha", "run_number", "ref", "actor", "happened_at"],
+                  "swFields": ["environment", "version", "run_url", "sha", "run_number", "ref", "actor", "happened_at"],
+                  "colOrder": [],
+                  "colHidden": [],
+                  "swimCollapsed": [],
+                  "swimAutoScroll": false,
+                  "timeWindow": "7 days",
+                  "correlation": "explicit parent"
                 }
               }
             ]
@@ -388,13 +437,26 @@
             "version": 1,
             "name": "Ops Focus \u2014 Platform",
             "settings": {
+              "theme": "light",
+              "notifEnabled": true,
+              "notifStatuses": ["failure"],
+              "notifServiceMode": "watch-all-except",
+              "notifServiceChips": [],
+              "notifEnvMode": "watch-all-except",
+              "notifEnvChips": [],
               "view": "matrix",
+              "svcFilter": "",
               "svcFilterMode": "exclude",
               "svcPatterns": ["catalog-edge"],
               "failOnly": false,
-              "theme": "light",
-              "notifEnabled": true,
-              "notifStatuses": ["failure"]
+              "matFields": ["version", "run_url", "sha", "run_number", "ref", "actor", "happened_at"],
+              "swFields": ["environment", "version", "run_url", "sha", "run_number", "ref", "actor", "happened_at"],
+              "colOrder": [],
+              "colHidden": [],
+              "swimCollapsed": [],
+              "swimAutoScroll": false,
+              "timeWindow": "7 days",
+              "correlation": "explicit parent"
             }
           }
         }

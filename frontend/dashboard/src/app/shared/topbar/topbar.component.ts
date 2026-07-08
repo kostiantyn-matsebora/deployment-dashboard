@@ -635,9 +635,29 @@ export class TopbarComponent {
     this.presetsMsg.set(`Saved "${name}".`);
   }
 
+  /**
+   * Run `fn`, then re-align the router if it changed the active view. The
+   * rendered view is route-driven (App.syncActiveView maps URL →
+   * state.activeView); state-mutating operations like PresetsService.apply()
+   * only set the signal, so without this the view switcher flips while
+   * RouterOutlet keeps rendering the previous view.
+   */
+  private withViewRealign(fn: () => void): void {
+    const viewBefore = this.state.activeView();
+    fn();
+    if (this.state.activeView() !== viewBefore) {
+      this.router.navigate(['/' + this.state.activeView()]);
+    }
+  }
+
+  /** Apply a preset envelope, re-aligning the router if the view changed. */
+  private applyEnvelope(envelope: PresetEnvelope): void {
+    this.withViewRealign(() => this.presetsService.apply(envelope));
+  }
+
   /** Apply a saved preset. */
   protected applyPreset(p: PresetEnvelope): void {
-    this.presetsService.apply(p);
+    this.applyEnvelope(p);
     this.presetsMsg.set(`Applied "${p.name}".`);
   }
 
@@ -715,7 +735,7 @@ export class TopbarComponent {
   /** Reset all settings to framework defaults after native confirm. */
   protected resetAllSettings(): void {
     if (!confirm('Reset ALL settings to defaults?\nThis will clear all filters, field choices, and preferences.')) return;
-    this.presetsService.resetAllSettings();
+    this.withViewRealign(() => this.presetsService.resetAllSettings());
     this.presetsMsg.set('All settings reset to defaults.');
   }
 
@@ -772,9 +792,9 @@ export class TopbarComponent {
     return `provided by ${p.source}`;
   }
 
-  /** Apply a provided preset — converts to a PresetEnvelope and reuses apply() unchanged. */
+  /** Apply a provided preset — converts to a PresetEnvelope and reuses applyEnvelope() unchanged. */
   protected applyProvidedPreset(p: ProvidedPreset): void {
-    this.presetsService.apply(this.presetsService.providedToEnvelope(p));
+    this.applyEnvelope(this.presetsService.providedToEnvelope(p));
     this.presetsMsg.set(`Applied "${p.name}".`);
   }
 

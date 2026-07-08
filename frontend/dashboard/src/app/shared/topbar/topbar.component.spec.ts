@@ -25,7 +25,7 @@
  */
 import { NO_ERRORS_SCHEMA, signal } from '@angular/core';
 import { TestBed }                   from '@angular/core/testing';
-import { RouterModule }              from '@angular/router';
+import { Router, RouterModule }      from '@angular/router';
 import { vi }                        from 'vitest';
 
 import { TopbarComponent }  from './topbar.component';
@@ -889,7 +889,9 @@ describe('TopbarComponent — provided presets (issue #391)', () => {
 
   beforeEach(async () => {
     const mockState: Partial<AppStateService> = {
-      activeView:             signal('matrix' as const),
+      // Widened beyond the literal 'matrix' default so the resetAllSettings()
+      // navigation tests below can seed a non-matrix starting view.
+      activeView:             signal<'matrix' | 'swimlanes' | 'analytics'>('matrix'),
       serviceFilter:          signal(''),
       failuresOnly:           signal(false),
       serviceFilterMode:      signal('exclude' as const),
@@ -1044,6 +1046,65 @@ describe('TopbarComponent — provided presets (issue #391)', () => {
       presetsService.apply(local);
 
       expect(priv<(p: ProvidedPreset) => boolean>(component, 'isProvidedPresetActive').call(component, item)).toBe(true);
+    });
+  });
+
+  // ── applyEnvelope() router re-alignment (bug fix) ────────────────────────
+  //
+  // The rendered view is route-driven (App.syncActiveView maps URL →
+  // state.activeView); PresetsService.apply()/resetAllSettings() only set
+  // the signal, so a preset/reset that changes the view must also navigate
+  // or the view switcher flips while RouterOutlet keeps rendering the
+  // previous view.
+  describe('applyProvidedPreset() — navigates when the preset changes the view', () => {
+    it('navigates to the new view when the applied settings include view', () => {
+      const router      = TestBed.inject(Router);
+      const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      const item = mkProvided({ name: 'swimlanes-preset', settings: { view: 'swimlanes' } });
+      presetsService.providedPresets.set([item]);
+
+      priv<(p: ProvidedPreset) => void>(component, 'applyProvidedPreset').call(component, item);
+
+      expect(navigateSpy).toHaveBeenCalledWith(['/swimlanes']);
+    });
+
+    it('does not navigate when the applied settings do not include view', () => {
+      const router      = TestBed.inject(Router);
+      const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      const item = mkProvided({ name: 'theme-only', settings: { theme: 'light' } });
+      presetsService.providedPresets.set([item]);
+
+      priv<(p: ProvidedPreset) => void>(component, 'applyProvidedPreset').call(component, item);
+
+      expect(navigateSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resetAllSettings() — navigates when reset changes the view', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('navigates to /matrix when the current view is not matrix', () => {
+      const router      = TestBed.inject(Router);
+      const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      const state = TestBed.inject(AppStateService);
+      state.activeView.set('swimlanes');
+
+      priv<() => void>(component, 'resetAllSettings').call(component);
+
+      expect(navigateSpy).toHaveBeenCalledWith(['/matrix']);
+    });
+
+    it('does not navigate when already on matrix', () => {
+      const router      = TestBed.inject(Router);
+      const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+      priv<() => void>(component, 'resetAllSettings').call(component);
+
+      expect(navigateSpy).not.toHaveBeenCalled();
     });
   });
 });
