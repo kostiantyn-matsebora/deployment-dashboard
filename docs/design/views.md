@@ -26,7 +26,7 @@
 
 ### Presets Control (all views)
 
-The bookmark icon (`btn-presets`) sits in the `.hdr-icons` topbar cluster, to the right of the bell toggle, before the Live pill. It is **shared across all views** (Matrix, Swimlanes, Analytics) — the button and popover are never hidden on any tab switch.
+The bookmark icon (`btn-presets`) sits in the `.hdr-icons` topbar cluster, to the right of the bell toggle, before the Live pill. It is **shared across all views** (Matrix, Swimlanes, Feed, Analytics) — the button and popover are never hidden on any tab switch.
 
 - Opens the [Presets popover](./components.md#presets-popover) when clicked.
 - The badge dot on the button is visible whenever one or more presets exist in `localStorage`.
@@ -259,9 +259,95 @@ Edges carry the **parent node's** effective status. All 8 status values map to a
 
 ---
 
+## Feed View Layout
+
+The Feed view is the 3rd tab in the top-nav segmented control — locked tab order: **Matrix → Swimlanes → Feed → Analytics**. It renders the full chronological deployment-event log as a scrollable columnar table, backed by `GET /api/deployments` with cursor pagination and server-side `q` search (#397).
+
+### Shell Structure
+
+```css
+.feed-shell {
+  /* full-width scrollable column: header + full-height scrollable log */
+}
+.feed-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  /* title block (name + count summary) + search input + group toggle */
+}
+.feed-log {
+  height: calc(100vh - 320px);
+  min-height: 320px;
+  overflow-y: auto;
+  overflow-x: auto;
+  /* scroll container; infinite-scroll trigger fires near the bottom edge */
+}
+```
+
+The header subtitle (`.feed-sub`) reads `"<N> events · <M> deployments — showing <shown>"`, extended with a matching-count clause while a search is active.
+
+### Columnar Log Grid (shared header · flat rows · roll-up rows · detail rows · dock)
+
+One `--feed-cols` grid template drives **every** row shape in the Feed view and the [feed dock](./components.md#deployment-feed-dock) — the header row, flat event rows, grouped roll-up rows, and expanded group-detail rows all share the identical 14-slot column template, so columns stay aligned across row kind and across the two surfaces:
+
+```css
+.feed-log, .feed-dock-body {
+  --feed-cols: 16px 8px 54px minmax(100px,1fr) 70px 92px 68px minmax(110px,1fr) 56px 50px 80px minmax(80px,1fr) 26px 34px;
+}
+.feed-head-row, .feed-row {
+  display: grid;
+  grid-template-columns: var(--feed-cols);
+  align-items: center;
+  gap: 8px;
+}
+```
+
+| # | Slot | Field | Notes |
+|---|---|---|---|
+| 1 | chevron | — | Expander (▸ / rotated 90° expanded); populated on group roll-up rows only, empty placeholder elsewhere — keeps column 1 aligned everywhere. |
+| 2 | pip | — | Status-hue dot (all 8 statuses, per components.md "Status set (8)"). |
+| 3 | time | `happened_at` | Elapsed ("3h ago"); absolute UTC in `title`. |
+| 4 | service | `service` (+ `namespace` prefix on collision) | Same composite-identity / render-on-collision rule as Matrix and Swimlanes. |
+| 5 | environment | `environment` | |
+| 6 | status | `status` | `status-chip`, reuses the existing shared status color tokens/classes. |
+| 7 | version | `version` | |
+| 8 | ref | `ref` | ⎇ prefix. |
+| 9 | sha | `sha` | Plain mono hex. |
+| 10 | run # | `run_number` | `#` prefix. |
+| 11 | actor | `actor` | @ prefix. |
+| 12 | deployment | `deployment_id` | |
+| 13 | badge | — | `×N` event-count badge; group roll-up rows with more than one event only. |
+| 14 | run link | `run_url` | ↗, opens in a new tab. |
+
+**Exclusions.** The synthetic row `id` and `parent_deployments` never render in the Feed — the log is flat or grouped by `deployment_id`, not graph-correlated (DAG correlation is Swimlanes-only). Every other wire attribute is visible.
+
+**Header row.** `.feed-head-row` renders the same grid with uppercase 9.5px mono column labels, `position: sticky; top: 0`, sitting above the scrolling body.
+
+**Group roll-up row.** Renders the group's newest event through the same row template as a flat row, with the chevron and (when `events.length > 1`) the `×N` badge populated. Clicking the row (outside the run link) toggles an inline `.feed-group-detail` block — every event in the group, oldest-to-newest reversed (newest-first), rendered through the identical row template at a reduced, dimmed style.
+
+### Search
+
+- `.feed-search` text input in `.feed-header`; its placeholder communicates that it searches the **full history**, not just the rows currently rendered.
+- Debounced client-side before it fires the server-side `q` query param on `GET /api/deployments` (see [behavior.md § Interactions](./behavior.md#interactions) for timing). A `"searching…"` interstitial replaces the log body while the debounced request is in flight.
+- A new search resets pagination (`feedShownCount = 0`) and re-fetches from the first page; results span the full history, not only already-loaded pages.
+
+### Group-by-Deployment Toggle
+
+`.feed-group-toggle` sits in `.feed-header`, mirroring `.dock-group-toggle` in the [feed dock](./components.md#deployment-feed-dock) header — both toggles drive the **same** shared `feedGrouped` state (see [behavior.md § Interactions](./behavior.md#interactions)), default **ON**.
+
+### Infinite Scroll
+
+- `.feed-log` is the scroll container. Scrolling within ~120px of its bottom edge appends the next page via the `cursor` / `next_cursor` pair.
+- **Loading state.** A `.feed-loading` tail row ("loading older events…") while the next page is in flight.
+- **End-of-history state.** A `.feed-end` tail row once `next_cursor` is `null` ("— end of history · bounded by HISTORY_RETENTION_DAYS —"), or a "no matching deployment events" tail when a search matches nothing.
+
+---
+
 ## Analytics View Layout
 
-The Analytics view is the 3rd tab in the top-nav segmented control. All data is server-side computed — the SPA fetches, renders, never aggregates client-side.
+The Analytics view is the 4th tab in the top-nav segmented control, after Matrix, Swimlanes, and Feed. All data is server-side computed — the SPA fetches, renders, never aggregates client-side.
 
 ### Shell Structure
 

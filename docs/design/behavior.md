@@ -50,7 +50,7 @@ version → sha → ref → run_number
 
 | Trigger | Target | Result |
 |---------|--------|--------|
-| Click tab | Segmented control | Switch Matrix ↔ Swimlanes view. Close popovers. Swap field picker content. Rebuild swimlane layout on switch-to-vis. |
+| Click tab | Segmented control | Switch Matrix ↔ Swimlanes ↔ Feed ↔ Analytics view. Close popovers. Swap field picker content. Rebuild swimlane layout on switch-to-vis; re-render the Feed log on switch-to-feed; re-sync feed-dock visibility and the topbar dock-toggle's disabled state on every switch (dock hidden + toggle disabled only while Feed is active). |
 | Type in filter input | Matrix rows | Hide rows whose component name doesn't include the query (case-insensitive substring). |
 | Click failures toggle | Matrix rows | Toggle `.is-on`. When ON, hide rows with no failed states. |
 | Hover `.ver` | All tiles | Amber-highlight all `.ver` spans and their parent `.slot`s that share the same version string. |
@@ -61,6 +61,13 @@ version → sha → ref → run_number
 | Click "Auto-scroll to change" toggle | Swimlane behavior | Toggle ON/OFF. When ON + lane off-screen: "Simulate event" scrolls lane into view after event fires — in both collapsed and expanded states. Persists to `localStorage`. |
 | Click "Simulate event" | Lane tip card (any state) | Advance tip node's status, rebuild via the unified renderer, flash the tip card (`svFlash` animation) — collapsed = vector tip card, expanded = newest-event DAG node card. Scroll lane into view if auto-scroll ON and lane off-screen. |
 | Live effective-status change (SSE, `lastEffectiveEvent`) | Matrix tile | One-shot accent flash (`tile-flash` animation) on the `(service, environment, namespace)` tile whose slot changed. Effective statuses only (success / in-progress / failure) — context statuses (pending/queued/waiting/cancelled/rejected) don't flash. Fades ~1.2s, then clears. Mirrors the Swimlanes tip-card flash above (#309); no auto-scroll — the Matrix is a grid, not a scrollable lane list. (#398) |
+| Click feed-dock toggle (topbar) | Feed dock | Toggle dock open/closed. Persist the preference to `localStorage`. Disabled while the Feed view is active. (#397) |
+| Click dock × / "Open feed →" | Feed dock | × closes the dock (updates the persisted preference). "Open feed →" switches to the Feed view tab. (#397) |
+| Type in Feed search input | Feed view log | Debounce, then fire the server-side `q` param on `GET /api/deployments` — searches the full history, not only rendered rows. Resets pagination and re-renders from the first page. (#397) |
+| Click group/flat toggle (Feed view or dock) | Feed view + Feed dock | Toggle the shared `feedGrouped` state; both surfaces re-render immediately from the same state; persists to `localStorage`. (#397) |
+| Click group roll-up row (Feed view or dock) | Feed row | Toggle that group's expand/collapse, revealing/hiding its `.feed-group-detail` child rows. Clicking the run link does not toggle the row. (#397) |
+| Scroll near bottom of Feed log | Feed view log | If more pages remain, append the next page via the `cursor` / `next_cursor` pair, with a brief loading tail row; show an end-of-history tail row once `next_cursor` is `null`. (#397) |
+| Live deployment event (SSE) | Feed dock (if open) + Feed view (if active) | Prepend the new event newest-first — to a new or existing group by `deployment_id` — and play the row flash animation. When a search (`q`) is active, only re-renders if the new event matches it. (#397) |
 | Click icon button | Popover | Toggle popover open/closed. Close any other open popover first. |
 | Click field toggle | View content | Toggle field on/off in the active view. Tiles/nodes resize. Swimlanes recompute layout. |
 | Click predicate radio | Correlation picker | Single-select. Disable time-window when "explicit parent" is selected. |
@@ -83,7 +90,7 @@ version → sha → ref → run_number
 ### Apply
 
 1. User clicks a preset row (or its ✓ Apply action button).
-2. `applySettings(p.settings)` writes each captured key back through the same code paths used by direct UI interaction — no short-circuit: theme flip triggers swimlane rebuild; field changes trigger matrix/swimlane re-render; view change calls `setView()`; filter changes call `applySvcFilter()`; column changes trigger grid recompute.
+2. `applySettings(p.settings)` writes each captured key back through the same code paths used by direct UI interaction — no short-circuit: theme flip triggers swimlane rebuild; field changes trigger matrix/swimlane re-render; filter changes call `applySvcFilter()`; column changes trigger grid recompute; `feedGrouped`/`feedDockOpen` changes call `feedSetGrouped()`/`feedSetDockOpen()`. **View is route-driven** — applying `view` calls `setView()` and realigns the route/active tab to match (the `withViewRealign` pattern), not just an internal re-render, so a preset can never leave the URL and the visibly active tab out of sync.
 3. The applied preset is marked `.is-active`: accent border + tint, `aria-current="true"`, and an "Active" badge on its row. The name is persisted to `localStorage` (`dd:presetActive`), so the indicator survives page reload.
 4. Unknown/missing fields in the snapshot fall back to current defaults — no error thrown.
 
@@ -116,7 +123,7 @@ version → sha → ref → run_number
 
 1. User clicks **Reset all settings** in the Presets popover.
 2. `window.confirm()` prompt: `Reset all settings to defaults?` — user must confirm.
-3. On confirm: every captured setting key is removed from `localStorage` and each setting returns to its framework default (theme → `dark`; field pickers → all ON; filters → clear; view → Matrix; etc.).
+3. On confirm: every captured setting key is removed from `localStorage` and each setting returns to its framework default (theme → `dark`; field pickers → all ON; filters → clear; view → Matrix (route realigned via `withViewRealign`); feed dock → closed; feed grouping → ON; etc.).
 4. The active indicator is cleared (`dd:presetActive` removed) — no preset is considered active after a reset. The saved preset list is not affected; only the active tracking is cleared.
 
 ### Export (per-preset)
