@@ -11,6 +11,7 @@ public sealed class DashboardDbContext(DbContextOptions<DashboardDbContext> opti
     public DbSet<ControlStreamEvent> ControlStreamEvents => Set<ControlStreamEvent>();
     public DbSet<ComponentEvent> ComponentEvents => Set<ComponentEvent>();
     public DbSet<ResetCycle> ResetCycles => Set<ResetCycle>();
+    public DbSet<ProvidedPreset> ProvidedPresets => Set<ProvidedPreset>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -22,5 +23,6 @@ public sealed class DashboardDbContext(DbContextOptions<DashboardDbContext> opti
         modelBuilder.ApplyConfiguration(new ControlStreamEventConfiguration(isSqlite));
         modelBuilder.ApplyConfiguration(new ResetCycleConfiguration(isSqlite));
         modelBuilder.ApplyConfiguration(new ComponentEventConfiguration(isSqlite));
+        modelBuilder.ApplyConfiguration(new ProvidedPresetConfiguration(isSqlite));
     }
 }

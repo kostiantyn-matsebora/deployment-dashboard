@@ -21,6 +21,7 @@ public static class WriteEndpoints
            .WithName("IngestDeployment")
            .WithTags("Deployments")
            .WithSummary("Ingest a deployment event")
+           .Produces<DeploymentEvent>(StatusCodes.Status200OK)
            .Produces<DeploymentEvent>(StatusCodes.Status201Created)
            .ProducesProblem(StatusCodes.Status401Unauthorized)
            .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -36,7 +37,9 @@ public static class WriteEndpoints
         IDeploymentIngestService ingestService,
         CancellationToken ct)
     {
-        var ev = await ingestService.IngestAsync(body, progressReporter, ct);
-        return Results.Created($"/api/deployments/{ev.Id}", ev);
+        var result = await ingestService.IngestAsync(body, progressReporter, ct);
+        return result.Created
+            ? Results.Created($"/api/deployments/{result.Event.Id}", result.Event)
+            : Results.Ok(result.Event);
     }
 }

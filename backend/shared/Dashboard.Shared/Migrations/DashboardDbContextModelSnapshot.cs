@@ -17,7 +17,7 @@ namespace Dashboard.Shared.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.8")
+                .HasAnnotation("ProductVersion", "10.0.9")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -67,6 +67,10 @@ namespace Dashboard.Shared.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CorrelationId")
+                        .HasDatabaseName("ix_ce_correlation_id")
+                        .HasFilter("correlation_id IS NOT NULL");
+
                     b.HasIndex("ReceivedAt", "Id")
                         .IsDescending()
                         .HasDatabaseName("ix_ce_received_id");
@@ -74,10 +78,6 @@ namespace Dashboard.Shared.Migrations
                     b.HasIndex("ComponentId", "ReceivedAt", "Id")
                         .IsDescending(false, true, true)
                         .HasDatabaseName("ix_ce_component_received_id");
-
-                    b.HasIndex("CorrelationId")
-                        .HasDatabaseName("ix_ce_correlation_id")
-                        .HasFilter("correlation_id IS NOT NULL");
 
                     b.ToTable("component_events", (string)null);
                 });
@@ -93,13 +93,13 @@ namespace Dashboard.Shared.Migrations
                         .HasColumnType("text")
                         .HasColumnName("component");
 
-                    b.Property<DateTimeOffset>("OccurredAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("occurred_at");
-
                     b.Property<Guid?>("CorrelationId")
                         .HasColumnType("uuid")
                         .HasColumnName("correlation_id");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("occurred_at");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -193,6 +193,10 @@ namespace Dashboard.Shared.Migrations
                         .IsDescending()
                         .HasDatabaseName("ix_de_happened_id");
 
+                    b.HasIndex("DeploymentId", "Status", "HappenedAt")
+                        .IsUnique()
+                        .HasDatabaseName("ux_de_dedup_natural_key");
+
                     b.HasIndex("Service", "Environment", "HappenedAt")
                         .IsDescending(false, false, true)
                         .HasDatabaseName("ix_de_service_env_happened_success")
@@ -225,6 +229,34 @@ namespace Dashboard.Shared.Migrations
                     b.ToTable("fetcher_state", (string)null);
                 });
 
+            modelBuilder.Entity("Dashboard.Shared.Entities.ProvidedPreset", b =>
+                {
+                    b.Property<string>("Source")
+                        .HasColumnType("text")
+                        .HasColumnName("source");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<DateTimeOffset>("FetchedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("fetched_at");
+
+                    b.Property<string>("SettingsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("settings_json");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Source", "Name");
+
+                    b.ToTable("provided_presets", (string)null);
+                });
+
             modelBuilder.Entity("Dashboard.Shared.Entities.ResetCycle", b =>
                 {
                     b.Property<short>("Id")
@@ -235,6 +267,10 @@ namespace Dashboard.Shared.Migrations
                         .HasColumnType("text[]")
                         .HasColumnName("acks_received");
 
+                    b.Property<Guid?>("CorrelationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("correlation_id");
+
                     b.Property<DateTimeOffset?>("DeadlineAt")
                         .HasColumnType("timestamptz")
                         .HasColumnName("deadline_at");
@@ -242,10 +278,6 @@ namespace Dashboard.Shared.Migrations
                     b.PrimitiveCollection<string[]>("ExpectedComponents")
                         .HasColumnType("text[]")
                         .HasColumnName("expected_components");
-
-                    b.Property<Guid?>("CorrelationId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("correlation_id");
 
                     b.Property<DateTimeOffset?>("StartedAt")
                         .HasColumnType("timestamptz")

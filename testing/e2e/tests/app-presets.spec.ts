@@ -844,3 +844,191 @@ test.describe('Screenshots', () => {
     console.log(`[SCREENSHOT] presets-light: ${screenshotPath}`);
   });
 });
+
+// ---------------------------------------------------------------------------
+// M) Import from URL
+//
+// Uses page.route() to stub the external HTTPS fetch — this is the true
+// network boundary; it is NOT mocking application code.
+//
+// M1 — SINGLE: route returns a valid single-preset JSON → one new row + success msg.
+// M2 — BUNDLE: route returns {version:1,presets:[A,B]} with name A colliding
+//              with an existing preset → both imported; A gets dedup suffix ' (2)'.
+// M3 — FAILURE (404): route fulfills with status 404 → inline error, no preset added.
+// M4 — FAILURE (CORS/network abort): route aborts → inline error, no preset added.
+// ---------------------------------------------------------------------------
+
+/** Stable fake HTTPS URL intercepted by page.route() in every test below. */
+const FAKE_URL = 'https://raw.example.com/presets/test.json';
+
+test.describe('M) Import from URL', () => {
+  test.beforeEach(async ({ page }) => {
+    await openMatrixClean(page);
+  });
+
+  // ── M1: single-preset import ──────────────────────────────────────────────
+
+  test('M1) single-preset URL imports one new preset and shows success message', async ({
+    page,
+  }) => {
+    // Stub the fetch before any browser request can fire.
+    await page.route(FAKE_URL, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          version: 1,
+          name: 'URL Preset Alpha',
+          settings: { theme: 'dark', view: 'matrix' },
+        }),
+      }),
+    );
+
+    await openPresetsPopover(page);
+
+    // Type the URL and click Import URL.
+    await page.locator('[data-testid="presets-import-url-input"]').fill(FAKE_URL);
+    await page.locator('[data-testid="presets-import-url-btn"]').click();
+
+    // Wait for the import to complete: exactly one preset row must appear.
+    await expect(page.locator('.presets-list .presets-name')).toHaveCount(1, { timeout: 10_000 });
+    const names = await listedPresetNames(page);
+    expect(names).toContain('URL Preset Alpha');
+
+    // Success message must be shown.
+    const msg = page.locator('.presets-msg');
+    await expect(msg).toBeVisible();
+    await expect(msg).toContainText('Imported 1 preset');
+
+    // URL input must be cleared after a successful import.
+    await expect(page.locator('[data-testid="presets-import-url-input"]')).toHaveValue('');
+
+    // Verify the preset landed in localStorage.
+    const stored = await page.evaluate((key: string) => {
+      const raw = localStorage.getItem(key);
+      return raw ? (JSON.parse(raw) as Array<{ name: string }>) : [];
+    }, STORAGE_KEY);
+    expect(stored.map((e) => e.name)).toContain('URL Preset Alpha');
+  });
+
+  // ── M2: bundle import with name dedup ─────────────────────────────────────
+
+  test('M2) bundle URL imports all presets; colliding name gets dedup suffix', async ({
+    page,
+  }) => {
+    // Seed an existing preset named "Bundle A" so we can verify the dedup.
+    await seedPreset(page, 'Bundle A');
+
+    // Stub the fetch to return a two-entry bundle.
+    await page.route(FAKE_URL, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          version: 1,
+          presets: [
+            { name: 'Bundle A', settings: { theme: 'dark', view: 'matrix' } },
+            { name: 'Bundle B', settings: { theme: 'light', view: 'swimlanes' } },
+          ],
+        }),
+      }),
+    );
+
+    await openPresetsPopover(page);
+
+    // Trigger the import.
+    await page.locator('[data-testid="presets-import-url-input"]').fill(FAKE_URL);
+    await page.locator('[data-testid="presets-import-url-btn"]').click();
+
+    // 1 (seeded) + 2 (bundle) = 3 total preset rows.
+    await expect(page.locator('.presets-list .presets-name')).toHaveCount(3, { timeout: 10_000 });
+    const names = await listedPresetNames(page);
+
+    // Original pre-existing preset is unchanged.
+    expect(names).toContain('Bundle A');
+    // Duplicate name gets the (2) suffix.
+    expect(names).toContain('Bundle A (2)');
+    // Non-colliding bundle entry is imported verbatim.
+    expect(names).toContain('Bundle B');
+
+    // Success message confirms 2 presets imported.
+    const msg = page.locator('.presets-msg');
+    await expect(msg).toBeVisible();
+    await expect(msg).toContainText('Imported 2 presets');
+  });
+
+  // ── M3: 404 → inline error, no preset written ─────────────────────────────
+
+  test('M3) 404 response shows an inline error and writes no preset', async ({
+    page,
+  }) => {
+    // Record how many presets exist before the attempt (zero after clean).
+    const countBefore = await page.evaluate((key: string) => {
+      const raw = localStorage.getItem(key);
+      return raw ? (JSON.parse(raw) as unknown[]).length : 0;
+    }, STORAGE_KEY);
+
+    // Stub the fetch to return 404.
+    await page.route(FAKE_URL, (route) =>
+      route.fulfill({
+        status: 404,
+        contentType: 'text/plain',
+        body: 'Not Found',
+      }),
+    );
+
+    await openPresetsPopover(page);
+
+    await page.locator('[data-testid="presets-import-url-input"]').fill(FAKE_URL);
+    await page.locator('[data-testid="presets-import-url-btn"]').click();
+
+    // An error message must appear.
+    const msg = page.locator('.presets-msg');
+    await expect(msg).toBeVisible({ timeout: 10_000 });
+    // The service returns "HTTP 404 — …" for non-ok responses.
+    await expect(msg).toContainText('404');
+
+    // No new preset must have been written.
+    const countAfter = await page.evaluate((key: string) => {
+      const raw = localStorage.getItem(key);
+      return raw ? (JSON.parse(raw) as unknown[]).length : 0;
+    }, STORAGE_KEY);
+    expect(countAfter).toBe(countBefore);
+
+    // Preset list must still be absent (clean state had none).
+    await expect(page.locator('.presets-list')).toHaveCount(0);
+  });
+
+  // ── M4: network abort (CORS / unreachable) → inline error, no preset ──────
+
+  test('M4) network abort shows an inline error and writes no preset', async ({
+    page,
+  }) => {
+    // Record baseline preset count (zero after clean).
+    const countBefore = await page.evaluate((key: string) => {
+      const raw = localStorage.getItem(key);
+      return raw ? (JSON.parse(raw) as unknown[]).length : 0;
+    }, STORAGE_KEY);
+
+    // Abort the request to simulate a CORS / DNS / network failure.
+    await page.route(FAKE_URL, (route) => route.abort('failed'));
+
+    await openPresetsPopover(page);
+
+    await page.locator('[data-testid="presets-import-url-input"]').fill(FAKE_URL);
+    await page.locator('[data-testid="presets-import-url-btn"]').click();
+
+    // The service catches fetch() throwing and returns a network-error string.
+    const msg = page.locator('.presets-msg');
+    await expect(msg).toBeVisible({ timeout: 10_000 });
+    // Error message must mention URL reachability / CORS.
+    await expect(msg).toContainText('Could not reach that URL');
+
+    // No new preset must have been written.
+    const countAfter = await page.evaluate((key: string) => {
+      const raw = localStorage.getItem(key);
+      return raw ? (JSON.parse(raw) as unknown[]).length : 0;
+    }, STORAGE_KEY);
+    expect(countAfter).toBe(countBefore);
+  });
+});

@@ -39,7 +39,7 @@ It is **just another pusher** — the backend treats fetcher traffic identically
 | F2 | **One abstraction — `ICiCdAdapter`.** The host/orchestrator depend only on it + the canonical DTO + an opaque cursor string. **Zero** tool-specifics leak out. | The headline requirement. Adding Azure DevOps / Jenkins = a new adapter, no host changes. |
 | F3 | **Adapter owns its cursor shape.** Persisted opaquely via `/api/fetcher/state/{adapter}`; host never parses it. | Matches openapi opaque-cursor contract. |
 | F4 | **GitHub adapter sources the Deployments + Deployment Statuses REST API.** `AdapterId = github-actions`. | Those endpoints carry `environment` + the status lifecycle the matrix needs (workflow-runs API lacks `environment`). |
-| F5 | **At-least-once delivery per chunk.** Cursor advances after all POSTs in a chunk succeed and the cursor is persisted; a throw mid-chunk leaves the cursor at the previous chunk → next loop re-delivers that chunk (dupes OK, append-only). | Store is append-only / no dedup — duplicates are acceptable, dropped events are not. |
+| F5 | **At-least-once delivery per chunk; idempotent ingest.** Cursor advances after all POSTs in a chunk succeed and the cursor is persisted; a throw mid-chunk leaves the cursor at the previous chunk → next loop re-delivers that chunk. Ingest is idempotent on `(deployment_id, status, happened_at)`: a duplicate POST returns **200** (existing event, no new row, no SSE frame); a new event returns **201**. Backfill replay and POST retries are safe — duplicates are de-duplicated, not appended. | Idempotent ingest makes at-least-once delivery safe without store-level accumulation; dropped events are still the only unacceptable outcome. |
 | F6 | **Single replica per adapter.** No leader election; the cursor is shared but unlocked. | Two replicas would double-post. The API (not the fetcher) is the horizontally-scaled tier. |
 | F7 | **Bounded initial backfill.** On a `404` (no cursor yet) the adapter starts from `now − INITIAL_LOOKBACK`, not from repo genesis. | Avoids flooding the store with full history on first run. |
 | F8 | **Adapter handles conditional requests + rate limits.** ETag / `If-None-Match`, `X-RateLimit-*`, `Retry-After`, backoff. | Keeps polling cheap and a good API citizen — internal to the adapter. |
@@ -131,7 +131,7 @@ while (!ct.IsCancellationRequested)
 }
 ```
 
-- Cursor is **persisted after each chunk** whose cursor advances (F5). A throw mid-chunk leaves the cursor at the last completed chunk → next loop re-delivers from that point (dupes OK, append-only).
+- Cursor is **persisted after each chunk** whose cursor advances (F5). A throw mid-chunk leaves the cursor at the last completed chunk → next loop re-delivers from that point; the idempotent ingest (F5) de-duplicates any re-posted events.
 - Zero-event completion markers (backfill repo-done) ARE persisted when they carry a new cursor.
 - The host references **no** `Dashboard.Fetcher.Adapters.GitHub` type — adapters are resolved via DI as `IEnumerable<ICiCdAdapter>`.
 
@@ -216,7 +216,7 @@ Base64 of compact JSON, forward-only, well under the 8 KiB limit.
 
 **Normal / post-backfill shape:**
 ```json
-{ "repos": { "acme/api": { "since": "2026-05-28T10:14:02Z" }, "acme/web": { "since": "2026-05-28T09:50:00Z" } } }
+{ "repos": { "acme/api": { "since": "2026-05-28T10:14:02Z", "oldest_pending": "2026-05-27T08:00:00Z" }, "acme/web": { "since": "2026-05-28T09:50:00Z" } } }
 ```
 
 **Mid-backfill shape (backfill section present while in progress):**
@@ -230,6 +230,7 @@ Base64 of compact JSON, forward-only, well under the 8 KiB limit.
 ```
 
 - `repos[repo].since` = high-water mark on `status.created_at`. Set only on backfill completion or normal poll advance. Never set mid-backfill.
+- `repos[repo].oldest_pending` = oldest `deployment.created_at` among this repo's deployments whose latest status is non-terminal (`waiting` / `pending` / `queued` / `in_progress`). Absent when no such deployments exist. Used to lower the deployments-list scan `cutoff` so a long-pending deployment is never evicted from the window (§5.5.3). `inactive` is terminal (superseded) and is never tracked here.
 - `backfill[repo].anchor` = UTC timestamp when this repo's backfill pass started. Stable across resumes (prevents scan-window drift on restart).
 - `backfill[repo].done_envs` = list of environment names whose per-env scan is complete and emitted. Used to skip already-processed envs on resume.
 - `backfill` key absent = no backfill in progress (old cursors decode safely with empty backfill).
@@ -289,6 +290,25 @@ Scope: **live poll only** (backfill unchanged). Applies to two endpoints per rep
 **Graceful degradation.** When the server omits the `ETag` header on a `200` response (e.g. the `github-emulator`), nothing is cached and every subsequent cycle is a normal unconditional fetch — correctness is unaffected.
 
 **Interplay with §5.5.1.** Both terminal-skip and ETag-`304` populate the same `reusedRunIds` map, which feeds the `envToDeploymentId` build in §5.6.4. Cross-cycle and cross-environment parent edges are preserved regardless of which path suppressed the status re-fetch.
+
+#### 5.5.3 Poll efficiency — pending-floor cutoff
+
+The deployments-list `stopBefore` predicate (§5.5.2) uses a `cutoff` computed each cycle as:
+
+```
+cutoff = min(since − 1 day, oldest_pending)
+```
+
+- `since − 1 day` — default lower bound: one day before the high-water mark ensures any deployment created up to a day before the last seen status event remains in scope.
+- `oldest_pending` — from the cursor (§5.4); the oldest `deployment.created_at` among still-pending deployments in this repo. When set, it extends the scan window back far enough to always include that deployment.
+
+**Without pending-floor.** A `waiting` deployment held for more than one day (e.g. awaiting manual approval) falls outside the default `since − 1 day` window. Its statuses are never re-fetched, so the eventual `success` is never ingested — the tile stays `waiting` indefinitely.
+
+**With pending-floor.** `cutoff` is lowered to `oldest_pending`, keeping the long-pending deployment inside the scan window every cycle until its latest status turns terminal. On termination: the deployment enters the terminal cache (§5.5.1); `oldest_pending` is advanced to the next-oldest still-pending deployment (or removed when none remain); the updated value is saved in the cursor on the next advance.
+
+Tracked non-terminal states: `waiting` / `pending` / `queued` / `in_progress`. `inactive` is terminal (superseded) and is never tracked.
+
+Scope: **live poll only**. Backfill is not affected — it uses `BACKFILL_MAX_AGE` as its hard time boundary.
 
 ### 5.6 Parent deployment derivation (F10)
 
@@ -583,7 +603,7 @@ A second long-lived task (alongside the poll loop) holds an open control stream:
 | Subscriber connection drops mid-cycle | Reconnect with `Last-Event-ID`; the server replays any missed events (including a missed `reset-completed`) within the 2 h window — recovery still fires. |
 | Fetcher down for the entire reset cycle | On next startup the poll loop sees an empty store + `404` cursor and **backfills anyway** (F14) — no event needed; the reset self-heals via the same null-cursor path. |
 | Ack POST fails | Stay paused; orchestrator proceeds on `AckTimeoutSeconds`. Recovery still triggers on the eventual `reset-completed`. |
-| `reset-completed` arrives while already running (duplicate/replay) | Idempotent: dropping an already-advanced cursor and re-checking state at worst re-backfills the most-recent slot per `(service, environment)` — duplicates are acceptable (F5, append-only). |
+| `reset-completed` arrives while already running (duplicate/replay) | Idempotent: dropping an already-advanced cursor and re-checking state at worst re-backfills the most-recent slot per `(service, environment)`; the idempotent ingest (F5) de-duplicates any re-posted events. |
 
 ---
 
@@ -646,6 +666,7 @@ Non-fatal. Transport errors and non-2xx responses are logged at `Warning` level 
 | `CONTROL_API_KEY` | *(secret)* | `X-Control-API-Key` for the control stream subscription (`GET /api/control/stream`); distinct from `API_KEY` (§5.10.2) |
 | `COMPONENT_ID` | `dashboard-fetcher` | `X-Component-Id` on component-event posts; MUST match the API's `ExpectedComponents` (§5.10.1) |
 | `POLL_INTERVAL_SECONDS` | `30` | loop cadence (integration uses `1`) |
+| `DISCOVERY_INTERVAL_SECONDS` | `3600` | cadence of the slow-cadence preset-discovery loop (§8) — separate from `POLL_INTERVAL_SECONDS`; default 1h |
 | `INITIAL_LOOKBACK` | `7.00:00:00` | normal poll first-run window (F7); also the default for `BACKFILL_MAX_AGE` when unset |
 | `BACKFILL` | `false` | set `true` to force a backfill run regardless of cursor state (F14) |
 | `BACKFILL_MAX_AGE` | `30.00:00:00` | how far back backfill scans per environment; defaults to `INITIAL_LOOKBACK` |
@@ -788,7 +809,65 @@ Real fetcher-host against the `github-emulator` + real `Dashboard.Api` + Postgre
 
 ---
 
-## 8. Out of scope
+## 8. Preset discovery (issue #391)
+
+A **slow-cadence, sibling process** to the deployment poll loop (§4) — same GitHub adapter, own cadence, no cursor, no pause/resume. Publishes repo/CI-sourced UI-settings presets so the SPA can offer them read-only; see [`docs/guide/provided-presets.md`](guide/provided-presets.md) for the adopter-facing convention, the push-mode `curl PUT` alternative, and the three permission tiers. Contract: [`docs/api/openapi.yaml`](api/openapi.yaml) `presets` tag; [`docs/API_SPECIFICATION.md`](API_SPECIFICATION.md) `provided_presets`.
+
+### 8.1 Loop shape
+
+`DiscoveryLoop` (`Dashboard.Fetcher.Orchestration`) runs `PresetDiscoveryRunner.RunOnceAsync` on `DiscoveryInterval` (`DISCOVERY_INTERVAL_SECONDS`, default 3600 — §6), swallowing per-cycle exceptions so one bad cycle never stops the loop — the same at-least-tries philosophy as `PollLoop`'s retry-next-interval behaviour. It runs alongside the per-adapter poll loops inside the same host process, sharing the singleton `GithubClient` / `RateLimitBudget` (§5.9) — discovery requests are counted against the **same** rate-limit budget as deployment polling, not a separate one.
+
+**Repo list.** Reuses `GITHUB_REPOS` (`GithubAdapterOptions.RepoList`) unchanged — the same, already glob-expanded `owner/repo` list the deployment poll loop uses. There is no separate discovery-only repo variable.
+
+### 8.2 Per-source discovery cycle (`PresetDiscoveryRunner`)
+
+For each configured `owner/repo` source:
+
+1. `GET /repos/{owner}/{repo}/contents/.deployment-dashboard`, ETag-conditional (`If-None-Match` from the previous cycle's response `ETag`, per source).
+2. `304 Not Modified` → reuse; **no re-`PUT`**, cycle ends here for this source.
+3. `404` → the directory doesn't exist on this repo → skip, no `PUT`, no prune.
+4. Any other non-2xx (`403`, `5xx`, transport error) → skip, no `PUT`, no prune.
+5. `200` → for every entry that is a file and whose name ends `.json`: fetch + Base64-decode its content, then parse it **single-or-bundle** (§8.3). A fetch or parse failure on **any** file aborts discovery for the **whole source** for this cycle (no partial publish, no prune) — the directory-listing ETag is **not** advanced, so the next cycle retries the same directory state rather than adopting a partial read as "known."
+6. All parsed presets across all files in the directory are aggregated into one list and `PUT /api/presets/sources/{source}` (via `IPresetIngestClient` — `PresetIngestClient`, `Dashboard.Fetcher.Ingest`). The directory-listing `ETag` is recorded **only after** a successful parse-and-`PUT`.
+7. Non-`.json` files and sub-directories in `.deployment-dashboard` are ignored.
+
+Per-source failures are caught and logged inside `RunOnceAsync` — one bad source never blocks discovery for the others in the same cycle.
+
+### 8.3 Single-or-bundle parsing (`PresetFileParser`)
+
+Each `.deployment-dashboard/*.json` file is one of two shapes:
+
+| Shape | Root object | Result |
+|---|---|---|
+| Single envelope | `{version, name, settings}` | One preset. |
+| Bundle | `{version, presets: [{version, name, settings}, …]}` | Every entry in `presets`. |
+
+A root object that is neither shape (missing `name`+`settings` and no `presets` array), a non-object root, a non-array `presets`, an entry missing `name`/`settings`, or a blank `name` → throws — treated as a parse error (§8.2 step 5: aborts the whole source, no prune). `settings` is stored opaque (`JsonElement`, cloned) — the fetcher never interprets its shape.
+
+### 8.4 Semantics — replace-by-source, prune only on an authoritative empty read
+
+`PUT /api/presets/sources/{source}` is **authoritative-replace** (API-side — `IProvidedPresetRepository.ReplaceForSourceAsync`: delete-then-insert for that source). Discovery's own contribution is deciding **when** to call it:
+
+| Directory-listing outcome this cycle | Discovery action |
+|---|---|
+| `200`, ≥ 1 valid `.json` file | `PUT` the aggregated bundle — replaces the source's prior presets. |
+| `200`, 0 `.json` files (empty/removed directory) | `PUT` an empty `presets: []` bundle — **prunes** every preset this source previously published. |
+| `304` | No `PUT` — reuses the last-published bundle. |
+| `403` / `404` / other non-2xx / network error / any per-file fetch-or-parse error | **Skip — no `PUT`, no prune.** The source keeps whatever it last successfully published (keep-last-known-good). |
+
+This makes a temporary `Contents:read` grant safe to revoke after bootstrapping: the grant lets one cycle publish the bundle (row 1); revoking it turns the next cycle's directory listing into a `403`, which is a **skip** (row 4), never a prune. The presets stay published until either the grant returns or a source explicitly `PUT`s an empty bundle (or a push-mode `curl PUT` — [`docs/guide/provided-presets.md`](guide/provided-presets.md) — replaces them).
+
+### 8.5 Testing
+
+| Layer | Cases |
+|---|---|
+| `DiscoveryLoopTests` | Invokes the delegate on each interval tick; a cycle throw does not stop the loop; cancellation returns cleanly. |
+| `PresetFileParserTests` | Single-envelope shape; bundle shape; malformed JSON; neither-shape root; missing `name`/`settings`; blank `name`. |
+| `PresetDiscoveryRunnerTests` | Single-shape file → aggregates and `PUT`s; bundle-shape file → aggregates and `PUT`s; mixed single+bundle files in one directory aggregate together (non-`.json` and sub-dir entries ignored); empty directory → `PUT`s an empty bundle (prune); directory `304` → no re-`PUT`, `If-None-Match` sent on the second cycle; directory `403`/`404` → skip, no `PUT`; a per-file parse error or non-2xx fetch aborts the **whole** source, no partial publish, no prune; one source failing does not block another configured source from publishing; GitHub calls route through the shared rate-limit budget. |
+
+---
+
+## 9. Out of scope
 
 - Horizontal scaling of the fetcher (single replica per adapter — F6).
 - Adapters other than GitHub (the abstraction is the deliverable; ADO/Jenkins are future drop-ins).

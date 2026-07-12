@@ -148,7 +148,7 @@ For `422` payload-validation failures, the body additionally carries an `errors[
 | `429 Too Many Requests` | Future rate-limit slot. `Retry-After` always present. |
 | `503 Service Unavailable` | DB unreachable; any LISTEN channel not attached (`deployment_events`, `control_events`, `component_acks`, `component_events`). |
 
-**No `409 Conflict` on ingest.** The store is append-only — duplicates are not a server-side concern.
+**No `409 Conflict` on ingest.** A duplicate on the natural key `(deployment_id, status, happened_at)` returns `200` — not an error. A new event returns `201`.
 
 ---
 
@@ -166,9 +166,9 @@ For `422` payload-validation failures, the body additionally carries an `errors[
 
 ## 8. Append-only semantics
 
-- `POST /api/deployments` **appends** a row. There is no update, no upsert, no dedup.
-- A retried POST produces an **additional** row. Handling retries is the caller's concern.
-- `deployment_id` is an **emitter-supplied correlation key** grouping multiple event rows. NOT a row identity, NOT a uniqueness constraint, NOT an idempotency key.
+- `POST /api/deployments` **appends** a row, or returns the existing one — idempotent on `(deployment_id, status, happened_at)`. Duplicate → **`200`** (no new row, no SSE frame); new event → **`201`** + `Location`.
+- A retried POST with the same `(deployment_id, status, happened_at)` is safe — the store de-duplicates it automatically; no extra rows are created.
+- `deployment_id` is an **emitter-supplied correlation key** grouping multiple event rows (one per status event). NOT a row identity on its own. `(deployment_id, status, happened_at)` is the natural idempotency key.
 - `happened_at` is **emitter-supplied** and required (UTC wall-clock on the CI/CD side).
 - The read surface reduces the log:
   - **Matrix** — `MAX(happened_at)` per `(service, environment)` for `current`; success-filtered for `last_successful`.

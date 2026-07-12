@@ -68,6 +68,30 @@ public sealed class GithubCursor
             Backfill = Backfill,
         };
 
+    /// <summary>
+    /// Returns the oldest still-pending (non-terminal) deployment's <c>created_at</c> for
+    /// <paramref name="repo"/>, or <c>null</c> if none is stored (first run, or cleared
+    /// because all deployments reached a terminal state last cycle).
+    /// </summary>
+    public DateTimeOffset? OldestPendingFor(string repo) =>
+        Repos.TryGetValue(repo, out var c) ? c.OldestPending : null;
+
+    /// <summary>
+    /// Returns a new cursor with both the high-water mark and the oldest-pending floor
+    /// updated for <paramref name="repo"/>.  Pass <paramref name="oldestPending"/> =
+    /// <c>null</c> to clear a previously stored floor (all in-window deployments reached
+    /// terminal state this cycle).  Preserves the <see cref="Backfill"/> section.
+    /// </summary>
+    public GithubCursor WithRepoState(string repo, DateTimeOffset since, DateTimeOffset? oldestPending) =>
+        new()
+        {
+            Repos = new Dictionary<string, RepoCursor>(Repos)
+            {
+                [repo] = new RepoCursor { Since = since, OldestPending = oldestPending },
+            },
+            Backfill = Backfill,
+        };
+
     // ── backfill helpers ──────────────────────────────────────────────────────
 
     /// <summary>True when any repo still has an active backfill marker.</summary>
@@ -146,6 +170,16 @@ public sealed record RepoCursor
 {
     [JsonPropertyName("since")]
     public DateTimeOffset Since { get; init; }
+
+    /// <summary>
+    /// <c>created_at</c> of the oldest deployment that was still non-terminal (pending) at the
+    /// end of the last poll cycle for this repo.  Persisted so the next cycle extends the
+    /// list cutoff floor to include it, preventing long-running approvals from being evicted.
+    /// Absent (null) on old cursors — backward-compatible: missing key deserialises to null.
+    /// Placed last to avoid breaking forward-compatibility when the field is added.
+    /// </summary>
+    [JsonPropertyName("oldest_pending")]
+    public DateTimeOffset? OldestPending { get; init; }
 }
 
 /// <summary>

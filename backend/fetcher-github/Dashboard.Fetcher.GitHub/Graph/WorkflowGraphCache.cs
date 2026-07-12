@@ -201,8 +201,7 @@ public sealed class WorkflowGraphCache
 
             if (file is not null)
             {
-                var yaml = Encoding.UTF8.GetString(
-                    Convert.FromBase64String(file.Content.Replace("\n", "")));
+                var yaml = Encoding.UTF8.GetString(file.DecodeUtf8());
 
                 // Parse the YAML to obtain the jobs graph (allJobs, deploymentJobs).
                 // Override WorkflowName with `identity` (from the workflows endpoint) so

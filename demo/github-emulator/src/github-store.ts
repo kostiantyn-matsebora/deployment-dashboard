@@ -78,6 +78,15 @@ export interface RepoStore {
   artifacts: Map<number, GhArtifact[]>;
   /** Keyed by deployment id — reviewer decisions for environment gates */
   reviews: Map<number, GhDeploymentReview[]>;
+  /**
+   * Arbitrary repo files, keyed by full repo-relative path (e.g.
+   * ".deployment-dashboard/presets.json") — UTF-8 text content. Parallel to
+   * {@link workflowYaml} but NOT keyed by ref: this backs the generic GitHub
+   * Contents API directory-listing + single-file behavior (issue #391 —
+   * preset discovery) rather than the workflow-graph YAML fetch, which stays
+   * on {@link workflowYaml} unchanged.
+   */
+  files: Map<string, string>;
 }
 
 // ── Store singleton ───────────────────────────────────────────────────────────
@@ -104,6 +113,7 @@ export class GithubStore {
         environments: [],
         artifacts: new Map(),
         reviews: new Map(),
+        files: new Map(),
       });
     }
     return this.repos.get(key)!;

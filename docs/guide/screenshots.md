@@ -48,6 +48,19 @@ Opt-in desktop notifications triggered by deployment status transitions. Enable 
 ![Browser notifications — dark](../_assets/screenshots/notifications-dark.png#only-dark){ .dd-shot }
 ![Browser notifications — light](../_assets/screenshots/notifications-light.png#only-light){ .dd-shot }
 
+## :material-bookmark-box-multiple-outline: UI settings presets { #ui-settings-presets }
+
+Save, apply, share, and import named snapshots of your UI settings — filters, display preferences, and notification configuration — via the preset panel.
+
+![UI settings presets — dark](../_assets/screenshots/presets-dark.png#only-dark){ .dd-shot }
+![UI settings presets — light](../_assets/screenshots/presets-light.png#only-light){ .dd-shot }
+
+### Import from URL
+
+The preset panel's **Import from URL** field lets you paste a public HTTPS link to a single preset or a multi-preset bundle. The SPA fetches client-side — no backend involved.
+
+[:octicons-arrow-right-24: Import from URL — accepted formats and boundaries](./ui-settings.md#import-from-url)
+
 ## :material-tune-variant: Demo control panel { #demo-control-panel }
 
 The demo profile ships a **Demo Driver** control panel (`/demo/`): ingest the curated or random dataset, seed the GitHub emulator, drive live emission, trigger a system reset, and watch the deployment feed and component event streams in real time.
@@ -61,6 +74,15 @@ The dashboard can be installed as a standalone Chromium app — a dedicated wind
 ![Dashboard running as an installed standalone app](../_assets/screenshots/install-app-dark.png){ .dd-shot }
 
 [:octicons-arrow-right-24: Install guide](./install-app.md){ .md-button }
+
+## :material-cloud-download-outline: Provided presets { #provided-presets }
+
+Read-only, repo/CI-sourced UI-settings presets published by a `owner/repo` source — either directly over the [push-mode REST recipe](./provided-presets.md#publishing-presets-push-mode) or automatically discovered by the Fetcher in pull mode. They appear in a **PROVIDED** section of the topbar presets popover, alongside any presets saved locally, with **Apply** and **Clone-to-edit** actions. Nothing here is ever written back — provided presets are never edited or deleted from the UI.
+
+![Provided presets in the topbar popover — dark](../_assets/screenshots/provided-presets-dark.png#only-dark){ .dd-shot }
+![Provided presets in the topbar popover — light](../_assets/screenshots/provided-presets-light.png#only-light){ .dd-shot }
+
+[:octicons-arrow-right-24: Provided presets guide](./provided-presets.md){ .md-button }
 
 ## :material-dock-bottom: Footer { #footer }
 

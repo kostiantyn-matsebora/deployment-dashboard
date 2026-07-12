@@ -99,6 +99,9 @@ services:
       CONTROL_API_KEY: demo-control-key
       # Short poll interval for demo responsiveness.
       POLL_INTERVAL_SECONDS: "10"
+      # Slow-cadence preset discovery (issue #391) — re-runs promptly after the
+      # once-at-startup pass so provided presets show up quickly in the demo.
+      DISCOVERY_INTERVAL_SECONDS: "30"
       # Repoint the fetcher at the in-stack github-emulator instead of api.github.com.
       GITHUB_BASE_URL: "http://github-emulator:3100"
       GITHUB_TOKEN: "demo-token"

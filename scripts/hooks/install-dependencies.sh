@@ -267,5 +267,49 @@ else
 fi
 
 # ===========================================================================
+## Docker Engine + Compose v2 plugin
+# ===========================================================================
+
+# Idempotency — nothing to do if docker is on PATH AND the `docker compose`
+# plugin resolves (the project drives the stack via `docker compose`, not the
+# legacy `docker-compose` standalone binary).
+# `docker compose version` queries only the plugin — it does NOT require the
+# daemon to be running, so it is safe to probe during bootstrap.
+_docker_ready() {
+  command -v docker >/dev/null 2>&1 || return 1
+  docker compose version >/dev/null 2>&1 || return 1
+  return 0
+}
+
+if _docker_ready; then
+  echo "install-dependencies.sh: docker and the compose v2 plugin already present — skipping." >&2
+else
+  # Prereq — apt-get must be available (both packages come from the distro feed).
+  if ! command -v apt-get >/dev/null 2>&1; then
+    echo "install-dependencies.sh: apt-get not found — cannot install Docker." >&2
+    exit 1
+  fi
+
+  echo "install-dependencies.sh: installing docker.io and docker-compose-v2 via apt-get..." >&2
+
+  # Refresh distro package lists (resilient, NON-FATAL) — same rationale as the
+  # .NET section: a broken third-party repo must not abort the bootstrap.
+  $_sudo apt-get update -qq >&2 || echo "install-dependencies.sh: apt-get update reported errors (unreachable repos); continuing with cached package lists." >&2
+
+  # Install — docker.io provides the engine + `docker` CLI; docker-compose-v2
+  # provides the `docker compose` plugin.
+  $_sudo apt-get install -y docker.io docker-compose-v2 >&2
+
+  # Verify — confirm docker is on PATH and the compose plugin resolves.
+  if ! _docker_ready; then
+    echo "install-dependencies.sh: installation completed but docker or the compose v2 plugin is not available." >&2
+    exit 1
+  fi
+
+  _docker_version="$(docker --version 2>&1)"
+  echo "install-dependencies.sh: docker installed successfully — ${_docker_version}" >&2
+fi
+
+# ===========================================================================
 # Future dependencies go here as additional "## <dep>" sections.
 # ===========================================================================

@@ -344,3 +344,29 @@ export interface ComponentEventRecord {
   received_at: string;
   payload: Record<string, unknown> | null;
 }
+
+/**
+ * One repo/CI-sourced provided preset as served by GET /api/presets (issue #391).
+ * Read-only from the SPA's perspective — never persisted to the dd:presets
+ * localStorage store. `settings` is opaque on the wire (the backend never
+ * parses it); the SPA interprets it as a PresetSettings payload when applying
+ * or cloning (see core/services/presets.service.ts).
+ * Contract: docs/api/openapi.yaml — ProvidedPreset schema.
+ */
+export interface ProvidedPreset {
+  /** The `owner/repo` that published this preset. */
+  source: string;
+  /** Preset name as published in the source's bundle. */
+  name: string;
+  /** Envelope schema version. Currently always 1. */
+  version: 1;
+  /** Opaque settings payload, served verbatim. */
+  settings: Record<string, unknown>;
+  /** Server timestamp when this source's bundle was last published/stored. */
+  fetched_at: string;
+}
+
+/** The merged provided-preset catalog served by GET /api/presets. */
+export interface ProvidedPresets {
+  items: ProvidedPreset[];
+}

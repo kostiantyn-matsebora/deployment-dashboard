@@ -60,6 +60,7 @@ version → sha → ref → run_number
 | Click "Collapse/Expand all" | All swimlane lanes | Flip every lane simultaneously. Button label updates to reflect current state. |
 | Click "Auto-scroll to change" toggle | Swimlane behavior | Toggle ON/OFF. When ON + lane off-screen: "Simulate event" scrolls lane into view after event fires — in both collapsed and expanded states. Persists to `localStorage`. |
 | Click "Simulate event" | Lane tip card (any state) | Advance tip node's status, rebuild via the unified renderer, flash the tip card (`svFlash` animation) — collapsed = vector tip card, expanded = newest-event DAG node card. Scroll lane into view if auto-scroll ON and lane off-screen. |
+| Live effective-status change (SSE, `lastEffectiveEvent`) | Matrix tile | One-shot accent flash (`tile-flash` animation) on the `(service, environment, namespace)` tile whose slot changed. Effective statuses only (success / in-progress / failure) — context statuses (pending/queued/waiting/cancelled/rejected) don't flash. Fades ~1.2s, then clears. Mirrors the Swimlanes tip-card flash above (#309); no auto-scroll — the Matrix is a grid, not a scrollable lane list. (#398) |
 | Click icon button | Popover | Toggle popover open/closed. Close any other open popover first. |
 | Click field toggle | View content | Toggle field on/off in the active view. Tiles/nodes resize. Swimlanes recompute layout. |
 | Click predicate radio | Correlation picker | Single-select. Disable time-window when "explicit parent" is selected. |

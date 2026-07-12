@@ -71,6 +71,15 @@ hide:
     ![Notifications](_assets/screenshots/notifications-dark.png#only-dark){ .dd-shot }
     ![Notifications](_assets/screenshots/notifications-light.png#only-light){ .dd-shot }
 
+=== "Provided presets"
+
+    Repo/CI-sourced UI-settings presets, published by any `owner/repo` source — over a plain `curl PUT` or auto-discovered by the optional Fetcher — and shown read-only to every visitor in a **PROVIDED** section of the presets popover, with one-click apply.
+
+    ![Provided presets in the topbar popover](_assets/screenshots/provided-presets-dark.png#only-dark){ .dd-shot }
+    ![Provided presets in the topbar popover](_assets/screenshots/provided-presets-light.png#only-light){ .dd-shot }
+
+    [:octicons-arrow-right-24: Provided presets guide](guide/provided-presets.md){ .md-button }
+
 === "Install as an app"
 
     Install the dashboard as a standalone app in Chrome or Edge — dedicated window, taskbar icon, no browser chrome. Works behind your gateway; no extra deployment needed.
