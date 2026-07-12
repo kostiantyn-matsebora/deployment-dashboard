@@ -2,6 +2,7 @@ using Dashboard.Shared.Abstractions;
 using Dashboard.Shared.Contracts;
 using Dashboard.Shared.Data;
 using Dashboard.Shared.Entities;
+using Dashboard.Shared.Identifiers;
 using Microsoft.EntityFrameworkCore;
 
 namespace Dashboard.Write.Services;
@@ -95,7 +96,7 @@ internal sealed class DeploymentIngestService(
     private static DeploymentEvent MapToEntity(DeploymentEventIngest body, string? progressReporter) =>
         new()
         {
-            Id = Guid.CreateVersion7(),
+            Id = MonotonicGuid.CreateVersion7(),
             DeploymentId = body.DeploymentId,
             Service = body.Service,
             Namespace = body.Namespace,
