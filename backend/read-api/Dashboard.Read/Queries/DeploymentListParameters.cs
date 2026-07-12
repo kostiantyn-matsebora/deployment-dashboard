@@ -14,5 +14,6 @@ internal sealed record DeploymentListParameters(
     [FromQuery(Name = "deployment_id")] string? DeploymentId,
     [FromQuery] DateTimeOffset? Since,
     [FromQuery] DateTimeOffset? Until,
+    [FromQuery] string? Q,
     [FromQuery] string? Cursor,
     [FromQuery] int? Limit);

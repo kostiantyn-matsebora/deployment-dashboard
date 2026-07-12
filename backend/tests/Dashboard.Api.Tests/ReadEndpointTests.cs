@@ -42,15 +42,18 @@ public sealed class ReadEndpointTests : IAsyncLifetime
         string service = "svc-a",
         string environment = "prod",
         string status = "success",
-        string happenedAt = "2026-05-28T10:00:00Z")
+        string happenedAt = "2026-05-28T10:00:00Z",
+        string? deploymentId = null,
+        string? actor = null)
     {
         var payload = new
         {
-            deployment_id = $"gh-{Guid.NewGuid():N}",
+            deployment_id = deploymentId ?? $"gh-{Guid.NewGuid():N}",
             service,
             environment,
             status,
             happened_at = happenedAt,
+            actor,
         };
         var msg = new HttpRequestMessage(HttpMethod.Post, "/api/deployments")
         {
@@ -111,6 +114,70 @@ public sealed class ReadEndpointTests : IAsyncLifetime
         Assert.True(body.TryGetProperty("next_cursor", out _) ||
                     body.ValueKind == JsonValueKind.Object,
                     "Response must be a JSON object; next_cursor may be null.");
+    }
+
+    [Fact]
+    public async Task GetDeployments_QMatchesService_ReturnsOnlyMatchingEvents()
+    {
+        await IngestAsync(service: "q-needle-svc");
+        await IngestAsync(service: "q-unrelated-svc");
+
+        var res = await _client.GetAsync("/api/deployments?q=needle");
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+        var items = body.GetProperty("items").EnumerateArray().ToList();
+
+        Assert.NotEmpty(items);
+        Assert.All(items, item =>
+            Assert.Contains("needle", item.GetProperty("service").GetString(), StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task GetDeployments_QMatchesActor_CaseInsensitive()
+    {
+        var seeded = await IngestAsync(service: "q-actor-svc", actor: "Alice-Needle");
+        var seededId = seeded.GetProperty("id").GetString();
+
+        var res = await _client.GetAsync("/api/deployments?q=ALICE-needle");
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+        var items = body.GetProperty("items").EnumerateArray().ToList();
+
+        Assert.Contains(items, item => item.GetProperty("id").GetString() == seededId);
+    }
+
+    [Fact]
+    public async Task GetDeployments_QNoMatch_ReturnsEmptyItems()
+    {
+        var res = await _client.GetAsync("/api/deployments?q=totally-unmatched-q-needle-zz9");
+
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(0, body.GetProperty("items").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task GetDeployments_QEmpty_BehavesAsNoTextFilter()
+    {
+        await IngestAsync(service: "q-empty-check-svc");
+
+        var res = await _client.GetAsync("/api/deployments?service=q-empty-check-svc&q=");
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+        var items = body.GetProperty("items").EnumerateArray().ToList();
+
+        Assert.Single(items);
+    }
+
+    [Fact]
+    public async Task GetDeployments_QComposesWithServiceFilter_AndSemantics()
+    {
+        await IngestAsync(service: "q-and-svc-a", environment: "q-and-env-needle");
+        await IngestAsync(service: "q-and-svc-b", environment: "q-and-env-needle"); // matches q, not service
+
+        var res = await _client.GetAsync("/api/deployments?service=q-and-svc-a&q=needle");
+        var body = await res.Content.ReadFromJsonAsync<JsonElement>();
+        var items = body.GetProperty("items").EnumerateArray().ToList();
+
+        Assert.All(items, item =>
+            Assert.Equal("q-and-svc-a", item.GetProperty("service").GetString()));
     }
 
     // ── GET /api/deployments/{id} ─────────────────────────────────────────────

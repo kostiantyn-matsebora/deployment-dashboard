@@ -81,6 +81,7 @@ public static class ReadEndpoints
             DeploymentId: filters.DeploymentId,
             Since: filters.Since,
             Until: filters.Until,
+            Q: filters.Q,
             Cursor: filters.Cursor,
             Limit: Math.Clamp(filters.Limit ?? 100, 1, 500));
 
