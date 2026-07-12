@@ -1,0 +1,76 @@
+<!-- FeedComponent — chronological deployment log (#397) -->
+<section class="feed-shell">
+
+  <!-- Header -->
+  <div class="feed-header">
+    <div class="feed-title-block">
+      <div class="feed-title">Deployment feed</div>
+      <div class="feed-sub">{{ countLabel() }}</div>
+    </div>
+    <div class="feed-controls">
+      <input
+        type="text"
+        class="input feed-search"
+        placeholder="search full history — service, env, version, actor, ref, sha, status…"
+        title="Simulates the server-side q param on GET /api/deployments — searches the full history, not just the rows currently loaded"
+        autocomplete="off"
+        spellcheck="false"
+        aria-label="Search deployment feed"
+        [value]="searchText()"
+        (input)="onSearchInput($any($event.target).value)"
+      />
+      <label
+        class="toggle"
+        [class.is-on]="grouped()"
+        (click)="toggleGrouped()"
+        role="switch"
+        [attr.aria-checked]="grouped()"
+        aria-label="Group by deployment"
+        title="Group events by deployment"
+      >
+        <span class="switch" aria-hidden="true"></span>
+        Group by deployment
+      </label>
+    </div>
+  </div>
+
+  <!-- Scrollable log -->
+  <div class="feed-log" (scroll)="onScroll($event)">
+    <app-feed-head-row />
+
+    @if (grouped()) {
+      @for (group of groupedRows(); track group.id) {
+        <app-feed-row
+          [event]="group.events[0]"
+          variant="group"
+          [count]="group.events.length"
+          [expanded]="isExpanded(group.id)"
+          [flash]="flashId() === group.events[0].id"
+          (toggle)="toggleExpanded(group.id)"
+        />
+        @if (isExpanded(group.id)) {
+          <div class="feed-group-detail is-expanded">
+            @for (ev of group.events; track ev.id) {
+              <app-feed-row [event]="ev" variant="child" />
+            }
+          </div>
+        }
+      }
+    } @else {
+      @for (ev of pageEvents(); track ev.id) {
+        <app-feed-row [event]="ev" variant="flat" [flash]="flashId() === ev.id" />
+      }
+    }
+
+    @if (loadingInitial()) {
+      <div class="feed-searching">loading…</div>
+    } @else if (loadingMore()) {
+      <div class="feed-loading">loading older events…</div>
+    } @else if (!hasMore()) {
+      <div class="feed-end">
+        {{ pageEvents().length > 0 ? '— end of history · bounded by HISTORY_RETENTION_DAYS —' : 'no matching deployment events' }}
+      </div>
+    }
+  </div>
+
+</section>

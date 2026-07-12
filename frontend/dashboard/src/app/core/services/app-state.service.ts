@@ -74,8 +74,8 @@ const K = {
 @Injectable({ providedIn: 'root' })
 export class AppStateService {
   // ── View ─────────────────────────────────────────────────
-  readonly activeView = signal<'matrix' | 'swimlanes' | 'analytics'>(
-    this.ls(K.view, v => (v === 'matrix' || v === 'swimlanes' || v === 'analytics') ? v : null, 'matrix'),
+  readonly activeView = signal<'matrix' | 'swimlanes' | 'feed' | 'analytics'>(
+    this.ls(K.view, v => (v === 'matrix' || v === 'swimlanes' || v === 'feed' || v === 'analytics') ? v : null, 'matrix'),
   );
 
   // ── Matrix filters ────────────────────────────────────────

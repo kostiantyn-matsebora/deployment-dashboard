@@ -1,0 +1,51 @@
+<!-- FeedDockComponent — bottom live panel (#397) -->
+<aside class="feed-dock" [class.is-open]="dockVisible()" role="log" aria-label="Live deployment feed">
+  <div class="feed-dock-head">
+    <span class="live-dot" aria-hidden="true"></span>
+    <div class="feed-dock-title-block">
+      <div class="feed-dock-title">Deployment feed</div>
+      <div class="feed-dock-sub">last 8 · live</div>
+    </div>
+    <label
+      class="toggle"
+      [class.is-on]="grouped()"
+      (click)="toggleGrouped()"
+      role="switch"
+      [attr.aria-checked]="grouped()"
+      aria-label="Group by deployment"
+      title="Group events by deployment"
+    >
+      <span class="switch" aria-hidden="true"></span>
+      Group by deployment
+    </label>
+    <div class="feed-dock-spacer"></div>
+    <button class="feed-dock-open-link" type="button" (click)="openFeed()">Open feed &rarr;</button>
+    <button class="drawer-close" type="button" (click)="close()" aria-label="Close deployment feed panel">×</button>
+  </div>
+
+  <div class="feed-dock-body">
+    @if (grouped()) {
+      @for (group of dockGroups(); track group.id) {
+        <app-feed-row
+          [event]="group.events[0]"
+          variant="group"
+          [count]="group.events.length"
+          [expanded]="isExpanded(group.id)"
+          [flash]="flashId() === group.events[0].id"
+          (toggle)="toggleExpanded(group.id)"
+        />
+        @if (isExpanded(group.id)) {
+          <div class="feed-group-detail is-expanded">
+            @for (ev of group.events; track ev.id) {
+              <app-feed-row [event]="ev" variant="child" />
+            }
+          </div>
+        }
+      }
+    } @else {
+      @for (ev of dockFlat(); track ev.id) {
+        <app-feed-row [event]="ev" variant="flat" [flash]="flashId() === ev.id" />
+      }
+    }
+  </div>
+</aside>

@@ -17,6 +17,7 @@ import {
   ServiceFilterMode,
 } from './app-state.service';
 import { DeploymentApiService } from './deployment-api.service';
+import { FeedService } from './feed.service';
 import {
   NOTIFICATION_STATUSES,
   NotifPrefs,
@@ -50,6 +51,10 @@ export interface PresetSettings {
   swimAutoScroll?: boolean;
   timeWindow?: string;
   correlation?: string;
+  /** Feed grouping toggle — shared by the Feed page and the bottom dock (#397). */
+  feedGrouped?: boolean;
+  /** Feed dock open/closed preference (#397). */
+  feedDockOpen?: boolean;
 }
 
 /**
@@ -163,6 +168,8 @@ export class PresetsService {
       swimAutoScroll:    this.state.autoScrollOnChange(),
       timeWindow:        this.state.timeWindow(),
       correlation:       this.state.correlationPredicate(),
+      feedGrouped:       this.injector.get(FeedService).grouped(),
+      feedDockOpen:      this.injector.get(FeedService).dockOpenPref(),
     };
   }
 
@@ -277,6 +284,12 @@ export class PresetsService {
     if (s.correlation !== undefined && this.isCorrelation(s.correlation)) {
       this.state.correlationPredicate.set(s.correlation);
     }
+    if (s.feedGrouped !== undefined) {
+      this.injector.get(FeedService).setGrouped(Boolean(s.feedGrouped));
+    }
+    if (s.feedDockOpen !== undefined) {
+      this.injector.get(FeedService).setDockOpen(Boolean(s.feedDockOpen));
+    }
 
     this.persistActive(envelope.name);
   }
@@ -362,13 +375,14 @@ export class PresetsService {
    * Callers are responsible for showing a native confirm dialog before
    * calling this method.
    *
-   * Defaults mirror the AppStateService / ThemeService / NotificationPrefsService
-   * signal initialisers:
+   * Defaults mirror the AppStateService / ThemeService / NotificationPrefsService /
+   * FeedService signal initialisers:
    *   theme: 'dark' · notif: disabled, success+failure statuses, no filters ·
    *   view: 'matrix' · svcFilterMode: 'exclude' · svcPatterns: [] ·
    *   failOnly: false · matFields: all · swFields: all ·
    *   colOrder: [] · colHidden: {} · swimCollapsed: {} · swimAutoScroll: true ·
-   *   timeWindow: '1 day' · correlation: 'explicit parent'
+   *   timeWindow: '1 day' · correlation: 'explicit parent' ·
+   *   feedGrouped: true · feedDockOpen: false
    */
   resetAllSettings(): void {
     this.themeService.setTheme('dark');
@@ -395,6 +409,8 @@ export class PresetsService {
     this.state.autoScrollOnChange.set(true);
     this.state.timeWindow.set('1 day' as TimeWindow);
     this.state.correlationPredicate.set('explicit parent' as CorrelationPredicate);
+    this.injector.get(FeedService).setGrouped(true);
+    this.injector.get(FeedService).setDockOpen(false);
     this.persistActive(null);
   }
 
@@ -779,8 +795,8 @@ export class PresetsService {
     return v === 'dark' || v === 'light' || v === 'auto';
   }
 
-  private isView(v: string): v is 'matrix' | 'swimlanes' | 'analytics' {
-    return v === 'matrix' || v === 'swimlanes' || v === 'analytics';
+  private isView(v: string): v is 'matrix' | 'swimlanes' | 'feed' | 'analytics' {
+    return v === 'matrix' || v === 'swimlanes' || v === 'feed' || v === 'analytics';
   }
 
   private isTimeWindow(v: string): v is TimeWindow {

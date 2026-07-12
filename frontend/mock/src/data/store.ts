@@ -140,6 +140,13 @@ class EventStore {
     deployment_id?: string;
     since?: string;
     until?: string;
+    /**
+     * Free-text search — case-insensitive substring match across service,
+     * namespace, environment, version, status, actor, ref, sha,
+     * deployment_id, run_number. Applied AFTER the structured filters and
+     * BEFORE cursor pagination (contract: docs/api/openapi.yaml `q` param).
+     */
+    q?: string;
     cursor?: string;
     limit?: number;
   }): { items: DeploymentEvent[]; next_cursor: string | null } {
@@ -152,6 +159,14 @@ class EventStore {
     if (params.deployment_id) rows = rows.filter((e) => e.deployment_id === params.deployment_id);
     if (params.since)         rows = rows.filter((e) => e.happened_at >= params.since!);
     if (params.until)         rows = rows.filter((e) => e.happened_at < params.until!);
+    if (params.q) {
+      const q = params.q.toLowerCase();
+      rows = rows.filter((e) =>
+        [e.service, e.namespace, e.environment, e.version, e.status, e.actor, e.ref, e.sha, e.deployment_id, e.run_number]
+          .filter((v): v is string => v != null)
+          .some((v) => v.toLowerCase().includes(q)),
+      );
+    }
 
     let offset = 0;
     if (params.cursor) {

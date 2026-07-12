@@ -4,4 +4,11 @@
   max-width: 100%;
   margin: 0 auto;
   padding: 14px 18px 80px; /* bottom clearance for fixed footer */
+  transition: padding-bottom 0.3s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* Extra clearance while the feed dock is showing (#397) — mirrors the
+   mockup's `body.feed-dock-open .app { padding-bottom: 340px; }`. */
+:host.feed-dock-open {
+  padding-bottom: 400px;
 }
