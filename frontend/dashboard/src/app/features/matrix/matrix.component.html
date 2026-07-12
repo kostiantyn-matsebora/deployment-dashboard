@@ -55,6 +55,7 @@
                 [slot]="row.slots[env]!"
                 [visibleFields]="state.matrixVisibleFields()"
                 [highlightedVersion]="highlightedVersion()"
+                [isFlashing]="flashingIds().has(tileId(row.service, env, row.namespace))"
                 (tileClick)="openDrawer(row.service, env)"
                 (versionHover)="onVersionHover($event)"
               />

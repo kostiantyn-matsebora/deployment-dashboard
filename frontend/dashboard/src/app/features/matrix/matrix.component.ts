@@ -2,11 +2,14 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
+  effect,
   inject,
   signal,
+  untracked,
 } from '@angular/core';
 import { AppStateService } from '../../core/services/app-state.service';
-import { deriveBoxState } from '../../core/models/deployment.model';
+import { DeploymentEvent, deriveBoxState } from '../../core/models/deployment.model';
 import { MatrixTileComponent } from './matrix-tile/matrix-tile.component';
 import { HistoryDrawerComponent } from './history-drawer/history-drawer.component';
 
@@ -30,6 +33,42 @@ import { HistoryDrawerComponent } from './history-drawer/history-drawer.componen
 })
 export class MatrixComponent {
   protected readonly state = inject(AppStateService);
+
+  // ── Change-emphasis flash (mirrors Swimlanes card-flash, #398) ──────────
+  /**
+   * Set of tile ids currently flashing (change-emphasis). An id is added
+   * when `AppStateService.lastEffectiveEvent` fires for its (service,
+   * environment, namespace) and removed ~1200 ms later by a one-shot timer.
+   * The template binds `.is-flashing` on the matching tile via `tileId()`.
+   * Mirrors `SwimlanesComponent.flashingIds` / `flashCard` (#309).
+   */
+  protected readonly flashingIds = signal<Set<string>>(new Set());
+
+  /** Pending clear timers, keyed by tile id — cleared on component destroy. */
+  private readonly flashTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  constructor() {
+    /**
+     * Live change emphasis (#398): reacts to `lastEffectiveEvent`, set only
+     * by `applyDeploymentEvent` for non-context statuses (success /
+     * in-progress / failure) — same gating Swimlanes relies on (#309), no
+     * new filtering here.
+     *
+     * `untracked()` constrains this effect's dependency set to
+     * `lastEffectiveEvent` only: `flashTile` writes `flashingIds` (a new Set
+     * each call), which would otherwise become a tracked dependency and
+     * cause an infinite re-run loop.
+     */
+    effect(() => {
+      const ev = this.state.lastEffectiveEvent();
+      if (ev) untracked(() => this.onSseChange(ev));
+    });
+
+    inject(DestroyRef).onDestroy(() => {
+      this.flashTimers.forEach((t) => clearTimeout(t));
+      this.flashTimers.clear();
+    });
+  }
 
   // ── Drawer state ──────────────────────────────────────────
   protected readonly drawerOpen = signal<boolean>(false);
@@ -152,5 +191,54 @@ export class MatrixComponent {
 
   protected onVersionHover(version: string | null): void {
     this.highlightedVersion.set(version);
+  }
+
+  // ── Flash (SSE live change, #398) ─────────────────────────
+
+  /**
+   * Stable id for one (service, environment) tile — same identity shape as
+   * the template's row `@for` track expression, plus the environment.
+   */
+  protected tileId(
+    service: string,
+    environment: string,
+    namespace: string | null | undefined,
+  ): string {
+    return `${namespace ?? ''}|${service}|${environment}`;
+  }
+
+  /**
+   * Called when `lastEffectiveEvent` fires. Flashes the tile identified by
+   * the event's (service, environment, namespace).
+   */
+  private onSseChange(ev: DeploymentEvent): void {
+    this.flashTile(this.tileId(ev.service, ev.environment, ev.namespace ?? null));
+  }
+
+  /**
+   * Add `id` to the flashing set for 1200 ms, then remove it — one-shot,
+   * mirrors `SwimlanesComponent.flashCard` (#309). Deferred by two rAF ticks
+   * so a tile inserted by the same matrix update (new service/env) has
+   * committed to the DOM before the CSS animation starts.
+   */
+  private flashTile(id: string): void {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const s = new Set(this.flashingIds());
+        s.add(id);
+        this.flashingIds.set(s);
+
+        const existing = this.flashTimers.get(id);
+        if (existing) clearTimeout(existing);
+
+        const timer = setTimeout(() => {
+          const next = new Set(this.flashingIds());
+          next.delete(id);
+          this.flashingIds.set(next);
+          this.flashTimers.delete(id);
+        }, 1200);
+        this.flashTimers.set(id, timer);
+      });
+    });
   }
 }

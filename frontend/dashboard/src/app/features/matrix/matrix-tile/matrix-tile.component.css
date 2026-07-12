@@ -129,6 +129,46 @@
   box-shadow: 0 0 14px var(--coral-glow);
 }
 
+/* ── Change-emphasis flash (mirrors Swimlanes card-flash, #398) ──────────
+   Applied via ::after — NOT the `animation` shorthand on .slot itself —
+   so it composes with `breathe` (in-progress states set `animation` on
+   .slot) and with the box-state background/border/box-shadow rather than
+   fighting/replacing them. .slot already has position: relative and
+   overflow: visible, so the halo is never clipped. One-shot: the host
+   removes `.is-flashing` after the animation duration (~1.2s); `forwards`
+   just holds the final (transparent) frame until then. */
+.slot::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: calc(var(--radius-md) + 3px);
+  pointer-events: none;
+  opacity: 0;
+}
+
+@keyframes tile-flash {
+  0%   {
+    opacity: 1;
+    box-shadow:
+      0 0 0 3px rgba(var(--accent-rgb), 0.95),
+      0 0 32px 6px rgba(var(--accent-rgb), 0.65);
+  }
+  30%  {
+    opacity: 1;
+    box-shadow:
+      0 0 0 3px rgba(var(--accent-rgb), 0.70),
+      0 0 20px 4px rgba(var(--accent-rgb), 0.40);
+  }
+  100% {
+    opacity: 0;
+    box-shadow: none;
+  }
+}
+
+.slot.is-flashing::after {
+  animation: tile-flash 1.2s ease-out forwards;
+}
+
 /* ── Version hover — amber cross-matrix highlight ──────────── */
 .slot.highlighted-slot {
   box-shadow:

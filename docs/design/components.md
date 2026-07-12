@@ -75,6 +75,14 @@ flowchart TB
 
 Hovering any `.ver` span amber-highlights every tile across the matrix that shares the same version string. Effect: amber background + amber text + glow ring on `.ver.highlighted`, plus amber glow on `.slot.highlighted-slot`.
 
+### Live-Change Flash (#398)
+
+A live SSE update that changes a slot's **effective** status (success / in-progress / failure — the *context* statuses pending/queued/waiting/cancelled/rejected never trigger it, per "Deployment statuses & context rendering" above) plays a one-shot accent glow on the affected tile, identified by `(service, environment, namespace)`.
+
+- Rendered on `.slot::after` (`tile-flash` keyframe, toggled by `.slot.is-flashing`) — a separate pseudo-element layer, not the `animation` shorthand on `.slot` itself, so the glow composes with the box-state background/border/box-shadow and with `breathe` (running tiles) instead of overriding them.
+- Fades out over ~1.2s, then clears. One-shot — does not loop or persist.
+- Mirrors the Swimlanes tip-card flash (`card-flash` keyframe, `.vis-card.is-flashing`, see "Collapse / Expand (#309)" in `views.md`) for cross-view consistency. No auto-scroll counterpart — the Matrix is a grid, not a scrollable lane list.
+
 ---
 
 ## 6 Box States

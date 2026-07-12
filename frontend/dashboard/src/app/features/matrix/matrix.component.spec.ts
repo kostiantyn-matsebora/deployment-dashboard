@@ -693,6 +693,144 @@ describe('MatrixComponent', () => {
 
   });
 
+  // ── 5a. Change-emphasis flash (SSE live change, #398) ────────────────────
+  //
+  // Mirrors SwimlanesComponent's flashingIds/flashCard wiring (#309): reacts
+  // to AppStateService.lastEffectiveEvent (real service — not mocked), which
+  // is set only for effective (non-context) statuses. flashTile() defers the
+  // set-write behind two rAF ticks; requestAnimationFrame is spied to run
+  // synchronously so the assertions don't depend on real paint timing.
+
+  describe('change-emphasis flash — lastEffectiveEvent (#398)', () => {
+
+    function mkFlashEv(overrides: Partial<DeploymentEvent> = {}): DeploymentEvent {
+      return mkEv('svc-a', 'dev', 'success', overrides);
+    }
+
+    /**
+     * Run `fn` with requestAnimationFrame spied to invoke its callback
+     * synchronously — mirrors SwimlanesComponent's spec (flashCard defers
+     * behind two rAF ticks; the sync mock lets assertions run immediately
+     * without depending on real paint timing).
+     *
+     * NOTE: only call this around a DIRECT `onSseChange`/`flashTile` call —
+     * never around a `lastEffectiveEvent.set()` + `TestBed.flushEffects()`
+     * pair. Doing the latter re-enters Angular's effect scheduler while it
+     * is already flushing (the synchronous rAF mock removes the normal
+     * async boundary), which throws "Schedulers cannot synchronously
+     * execute watches while scheduling." Real (async) rAF avoids that by
+     * deferring the signal write outside the flush — same reason
+     * SwimlanesComponent's own effect-wiring test does not mock rAF.
+     */
+    function withSyncRaf<T>(fn: () => T): T {
+      const rafSpy = vi.spyOn(globalThis, 'requestAnimationFrame')
+        .mockImplementation((cb: FrameRequestCallback) => { cb(0); return 0; });
+      try {
+        return fn();
+      } finally {
+        rafSpy.mockRestore();
+      }
+    }
+
+    // ── Effect wiring: lastEffectiveEvent → onSseChange ──────────────────
+
+    it('lastEffectiveEvent effect calls onSseChange for effective events', async () => {
+      const { component, state } = await createMatrix();
+      const spy = vi.spyOn(priv(component), 'onSseChange');
+      spy.mockClear();
+
+      const ev = mkFlashEv();
+      state.lastEffectiveEvent.set(ev);
+      TestBed.flushEffects();
+
+      expect(spy).toHaveBeenCalledWith(ev);
+    });
+
+    it('lastEffectiveEvent effect does NOT call onSseChange when the signal is null', async () => {
+      const { component, state } = await createMatrix();
+      const spy = vi.spyOn(priv(component), 'onSseChange');
+      spy.mockClear();
+
+      state.lastEffectiveEvent.set(null);
+      TestBed.flushEffects();
+
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    // ── Flash logic: onSseChange / flashTile called directly ─────────────
+    // (avoids nesting a synchronous rAF-mocked signal write inside an
+    // active effect flush — see withSyncRaf's note above.)
+
+    it('an effective event flashes the matching tile id', async () => {
+      const { component } = await createMatrix();
+      expect(priv(component).flashingIds().size).toBe(0);
+
+      const ev = mkFlashEv();
+      withSyncRaf(() => priv(component).onSseChange(ev));
+
+      const id = priv(component).tileId('svc-a', 'dev', null);
+      expect(priv(component).flashingIds().has(id)).toBe(true);
+    });
+
+    it('the flash clears itself after ~1200ms (one-shot)', async () => {
+      const { component } = await createMatrix();
+      const ev = mkFlashEv();
+
+      vi.useFakeTimers();
+      try {
+        withSyncRaf(() => priv(component).onSseChange(ev));
+        const id = priv(component).tileId('svc-a', 'dev', null);
+        expect(priv(component).flashingIds().has(id)).toBe(true);
+
+        vi.advanceTimersByTime(1199);
+        expect(priv(component).flashingIds().has(id)).toBe(true);
+
+        vi.advanceTimersByTime(1);
+        expect(priv(component).flashingIds().has(id)).toBe(false);
+        expect(priv(component).flashingIds().size).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('targets the tile by (service, environment, namespace) — a different env is not flashed', async () => {
+      const { component } = await createMatrix();
+      const ev = mkFlashEv({ environment: 'prod' });
+
+      withSyncRaf(() => priv(component).onSseChange(ev));
+
+      expect(priv(component).flashingIds().has(priv(component).tileId('svc-a', 'prod', null))).toBe(true);
+      expect(priv(component).flashingIds().has(priv(component).tileId('svc-a', 'dev', null))).toBe(false);
+    });
+
+    it('targets the tile by (service, environment, namespace) — namespace distinguishes same-name services', async () => {
+      const { component } = await createMatrix();
+      const ev = mkFlashEv({ namespace: 'team-a' });
+
+      withSyncRaf(() => priv(component).onSseChange(ev));
+
+      expect(priv(component).flashingIds().has(priv(component).tileId('svc-a', 'dev', 'team-a'))).toBe(true);
+      expect(priv(component).flashingIds().has(priv(component).tileId('svc-a', 'dev', null))).toBe(false);
+      expect(priv(component).flashingIds().has(priv(component).tileId('svc-a', 'dev', 'team-b'))).toBe(false);
+    });
+
+    it('the matrix tile template binds isFlashing from flashingIds() via tileId()', async () => {
+      const { fixture, component, state } = await createMatrix();
+      state.matrixData.set(mkMatrix(['dev'], [
+        { service: 'svc-a', slots: { dev: mkSlot('svc-a', 'dev') } },
+      ]));
+
+      const id = priv(component).tileId('svc-a', 'dev', null);
+      withSyncRaf(() => priv(component).flashTile(id));
+
+      fixture.detectChanges();
+
+      const tile = fixture.debugElement.query(By.css('app-matrix-tile'));
+      expect(tile.componentInstance.isFlashing()).toBe(true);
+    });
+
+  });
+
   // ── 6. Presets visible-apply regression ──────────────────────────────────
   //
   // Regression gate: applying a preset that carries a serviceFilter MUST change
