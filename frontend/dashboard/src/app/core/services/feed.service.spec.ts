@@ -196,6 +196,163 @@ describe('FeedService', () => {
     });
   });
 
+  // ── Stale-response race — search() then clear (issue #417) ────────────────
+  //
+  // Reproduces the reported regression: search("auth") is in flight (few/no
+  // matches → its eventual response carries next_cursor: null); before it
+  // resolves, the user clears the box → search("") fires and resets the
+  // sequence. If the stale "auth" response is later applied anyway, it
+  // clobbers the fresh unfiltered state and pageHasMore is stuck false,
+  // killing infinite scroll even though there is plenty more history.
+  describe('stale search response after a newer search() (issue #417)', () => {
+    it('a late-arriving stale response does not overwrite the newer search results', () => {
+      const stale$ = new Subject<DeploymentEventPage>();
+      const fresh$ = new Subject<DeploymentEventPage>();
+      fakeApi.listDeployments
+        .mockReturnValueOnce(stale$.asObservable()) // search('auth')
+        .mockReturnValueOnce(fresh$.asObservable()); // search('') — supersedes it
+
+      service.search('auth');
+      service.search('');
+
+      // Fresh (unfiltered) response lands first, as the clear-search's own
+      // fetch normally would relative to a since-abandoned query.
+      fresh$.next({ items: [ev({ id: 'f1', deployment_id: 'dep-f' })], next_cursor: 'cursor-fresh' });
+      fresh$.complete();
+
+      // Stale 'auth' response arrives late — must be ignored entirely.
+      stale$.next({ items: [ev({ id: 'stale-1', deployment_id: 'dep-s' })], next_cursor: null });
+      stale$.complete();
+
+      expect(service.pageEvents().map((e) => e.id)).toEqual(['f1']);
+      expect(service.pageHasMore()).toBe(true);
+    });
+
+    it('a stale response error does not clobber pageHasMore either', () => {
+      const stale$ = new Subject<DeploymentEventPage>();
+      const fresh$ = new Subject<DeploymentEventPage>();
+      fakeApi.listDeployments
+        .mockReturnValueOnce(stale$.asObservable())
+        .mockReturnValueOnce(fresh$.asObservable());
+
+      service.search('auth');
+      service.search('');
+
+      fresh$.next({ items: [ev({ id: 'f1', deployment_id: 'dep-f' })], next_cursor: 'cursor-fresh' });
+      fresh$.complete();
+
+      stale$.error(new Error('stale request failed'));
+
+      expect(service.pageHasMore()).toBe(true);
+      expect(service.pageEvents().map((e) => e.id)).toEqual(['f1']);
+    });
+
+    it('loadMore() after the fresh search still fetches using the fresh cursor (sequence stays alive)', () => {
+      const stale$ = new Subject<DeploymentEventPage>();
+      const fresh$ = new Subject<DeploymentEventPage>();
+      fakeApi.listDeployments
+        .mockReturnValueOnce(stale$.asObservable())
+        .mockReturnValueOnce(fresh$.asObservable());
+
+      service.search('auth');
+      service.search('');
+      fresh$.next({ items: [ev({ id: 'f1', deployment_id: 'dep-f' })], next_cursor: 'cursor-fresh' });
+      fresh$.complete();
+      stale$.next({ items: [ev({ id: 'stale-1', deployment_id: 'dep-s' })], next_cursor: null });
+      stale$.complete();
+
+      fakeApi.listDeployments.mockReturnValue(
+        of<DeploymentEventPage>({ items: [ev({ id: 'f2', deployment_id: 'dep-f2' })], next_cursor: null }),
+      );
+      service.loadMore();
+
+      expect(fakeApi.listDeployments).toHaveBeenLastCalledWith({ limit: 50, cursor: 'cursor-fresh' });
+      expect(service.pageEvents().map((e) => e.id)).toEqual(['f1', 'f2']);
+      expect(service.pageHasMore()).toBe(false);
+    });
+
+    // Interleaving variant: the STALE request is a loadMore() (not a
+    // search()) superseded by a newer search(). fetchPage() must clear the
+    // loading flag its OWN request owns (pageLoadingMore here) even when the
+    // response is discarded as stale — otherwise pageLoadingMore is stuck
+    // true forever (loadMore() only ever sets it true; nothing else resets
+    // it), and loadMore()'s own guard permanently blocks all future scroll
+    // requests. Reachable via scroll-then-type inside the 300ms debounce.
+    it('a stale loadMore() response superseded by a newer search() does not leave pageLoadingMore stuck', () => {
+      fakeApi.listDeployments.mockReturnValueOnce(
+        of<DeploymentEventPage>({ items: [ev({ id: 'a', deployment_id: 'dep-a' })], next_cursor: 'cursor-2' }),
+      );
+      service.search('');
+
+      const staleLoadMore$ = new Subject<DeploymentEventPage>();
+      const freshSearch$ = new Subject<DeploymentEventPage>();
+      fakeApi.listDeployments
+        .mockReturnValueOnce(staleLoadMore$.asObservable()) // loadMore() — about to be superseded
+        .mockReturnValueOnce(freshSearch$.asObservable());  // search('other')
+
+      service.loadMore();
+      expect(service.pageLoadingMore()).toBe(true);
+
+      // A newer search supersedes the in-flight loadMore before it resolves.
+      service.search('other');
+
+      // The fresh search resolves first...
+      freshSearch$.next({ items: [ev({ id: 'f1', deployment_id: 'dep-f' })], next_cursor: 'cursor-fresh' });
+      freshSearch$.complete();
+
+      // ...then the stale loadMore response finally arrives late.
+      staleLoadMore$.next({ items: [ev({ id: 'stale', deployment_id: 'dep-s' })], next_cursor: 'cursor-stale' });
+      staleLoadMore$.complete();
+
+      expect(service.pageLoadingMore()).toBe(false);
+      expect(service.pageEvents().map((e) => e.id)).toEqual(['f1']); // stale item never applied
+
+      // loadMore() must not be permanently blocked by the stuck flag.
+      fakeApi.listDeployments.mockReturnValueOnce(
+        of<DeploymentEventPage>({ items: [ev({ id: 'f2', deployment_id: 'dep-f2' })], next_cursor: null }),
+      );
+      service.loadMore();
+
+      // pageQuery is still 'other' from the superseding search — loadMore()
+      // correctly continues that (not the stale, abandoned) query.
+      expect(fakeApi.listDeployments).toHaveBeenLastCalledWith({ limit: 50, cursor: 'cursor-fresh', q: 'other' });
+      expect(service.pageEvents().map((e) => e.id)).toEqual(['f1', 'f2']);
+    });
+
+    // Same interleaving, but the stale loadMore errors instead of succeeding.
+    it('a stale loadMore() ERROR superseded by a newer search() does not leave pageLoadingMore stuck', () => {
+      fakeApi.listDeployments.mockReturnValueOnce(
+        of<DeploymentEventPage>({ items: [ev({ id: 'a', deployment_id: 'dep-a' })], next_cursor: 'cursor-2' }),
+      );
+      service.search('');
+
+      const staleLoadMore$ = new Subject<DeploymentEventPage>();
+      const freshSearch$ = new Subject<DeploymentEventPage>();
+      fakeApi.listDeployments
+        .mockReturnValueOnce(staleLoadMore$.asObservable())
+        .mockReturnValueOnce(freshSearch$.asObservable());
+
+      service.loadMore();
+      expect(service.pageLoadingMore()).toBe(true);
+
+      service.search('other');
+
+      freshSearch$.next({ items: [ev({ id: 'f1', deployment_id: 'dep-f' })], next_cursor: 'cursor-fresh' });
+      freshSearch$.complete();
+
+      staleLoadMore$.error(new Error('stale loadMore failed'));
+
+      expect(service.pageLoadingMore()).toBe(false);
+      expect(service.pageHasMore()).toBe(true); // fresh search's hasMore, untouched by the stale error
+
+      fakeApi.listDeployments.mockReturnValueOnce(
+        of<DeploymentEventPage>({ items: [ev({ id: 'f2', deployment_id: 'dep-f2' })], next_cursor: null }),
+      );
+      service.loadMore();
+      expect(fakeApi.listDeployments).toHaveBeenLastCalledWith({ limit: 50, cursor: 'cursor-fresh', q: 'other' });
+    });
+  });
+
   describe('live ingest — feed page', () => {
     beforeEach(() => service.init());
 

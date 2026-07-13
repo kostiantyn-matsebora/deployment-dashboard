@@ -74,6 +74,16 @@ export class FeedService {
   private pageActive = false;
   private pageLoaded = false;
   private pageCursor: string | null = null;
+  /**
+   * Bumped by every `search()` call — a `fetchPage()` response only applies
+   * if its captured id still matches. Without this, a stale in-flight search
+   * request (e.g. a narrow query with few/no matches) that resolves AFTER a
+   * later `search()` has already reset the sequence clobbers the newer,
+   * correct state — including `pageHasMore`, permanently killing infinite
+   * scroll (issue #417). `loadMore()` reuses the current id — it continues
+   * the SAME sequence, so it must not be invalidated by its own request.
+   */
+  private pageRequestId = 0;
 
   // ── Shared toggle state ────────────────────────────────────
   readonly grouped = signal<boolean>(this.ls(K.grouped, (v) => (v === 'true' ? true : v === 'false' ? false : null), true));
@@ -151,6 +161,7 @@ export class FeedService {
     this.pageLoaded = true;
     this.pageQuery.set(q);
     this.pageCursor = null;
+    this.pageRequestId++;
     this.pageEvents.set([]);
     this.pageHasMore.set(true);
     this.fetchPage(true);
@@ -163,6 +174,7 @@ export class FeedService {
 
   private fetchPage(initial: boolean): void {
     const api = this.injector.get(DeploymentApiService);
+    const requestId = this.pageRequestId;
     if (initial) this.pageLoadingInitial.set(true);
     else this.pageLoadingMore.set(true);
 
@@ -175,16 +187,26 @@ export class FeedService {
       })
       .subscribe({
         next: (page) => {
+          // The loading flag THIS request owns is cleared unconditionally,
+          // even when the response turns out to be stale — otherwise a
+          // loadMore() superseded by a newer search() would leave
+          // pageLoadingMore stuck true forever (nothing else ever resets
+          // it), permanently blocking loadMore()'s own guard (issue #417).
+          if (initial) this.pageLoadingInitial.set(false);
+          else this.pageLoadingMore.set(false);
+          // A newer search() has already reset the sequence — this response
+          // belongs to a superseded query; applying it would clobber the
+          // correct state (issue #417).
+          if (requestId !== this.pageRequestId) return;
           this.pageEvents.update((events) => (initial ? page.items : [...events, ...page.items]));
           this.pageCursor = page.next_cursor ?? null;
           this.pageHasMore.set(this.pageCursor !== null);
-          this.pageLoadingInitial.set(false);
-          this.pageLoadingMore.set(false);
         },
         error: () => {
+          if (initial) this.pageLoadingInitial.set(false);
+          else this.pageLoadingMore.set(false);
+          if (requestId !== this.pageRequestId) return;
           this.pageHasMore.set(false);
-          this.pageLoadingInitial.set(false);
-          this.pageLoadingMore.set(false);
         },
       });
   }

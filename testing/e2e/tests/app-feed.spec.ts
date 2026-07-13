@@ -177,7 +177,12 @@ test.describe('Grouped roll-up rows', () => {
       'aria-checked', 'true',
     );
 
-    const groupRow = page.locator('.feed-row.feed-group-row').filter({ has: page.locator('.feed-count-badge') }).first();
+    // Scoped to .feed-log: the dock <aside> is always in the DOM (CSS-suppressed,
+    // not removed) and renders its own (up to 8) .feed-row elements regardless of
+    // whether it's visually open — an unscoped `.feed-row` locator double-counts them.
+    const feedLog = page.locator('.feed-log');
+
+    const groupRow = feedLog.locator('.feed-row.feed-group-row').filter({ has: page.locator('.feed-count-badge') }).first();
     await expect(groupRow).toBeVisible({ timeout: 20_000 });
 
     const badgeText = (await groupRow.locator('.feed-count-badge').textContent())?.trim() ?? '';
@@ -188,23 +193,24 @@ test.describe('Grouped roll-up rows', () => {
     expect(depId).toBeTruthy();
 
     // Collapsed: no expanded detail block yet.
-    await expect(page.locator('.feed-group-detail.is-expanded')).toHaveCount(0);
+    await expect(feedLog.locator('.feed-group-detail.is-expanded')).toHaveCount(0);
 
     await groupRow.click();
 
-    const detail = page.locator('.feed-group-detail.is-expanded');
+    const detail = feedLog.locator('.feed-group-detail.is-expanded');
     await expect(detail).toHaveCount(1);
     await expect(detail.locator('.feed-row.feed-child')).toHaveCount(expectedCount);
 
     // Collapse again via the same row click.
     await groupRow.click();
-    await expect(page.locator('.feed-group-detail.is-expanded')).toHaveCount(0);
+    await expect(feedLog.locator('.feed-group-detail.is-expanded')).toHaveCount(0);
   });
 
   test('the grouping toggle switches between grouped roll-up and flat chronological rows', async ({ page }) => {
     await openFeed(page);
 
-    const groupedRowCount = await page.locator('.feed-row.feed-group-row, .feed-row:not(.feed-child)').count();
+    const feedLog = page.locator('.feed-log');
+    const groupedRowCount = await feedLog.locator('.feed-row.feed-group-row, .feed-row:not(.feed-child)').count();
 
     await page.locator('.feed-header .toggle[aria-label="Group by deployment"]').click();
     await page.waitForTimeout(200);
@@ -213,10 +219,13 @@ test.describe('Grouped roll-up rows', () => {
       'aria-checked', 'false',
     );
     // Flat mode renders one row per event with no group-only chevrons/badges.
+    // Unscoped here on purpose: grouped/flat is FeedService-shared state (LOCKED,
+    // #397), so toggling on the page also flips the dock's rows to flat — chevrons
+    // and badges must disappear everywhere, not just in .feed-log.
     await expect(page.locator('.feed-chevron')).toHaveCount(0);
     await expect(page.locator('.feed-count-badge')).toHaveCount(0);
 
-    const flatRowCount = await page.locator('.feed-row').count();
+    const flatRowCount = await feedLog.locator('.feed-row').count();
     expect(flatRowCount).toBeGreaterThanOrEqual(groupedRowCount);
   });
 });
@@ -233,7 +242,12 @@ test.describe('Infinite scroll', () => {
   test('scrolling near the bottom of .feed-log loads the next cursor page', async ({ page }) => {
     await openFeed(page);
 
-    const initialCount = await page.locator('.feed-row').count();
+    // Scoped to .feed-log — the dock <aside> is always in the DOM (CSS-suppressed,
+    // not removed) with its own up-to-8 .feed-row elements; an unscoped locator
+    // would double-count them regardless of page pagination.
+    const feedLog = page.locator('.feed-log');
+
+    const initialCount = await feedLog.locator('.feed-row').count();
     expect(initialCount).toBeGreaterThan(0);
 
     const nextPageRequest = page.waitForRequest(
@@ -241,7 +255,7 @@ test.describe('Infinite scroll', () => {
       { timeout: 15_000 },
     );
 
-    await page.locator('.feed-log').evaluate((el) => {
+    await feedLog.evaluate((el) => {
       el.scrollTop = el.scrollHeight;
       el.dispatchEvent(new Event('scroll'));
     });
@@ -249,7 +263,7 @@ test.describe('Infinite scroll', () => {
     await nextPageRequest;
     await page.waitForTimeout(500);
 
-    const grownCount = await page.locator('.feed-row').count();
+    const grownCount = await feedLog.locator('.feed-row').count();
     expect(grownCount).toBeGreaterThan(initialCount);
   });
 
@@ -298,9 +312,16 @@ test.describe('Search narrowing', () => {
 
     await expect(page.locator('.feed-sub')).not.toHaveText(unfilteredSub ?? '');
     const sub = (await page.locator('.feed-sub').textContent()) ?? '';
-    expect(sub).toContain('matching "payments-api"');
+    // .feed-sub never echoes the raw query text — it appends a matching-count
+    // clause (views.md §Feed page: "<N> events · <M> deployments — showing
+    // <shown>", extended with "· <shown> matching event(s)" while a search is
+    // active). Flattened here, so the noun is "event(s)", not "deployment(s)".
+    expect(sub).toMatch(/\d+ matching events? — showing \d+/);
 
-    const rows = page.locator('.feed-row:not(.feed-child)');
+    // Scoped to .feed-log — the page's search box never touches the dock's
+    // independent (always-in-DOM) buffer, so an unscoped `.feed-row` would
+    // pull in up to 8 unrelated dock rows that don't match "payments-api".
+    const rows = page.locator('.feed-log').locator('.feed-row:not(.feed-child)');
     const count = await rows.count();
     expect(count).toBeGreaterThan(0);
     const services = await rows.locator('.feed-service').allTextContents();
@@ -316,20 +337,65 @@ test.describe('Search narrowing', () => {
     await page.waitForTimeout(600);
 
     await expect(page.locator('.feed-end')).toHaveText(/no matching deployment events/i);
-    await expect(page.locator('.feed-row')).toHaveCount(0);
+    // Scoped to .feed-log: the dock's own (unrelated, always-in-DOM) rows must
+    // not count toward "no matches" for the page's search.
+    await expect(page.locator('.feed-log').locator('.feed-row')).toHaveCount(0);
   });
 
-  test('clearing the search restores the unfiltered listing', async ({ page }) => {
+  test('clearing the search restores the unfiltered listing and infinite scroll resumes', async ({ page }) => {
     await openFeed(page);
+
+    // Flatten so row count maps 1:1 to loaded events, matching the infinite-scroll
+    // assertions below (mirrors the "Infinite scroll" describe block's pattern).
+    await page.locator('.feed-header .toggle[aria-label="Group by deployment"]').click();
+    await page.waitForTimeout(200);
+
+    // Scoped to .feed-log throughout — the dock <aside> is always in the DOM
+    // (CSS-suppressed, not removed) with its own up-to-8 .feed-row elements,
+    // independent of the page's search box; an unscoped locator double-counts them.
+    const feedLog = page.locator('.feed-log');
 
     await page.locator('.feed-search').fill('zzz-no-such-deployment-substring-xyz');
     await page.waitForTimeout(600);
-    await expect(page.locator('.feed-row')).toHaveCount(0);
+    await expect(feedLog.locator('.feed-row')).toHaveCount(0);
 
     await page.locator('.feed-search').fill('');
     await page.waitForTimeout(600);
 
-    await expect(page.locator('.feed-row').first()).toBeVisible({ timeout: 15_000 });
+    await expect(feedLog.locator('.feed-row').first()).toBeVisible({ timeout: 15_000 });
+    const restoredCount = await feedLog.locator('.feed-row').count();
+    expect(restoredCount).toBeGreaterThan(0);
+
+    // Regression (#417): after search -> clear, scrolling must still page further
+    // history — not just render the restored first page and then go dead.
+    const nextPageRequest = page.waitForRequest(
+      (req) => req.url().includes('/api/deployments') && req.url().includes('cursor='),
+      { timeout: 15_000 },
+    );
+
+    await feedLog.evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+      el.dispatchEvent(new Event('scroll'));
+    });
+
+    await nextPageRequest;
+    await page.waitForTimeout(500);
+
+    const grownCount = await feedLog.locator('.feed-row').count();
+    expect(grownCount).toBeGreaterThan(restoredCount);
+
+    // Keep paging until end-of-history — confirms post-clear loadMore() isn't a
+    // one-shot fluke but stays wired for every subsequent scroll.
+    for (let i = 0; i < 5; i++) {
+      if ((await page.locator('.feed-end').count()) > 0) break;
+      await feedLog.evaluate((el) => {
+        el.scrollTop = el.scrollHeight;
+        el.dispatchEvent(new Event('scroll'));
+      });
+      await page.waitForTimeout(700);
+    }
+    await expect(page.locator('.feed-end')).toHaveCount(1, { timeout: 15_000 });
+    await expect(page.locator('.feed-loading')).toHaveCount(0);
   });
 });
 
