@@ -1,4 +1,15 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  OnDestroy,
+  OnInit,
+  afterRenderEffect,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 
 import { FeedService } from '../../core/services/feed.service';
 import { AppStateService } from '../../core/services/app-state.service';
@@ -37,6 +48,9 @@ export class FeedComponent implements OnInit, OnDestroy {
   protected readonly loadingMore = computed(() => this.feedService.pageLoadingMore());
   protected readonly hasMore = computed(() => this.feedService.pageHasMore());
   protected readonly flashId = computed(() => this.feedService.pageFlashId());
+
+  /** The scrollable log container — measured to auto-fill a tall viewport (issue #417). */
+  private readonly feedLogEl = viewChild<ElementRef<HTMLElement>>('feedLog');
 
   /**
    * Distinct (service, namespace) identities across the currently loaded
@@ -79,6 +93,38 @@ export class FeedComponent implements OnInit, OnDestroy {
   protected readonly expandedIds = signal<Set<string>>(new Set());
 
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Fill-until-overflow (issue #417): scroll-driven `loadMore()` can never
+   * fire when the first page already fits the viewport without a scrollbar
+   * (e.g. a tall monitor + grouped roll-ups, which roughly halve the row
+   * count vs. flat) — `.feed-log` never receives a `scroll` event, so all
+   * older history becomes permanently unreachable. `afterRenderEffect`'s
+   * `read` phase runs after the DOM has actually been painted for the
+   * `pageEvents()`/`grouped()` change that triggered it, so `scrollHeight`
+   * reflects the CURRENT row count, not a stale pre-render value. Each
+   * `loadMore()` call grows `pageEvents()` again, re-triggering this same
+   * effect (since it's read inside), so the check naturally repeats until
+   * the container overflows or `hasMore()` goes false — never a manual loop.
+   */
+  constructor() {
+    afterRenderEffect({
+      read: () => {
+        this.pageEvents();
+        this.grouped();
+        this.maybeFillPage();
+      },
+    });
+  }
+
+  private maybeFillPage(): void {
+    const el = this.feedLogEl()?.nativeElement;
+    if (!el) return;
+    if (this.loadingInitial() || this.loadingMore() || !this.hasMore()) return;
+    if (el.scrollHeight <= el.clientHeight) {
+      this.feedService.loadMore();
+    }
+  }
 
   ngOnInit(): void {
     this.searchText.set(this.feedService.pageQuery());

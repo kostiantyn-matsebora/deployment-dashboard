@@ -219,6 +219,165 @@ describe('FeedComponent', () => {
     expect(text).toBe('2 events · 1 deployment · 1 matching deployment — showing 1');
   });
 
+  // ── Fill-until-overflow — auto-load when the page doesn't fill the
+  // viewport (issue #417) ────────────────────────────────────────────────
+  //
+  // Scroll-driven loadMore() can never fire when the first page already
+  // fits .feed-log without a scrollbar (tall monitor + grouped roll-ups,
+  // which roughly halve the row count vs. flat — the worst case). The
+  // component measures .feed-log via afterRenderEffect's `read` phase
+  // (guaranteed to run after the DOM reflects the latest pageEvents()) and
+  // keeps calling loadMore() until the container overflows or hasMore()
+  // goes false. TestBed.tick() flushes the render-effect synchronously —
+  // fakeFeed.pageHasMore starts false (the shared beforeEach default) so
+  // create()'s own initial render never arms the loop before the test has
+  // a chance to stub .feed-log's layout metrics.
+  describe('fill-until-overflow — auto-load when the page does not fill the viewport (issue #417)', () => {
+    function stubLogMetrics(
+      fixture: ReturnType<typeof create>,
+      clientHeight: number,
+      scrollHeight: number | (() => number),
+    ): HTMLElement {
+      const log = fixture.debugElement.query(By.css('.feed-log')).nativeElement as HTMLElement;
+      Object.defineProperty(log, 'clientHeight', { value: clientHeight, configurable: true });
+      if (typeof scrollHeight === 'function') {
+        Object.defineProperty(log, 'scrollHeight', { configurable: true, get: scrollHeight });
+      } else {
+        Object.defineProperty(log, 'scrollHeight', { value: scrollHeight, configurable: true });
+      }
+      return log;
+    }
+
+    it('auto-loads two more pages then stops once the container overflows (small viewport)', () => {
+      pageEvents.set([ev({ id: 'seed', deployment_id: 'dep-seed' })]);
+      grouped.set(false); // 1 row per event — simplest 1:1 row-count-to-height mapping
+      fakeFeed.loadMore = vi.fn(() => {
+        pageEvents.update((events) => [
+          ...events,
+          ev({ id: `g${events.length}`, deployment_id: `dep-${events.length}` }),
+        ]);
+      });
+      const fixture = create(); // pageHasMore still false — no auto-load armed yet
+
+      // 100px/row, 250px container: overflows once there are more than 2 rows.
+      stubLogMetrics(fixture, 250, () => pageEvents().length * 100);
+      fakeFeed.pageHasMore.set(true); // arm the loop now that metrics are stubbed
+      TestBed.tick();
+      TestBed.tick();
+      TestBed.tick();
+
+      expect(fakeFeed.loadMore).toHaveBeenCalledTimes(2);
+      expect(pageEvents()).toHaveLength(3);
+    });
+
+    it('stops auto-loading once hasMore goes false (end-of-history), even though the container still fits', () => {
+      pageEvents.set([ev({ id: 'seed', deployment_id: 'dep-seed' })]);
+      grouped.set(false);
+      fakeFeed.loadMore = vi.fn(() => {
+        pageEvents.update((events) => [
+          ...events,
+          ev({ id: `g${events.length}`, deployment_id: `dep-${events.length}` }),
+        ]);
+        // Simulates the server's next_cursor going null after this page.
+        fakeFeed.pageHasMore.set(false);
+      });
+      const fixture = create();
+
+      // Container tall enough to never overflow on its own — only hasMore should stop the loop.
+      stubLogMetrics(fixture, 5000, () => pageEvents().length * 100);
+      fakeFeed.pageHasMore.set(true);
+      TestBed.tick();
+      TestBed.tick();
+      TestBed.tick();
+
+      expect(fakeFeed.loadMore).toHaveBeenCalledTimes(1);
+      expect(pageEvents()).toHaveLength(2);
+    });
+
+    it('does not auto-load while a page is already loading', () => {
+      pageEvents.set([ev({ id: 'seed', deployment_id: 'dep-seed' })]);
+      const fixture = create();
+      stubLogMetrics(fixture, 5000, 100); // never overflows
+
+      fakeFeed.pageLoadingInitial.set(true);
+      fakeFeed.pageHasMore.set(true);
+      TestBed.tick();
+
+      expect(fakeFeed.loadMore).not.toHaveBeenCalled();
+    });
+
+    it('does not auto-load when the page already overflows', () => {
+      pageEvents.set([ev({ id: 'seed', deployment_id: 'dep-seed' })]);
+      const fixture = create();
+      stubLogMetrics(fixture, 100, 5000); // already overflowing
+
+      fakeFeed.pageHasMore.set(true);
+      TestBed.tick();
+
+      expect(fakeFeed.loadMore).not.toHaveBeenCalled();
+    });
+
+    it('re-checks after toggling grouped — fewer roll-up rows can newly stop filling the viewport', () => {
+      pageEvents.set([
+        ev({ id: 'a1', deployment_id: 'dep-a' }),
+        ev({ id: 'a2', deployment_id: 'dep-a' }),
+        ev({ id: 'b1', deployment_id: 'dep-b' }),
+      ]);
+      grouped.set(false); // 3 flat rows
+      const fixture = create();
+
+      // 3 flat rows overflow; 2 grouped roll-up rows (dep-a, dep-b) do not.
+      stubLogMetrics(fixture, 250, () => {
+        const rows = grouped() ? 2 : pageEvents().length;
+        return rows * 100;
+      });
+      fakeFeed.pageHasMore.set(true);
+      TestBed.tick();
+      expect(fakeFeed.loadMore).not.toHaveBeenCalled(); // flat: 300 > 250, already overflowing
+
+      grouped.set(true); // 2 rows * 100 = 200 <= 250 — now fits, should trigger a fill check
+      TestBed.tick();
+
+      expect(fakeFeed.loadMore).toHaveBeenCalledTimes(1);
+    });
+
+    it('survives a search superseding mid-fill — picks up the new page instead of the stale one', () => {
+      // FeedService's own pageRequestId guard (c1590f0) means a loadMore()
+      // in flight when search() fires gets its response discarded; the
+      // component only ever sees the RESULTING signal state, never the
+      // stale response. Simulate that here: the mocked loadMore(), instead
+      // of appending to the old query's array (what a plain loadMore()
+      // response would do), swaps in an entirely different query's page —
+      // the observable effect of a search superseding it mid-fill.
+      pageEvents.set([ev({ id: 'old-seed', deployment_id: 'dep-old' })]);
+      grouped.set(false);
+      fakeFeed.loadMore = vi.fn(() => {
+        pageEvents.set([
+          ev({ id: 'new1', deployment_id: 'dep-new1' }),
+          ev({ id: 'new2', deployment_id: 'dep-new2' }),
+        ]);
+        fakeFeed.pageHasMore.set(false); // the new query's page 1 is already end-of-history
+      });
+      const fixture = create();
+
+      // 100px/row, 250px container: 1 old row fits; 2 new rows still fit too.
+      stubLogMetrics(fixture, 250, () => pageEvents().length * 100);
+      fakeFeed.pageHasMore.set(true);
+      TestBed.tick();
+      TestBed.tick();
+      TestBed.tick();
+
+      // Fills once against the old page, the search-superseded response
+      // swaps the dataset, and the now-false hasMore stops the loop —
+      // no infinite loop, no attempt to keep growing the stale array.
+      expect(fakeFeed.loadMore).toHaveBeenCalledTimes(1);
+      expect(pageEvents()).toEqual([
+        ev({ id: 'new1', deployment_id: 'dep-new1' }),
+        ev({ id: 'new2', deployment_id: 'dep-new2' }),
+      ]);
+    });
+  });
+
   describe('service label — render-on-collision (issue #353)', () => {
     it('shows the bare service name when no namespace collision exists in the loaded page', () => {
       pageEvents.set([

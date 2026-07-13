@@ -60,6 +60,47 @@ function dockToggleButton(page: Page) {
   return page.locator('button[aria-label="Deployment feed — toggle the live event panel"]');
 }
 
+/**
+ * Default API key configured in frontend/mock/src/auth/api-key.ts (no .env
+ * override in local/CI dev, so CONFIGURED_KEY falls back to 'dev-secret').
+ */
+const MOCK_API_KEY = 'dev-secret';
+
+/**
+ * POST a `count`-event lifecycle chain sharing one fresh deployment_id, so a
+ * grouped-roll-up assertion can target a group it OWNS instead of depending
+ * on the curated demo seed happening to contain a repeated deployment_id
+ * within however many pages the fill-until-overflow effect (#417) loads —
+ * mirrors the unique-token seeding pattern in
+ * testing/api/tests/integration/deployments-read.spec.ts (ingestEvent).
+ *
+ * EventStore.append() unshifts (frontend/mock/src/data/store.ts:279-287), so
+ * each POST lands at position 0 — the LAST event posted here ends up as
+ * group.events[0] (frontend/dashboard/.../feed-group.util.ts groupFeedEvents
+ * keys by first-encounter order), i.e. the group row's own data-event-id.
+ * Returns that head event's id so the caller can locate the exact group row.
+ */
+async function seedDeploymentGroup(page: Page, count: number): Promise<string> {
+  const depId = `feed-e2e-group-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+  const statuses = ['queued', 'in-progress', 'success'];
+  let headEventId = '';
+  for (let i = 0; i < count; i++) {
+    const res = await page.request.post('/api/deployments', {
+      headers: { 'X-Api-Key': MOCK_API_KEY },
+      data: {
+        deployment_id: depId,
+        service: 'feed-e2e-svc',
+        environment: 'qa',
+        status: statuses[i % statuses.length],
+        happened_at: new Date(Date.now() - (count - i) * 1000).toISOString(),
+      },
+    });
+    if (!res.ok()) throw new Error(`seedDeploymentGroup POST -> ${res.status()}: ${await res.text()}`);
+    headEventId = (await res.json()).id;
+  }
+  return headEventId;
+}
+
 // ---------------------------------------------------------------------------
 // A) Tab order — Feed is locked immediately after Swimlanes
 // ---------------------------------------------------------------------------
@@ -170,6 +211,13 @@ test.describe('Grouped roll-up rows', () => {
   });
 
   test('a group row with a ×N badge expands to reveal N child rows, then collapses', async ({ page }) => {
+    // Own the fixture (issue #417 FIX): the curated demo seed has zero
+    // grouped deployment_ids, so relying on ambient data made this test
+    // fragile to how many events fill-until-overflow happens to auto-load.
+    // Seed a fresh 3-event lifecycle chain and target THAT group specifically.
+    const expectedCount = 3;
+    const headEventId = await seedDeploymentGroup(page, expectedCount);
+
     await openFeed(page);
 
     // Grouping defaults ON — assert the toggle reflects it before relying on group rows.
@@ -182,12 +230,13 @@ test.describe('Grouped roll-up rows', () => {
     // whether it's visually open — an unscoped `.feed-row` locator double-counts them.
     const feedLog = page.locator('.feed-log');
 
-    const groupRow = feedLog.locator('.feed-row.feed-group-row').filter({ has: page.locator('.feed-count-badge') }).first();
+    // Targets our own seeded group's head row directly, rather than "whichever
+    // group happens to be first" — green regardless of ambient data or page size.
+    const groupRow = feedLog.locator(`.feed-row.feed-group-row[data-event-id="${headEventId}"]`);
     await expect(groupRow).toBeVisible({ timeout: 20_000 });
 
     const badgeText = (await groupRow.locator('.feed-count-badge').textContent())?.trim() ?? '';
-    const expectedCount = Number(badgeText.replace('×', ''));
-    expect(expectedCount).toBeGreaterThan(1);
+    expect(badgeText).toBe(`×${expectedCount}`);
 
     const depId = await groupRow.getAttribute('data-event-id');
     expect(depId).toBeTruthy();
@@ -286,6 +335,55 @@ test.describe('Infinite scroll', () => {
 
     await expect(page.locator('.feed-end')).toHaveCount(1, { timeout: 15_000 });
     await expect(page.locator('.feed-loading')).toHaveCount(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// D2) Tall-viewport auto-fill (regression #417)
+// ---------------------------------------------------------------------------
+
+test.describe('Tall-viewport auto-fill', () => {
+  test.beforeEach(async ({ page }) => {
+    await resetFeedState(page);
+  });
+
+  test('opening /feed on a tall viewport keeps auto-loading until content overflows or end-of-history renders, without any scroll', async ({ page }) => {
+    // PR #417 regression: a viewport tall enough that one grouped page
+    // (~26 roll-up rows for the 58-event fixture) never overflows .feed-log,
+    // so the scroll-driven onScroll() handler is never reached by a real
+    // scroll gesture and older history becomes permanently unreachable.
+    await page.setViewportSize({ width: 1600, height: 2000 });
+
+    // Registered before navigation — the auto-fill loop may fire the second
+    // page request as soon as the first page renders and fails to overflow.
+    const autoFetchedNextPage = page
+      .waitForRequest(
+        (req) => req.url().includes('/api/deployments') && req.url().includes('cursor='),
+        { timeout: 15_000 },
+      )
+      .then(() => true)
+      .catch(() => false);
+
+    // Grouping defaults ON — the worst case (roll-up rows compress the most
+    // events into the fewest pixels). No scroll is dispatched anywhere below.
+    await page.goto('/feed');
+    await page.waitForSelector('.feed-shell', { timeout: 20_000 });
+    await expect(page.locator('.feed-searching')).toHaveCount(0, { timeout: 20_000 });
+
+    expect(
+      await autoFetchedNextPage,
+      'expected GET /api/deployments to be auto-fetched with a cursor param — without any scroll event — once the first page failed to overflow .feed-log',
+    ).toBe(true);
+
+    await page.waitForTimeout(500);
+    const feedLog = page.locator('.feed-log');
+    const overflowing = await feedLog.evaluate((el) => el.scrollHeight > el.clientHeight);
+    const reachedEnd = (await page.locator('.feed-end').count()) > 0;
+
+    expect(
+      overflowing || reachedEnd,
+      '.feed-log must either overflow (more history loaded than fits on screen) or render .feed-end (all history exhausted) without requiring a scroll',
+    ).toBe(true);
   });
 });
 

@@ -35,7 +35,7 @@
   </div>
 
   <!-- Scrollable log -->
-  <div class="feed-log" (scroll)="onScroll($event)">
+  <div class="feed-log" #feedLog (scroll)="onScroll($event)">
     <app-feed-head-row />
 
     @if (grouped()) {
