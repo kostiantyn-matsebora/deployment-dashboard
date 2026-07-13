@@ -145,6 +145,29 @@ public sealed class ReadEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task GetDeployments_QExceedsMaxLength_Returns400()
+    {
+        // Contract bound: q maxLength 200 (docs/api/openapi.yaml). 201 chars must be
+        // rejected rather than silently truncated (truncation would silently change
+        // the effective search needle).
+        var tooLong = new string('a', 201);
+
+        var res = await _client.GetAsync($"/api/deployments?q={tooLong}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetDeployments_QAtMaxLength_ReturnsOk()
+    {
+        var exactlyMax = new string('a', 200);
+
+        var res = await _client.GetAsync($"/api/deployments?q={exactlyMax}");
+
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+    }
+
+    [Fact]
     public async Task GetDeployments_QNoMatch_ReturnsEmptyItems()
     {
         var res = await _client.GetAsync("/api/deployments?q=totally-unmatched-q-needle-zz9");

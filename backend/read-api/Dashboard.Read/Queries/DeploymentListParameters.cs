@@ -16,4 +16,8 @@ internal sealed record DeploymentListParameters(
     [FromQuery] DateTimeOffset? Until,
     [FromQuery] string? Q,
     [FromQuery] string? Cursor,
-    [FromQuery] int? Limit);
+    [FromQuery] int? Limit)
+{
+    /// <summary>Contract bound (<c>docs/api/openapi.yaml</c> <c>q</c> param: <c>maxLength: 200</c>).</summary>
+    public const int QMaxLength = 200;
+}

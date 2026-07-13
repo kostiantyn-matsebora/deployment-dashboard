@@ -255,9 +255,13 @@ internal sealed class DeploymentReadRepository(
 
     /// <summary>
     /// Free-text search: OR across the ten searchable columns (<c>run_url</c> excluded
-    /// per contract), case-insensitive substring. <c>ToLower()</c>/<c>Contains()</c>
+    /// per contract), case-insensitive substring. Column-side <c>ToLower()</c>/<c>Contains()</c>
     /// (rather than <c>EF.Functions.Like</c>, whose case-folding differs between SQLite
-    /// and Npgsql) translates identically on both providers. Empty/whitespace <paramref name="needle"/>
+    /// and Npgsql) translates identically on both providers — that pair must stay inside
+    /// the lambda as written, since <c>ToLowerInvariant()</c> does not translate to SQL.
+    /// The needle itself is lowered client-side with <c>ToLowerInvariant()</c> (not the
+    /// current-culture <c>ToLower()</c>) so a culture-sensitive alphabet (e.g. Turkish I/i)
+    /// can't desync it from the column-side lowering. Empty/whitespace <paramref name="needle"/>
     /// is a no-op — no text filter is applied.
     /// </summary>
     // S1541: A flat OR-chain across ten null-safe substring checks must stay a single
@@ -269,7 +273,7 @@ internal sealed class DeploymentReadRepository(
         if (string.IsNullOrWhiteSpace(needle))
             return q;
 
-        var lowered = needle.Trim().ToLower();
+        var lowered = needle.Trim().ToLowerInvariant();
         return q.Where(e =>
             e.Service.ToLower().Contains(lowered) ||
             (e.Namespace != null && e.Namespace.ToLower().Contains(lowered)) ||

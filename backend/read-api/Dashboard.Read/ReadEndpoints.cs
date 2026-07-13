@@ -33,7 +33,8 @@ public static class ReadEndpoints
            .WithName("ListDeployments")
            .WithTags("Deployments")
            .WithSummary("List deployment events")
-           .Produces<DeploymentEventPage>(StatusCodes.Status200OK);
+           .Produces<DeploymentEventPage>(StatusCodes.Status200OK)
+           .ProducesProblem(StatusCodes.Status400BadRequest);
 
         app.MapGet("/api/deployments/{id:guid}", HandleGetByIdAsync)
            .WithName("GetDeployment")
@@ -74,6 +75,15 @@ public static class ReadEndpoints
         IDeploymentReadRepository repository,
         CancellationToken ct)
     {
+        // Contract bound (q maxLength: 200) — reject rather than silently truncate:
+        // truncating a search needle would silently change results, unlike clamping
+        // a page size (Limit below), where clamping is the documented behaviour.
+        if (filters.Q is { Length: > DeploymentListParameters.QMaxLength })
+            return Results.Problem(
+                title: "Invalid query parameter.",
+                detail: $"q must not exceed {DeploymentListParameters.QMaxLength} characters.",
+                statusCode: StatusCodes.Status400BadRequest);
+
         var query = new DeploymentListQuery(
             Service: filters.Service,
             Environment: filters.Environment,
