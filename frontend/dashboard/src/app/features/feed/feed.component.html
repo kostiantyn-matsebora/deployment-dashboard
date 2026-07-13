@@ -42,6 +42,7 @@
       @for (group of groupedRows(); track group.id) {
         <app-feed-row
           [event]="group.events[0]"
+          [serviceLabel]="serviceLabel(group.events[0])"
           variant="group"
           [count]="group.events.length"
           [expanded]="isExpanded(group.id)"
@@ -51,14 +52,14 @@
         @if (isExpanded(group.id)) {
           <div class="feed-group-detail is-expanded">
             @for (ev of group.events; track ev.id) {
-              <app-feed-row [event]="ev" variant="child" />
+              <app-feed-row [event]="ev" [serviceLabel]="serviceLabel(ev)" variant="child" />
             }
           </div>
         }
       }
     } @else {
       @for (ev of pageEvents(); track ev.id) {
-        <app-feed-row [event]="ev" variant="flat" [flash]="flashId() === ev.id" />
+        <app-feed-row [event]="ev" [serviceLabel]="serviceLabel(ev)" variant="flat" [flash]="flashId() === ev.id" />
       }
     }
 

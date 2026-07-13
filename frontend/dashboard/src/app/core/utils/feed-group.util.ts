@@ -1,4 +1,5 @@
 import { DeploymentEvent } from '../models/deployment.model';
+import { ServiceIdentity } from './glob.util';
 
 /**
  * One deployment_id group — events newest-first (mirrors the array's own order).
@@ -35,4 +36,26 @@ export function groupFeedEvents(events: DeploymentEvent[]): FeedGroup[] {
   }
 
   return order.map((id) => groups.get(id)!);
+}
+
+/**
+ * Distinct (service, namespace) identities from a loaded event list, in
+ * first-seen order — the "visible set" AppStateService.rowLabel's
+ * render-on-collision rule (issue #353) checks for a namespace collision.
+ *
+ * The Feed page and the dock each call this over their OWN loaded set
+ * (pageEvents vs dockEvents) — collisions are judged independently per
+ * surface, not across both (#397 FIX).
+ */
+export function visibleIdentitiesFromEvents(events: DeploymentEvent[]): ServiceIdentity[] {
+  const seen = new Set<string>();
+  const result: ServiceIdentity[] = [];
+  for (const ev of events) {
+    const key = `${ev.namespace ?? ''}|${ev.service}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push({ service: ev.service, namespace: ev.namespace });
+    }
+  }
+  return result;
 }

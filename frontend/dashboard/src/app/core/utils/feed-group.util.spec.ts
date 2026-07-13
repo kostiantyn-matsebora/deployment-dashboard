@@ -1,8 +1,8 @@
 /**
- * Unit tests for feed-group.util — groupFeedEvents.
+ * Unit tests for feed-group.util — groupFeedEvents, visibleIdentitiesFromEvents.
  */
 import { describe, it, expect } from 'vitest';
-import { groupFeedEvents } from './feed-group.util';
+import { groupFeedEvents, visibleIdentitiesFromEvents } from './feed-group.util';
 import { DeploymentEvent } from '../models/deployment.model';
 
 function ev(overrides: Partial<DeploymentEvent> & { id: string; deployment_id: string }): DeploymentEvent {
@@ -51,5 +51,34 @@ describe('groupFeedEvents', () => {
     const copy = [...events];
     groupFeedEvents(events);
     expect(events).toEqual(copy);
+  });
+});
+
+describe('visibleIdentitiesFromEvents', () => {
+  it('returns an empty array for an empty input', () => {
+    expect(visibleIdentitiesFromEvents([])).toEqual([]);
+  });
+
+  it('dedups repeated (service, namespace) pairs, first-seen order', () => {
+    const events = [
+      ev({ id: 'e1', deployment_id: 'dep-1', service: 'gateway', namespace: 'org-a' }),
+      ev({ id: 'e2', deployment_id: 'dep-2', service: 'auth-bff', namespace: null }),
+      ev({ id: 'e3', deployment_id: 'dep-3', service: 'gateway', namespace: 'org-a' }),
+    ];
+    expect(visibleIdentitiesFromEvents(events)).toEqual([
+      { service: 'gateway', namespace: 'org-a' },
+      { service: 'auth-bff', namespace: null },
+    ]);
+  });
+
+  it('keeps the same bare service under different namespaces as distinct identities', () => {
+    const events = [
+      ev({ id: 'e1', deployment_id: 'dep-1', service: 'gateway', namespace: 'org-a' }),
+      ev({ id: 'e2', deployment_id: 'dep-2', service: 'gateway', namespace: 'org-b' }),
+    ];
+    expect(visibleIdentitiesFromEvents(events)).toEqual([
+      { service: 'gateway', namespace: 'org-a' },
+      { service: 'gateway', namespace: 'org-b' },
+    ]);
   });
 });

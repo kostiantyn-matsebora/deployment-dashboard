@@ -4,7 +4,8 @@ import { Router } from '@angular/router';
 import { FeedService, isDockVisible } from '../../core/services/feed.service';
 import { AppStateService } from '../../core/services/app-state.service';
 import { FeedRowComponent } from '../feed-row/feed-row.component';
-import { FeedGroup, groupFeedEvents } from '../../core/utils/feed-group.util';
+import { FeedGroup, groupFeedEvents, visibleIdentitiesFromEvents } from '../../core/utils/feed-group.util';
+import { DeploymentEvent } from '../../core/models/deployment.model';
 
 /**
  * FeedDockComponent — fixed glass panel showing the newest 8 deployment
@@ -39,6 +40,19 @@ export class FeedDockComponent {
     groupFeedEvents(this.feedService.dockEvents()).slice(0, 8),
   );
   protected readonly dockFlat = computed(() => this.feedService.dockEvents().slice(0, 8));
+
+  /**
+   * Distinct (service, namespace) identities across the dock's own loaded
+   * buffer — the visible set for AppStateService.rowLabel's
+   * render-on-collision rule (issue #353), computed independently of the
+   * Feed page's own set (#397 FIX).
+   */
+  private readonly visibleIdentities = computed(() => visibleIdentitiesFromEvents(this.feedService.dockEvents()));
+
+  /** Service column label — namespace-prefixed only on a same-name collision in the dock's visible set. */
+  protected serviceLabel(ev: DeploymentEvent): string {
+    return this.state.rowLabel(ev.service, ev.namespace, this.visibleIdentities());
+  }
 
   /** Group ids currently expanded — local UI state. */
   protected readonly expandedIds = signal<Set<string>>(new Set());

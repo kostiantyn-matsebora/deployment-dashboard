@@ -562,18 +562,30 @@ export class AppStateService {
   }
 
   /**
-   * Returns the display label for a matrix row / swimlane lane.
+   * Returns the display label for a matrix row / swimlane lane / feed service cell.
    *
    * Render-on-collision rule (issue #353):
    *   Show `namespace/service` prefix on a label ONLY when the same service name
    *   appears under more than one namespace in the visible row set; otherwise show
    *   the bare service name. Null-namespace rows are always unprefixed.
    *
+   * `allRows` is typed as a minimal `{service, namespace?}` shape (not `MatrixRow[]`)
+   * so any visible-set shape carrying at least those two fields can reuse this one
+   * collision rule — Matrix rows, swimlane lanes, and Feed's loaded event list
+   * (#397) all satisfy it structurally without building a fake `MatrixRow`.
+   * `namespace` is optional here (matching `MatrixRow.namespace?`) rather than
+   * `ServiceIdentity`'s required-but-possibly-undefined field, so both shapes —
+   * and `DeploymentEvent`, which also declares it optional — are assignable.
+   *
    * @param service   The service name for the row.
    * @param namespace The row's namespace (null = bare, always unprefixed).
-   * @param allRows   All visible rows in the current view (used for collision check).
+   * @param allRows   All visible identities in the current view (used for collision check).
    */
-  rowLabel(service: string, namespace: string | null | undefined, allRows: MatrixRow[]): string {
+  rowLabel(
+    service: string,
+    namespace: string | null | undefined,
+    allRows: { service: string; namespace?: string | null }[],
+  ): string {
     if (!namespace) return service;
     // Count distinct non-null namespaces for this service name across all rows.
     const namespacesForService = new Set(

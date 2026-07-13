@@ -35,6 +35,15 @@ export type FeedRowVariant = 'flat' | 'group' | 'child';
 export class FeedRowComponent {
   readonly event = input.required<DeploymentEvent>();
   readonly variant = input<FeedRowVariant>('flat');
+  /**
+   * Pre-computed display label for the service column — the caller applies
+   * AppStateService.rowLabel's render-on-collision rule (issue #353) over
+   * its own visible set (the Feed page and the dock each compute over their
+   * own loaded set) before passing it down; this component never sees the
+   * full set, so it cannot compute the rule itself. Falls back to the bare
+   * `event().service` when omitted (e.g. in isolated tests).
+   */
+  readonly serviceLabel = input<string>();
   /** Total events in the group — the ×N badge shows only when > 1 (group variant only). */
   readonly count = input<number>(0);
   readonly expanded = input<boolean>(false);

@@ -15,6 +15,9 @@
  *   - expand/collapse: toggleExpanded flips local expandedIds
  *   - infinite scroll: onScroll calls loadMore() only near the bottom
  *   - countLabel(): reflects loaded totals and the active query
+ *   - service label render-on-collision (issue #353, #397 FIX): namespace
+ *     prefix appears only when the same service name collides across
+ *     namespaces within THIS page's own loaded set
  */
 import { NO_ERRORS_SCHEMA, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
@@ -184,12 +187,60 @@ describe('FeedComponent', () => {
     expect(fakeFeed.loadMore).toHaveBeenCalledTimes(1);
   });
 
-  it('countLabel reflects loaded totals and shows the active query', () => {
+  it('countLabel renders the documented template (views.md §Feed page) when no search is active', () => {
+    pageEvents.set([
+      ev({ id: 'a1', deployment_id: 'dep-a' }),
+      ev({ id: 'b1', deployment_id: 'dep-b' }),
+    ]);
+    grouped.set(false);
+    const fixture = create();
+    const text = (fixture.debugElement.query(By.css('.feed-sub')).nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toBe('2 events · 2 deployments — showing 2');
+  });
+
+  it('countLabel appends a matching-count clause while a search is active (flat)', () => {
     pageEvents.set([ev({ id: 'a1', deployment_id: 'dep-a' })]);
     pageQuery.set('auth');
+    grouped.set(false);
     const fixture = create();
-    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
-    expect(text).toContain('1 event loaded');
-    expect(text).toContain('matching "auth"');
+    const text = (fixture.debugElement.query(By.css('.feed-sub')).nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toBe('1 event · 1 deployment · 1 matching event — showing 1');
+  });
+
+  it('countLabel matching-count clause uses "deployment(s)" wording when grouped', () => {
+    pageEvents.set([
+      ev({ id: 'a1', deployment_id: 'dep-a' }),
+      ev({ id: 'a2', deployment_id: 'dep-a' }),
+    ]);
+    pageQuery.set('auth');
+    grouped.set(true);
+    const fixture = create();
+    const text = (fixture.debugElement.query(By.css('.feed-sub')).nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toBe('2 events · 1 deployment · 1 matching deployment — showing 1');
+  });
+
+  describe('service label — render-on-collision (issue #353)', () => {
+    it('shows the bare service name when no namespace collision exists in the loaded page', () => {
+      pageEvents.set([
+        ev({ id: 'a1', deployment_id: 'dep-a', service: 'gateway', namespace: 'org-a' }),
+        ev({ id: 'b1', deployment_id: 'dep-b', service: 'auth-bff', namespace: null }),
+      ]);
+      grouped.set(false);
+      const fixture = create();
+      const labels = fixture.debugElement.queryAll(By.css('.feed-service')).map((d) => (d.nativeElement as HTMLElement).textContent?.trim());
+      expect(labels).toEqual(['gateway', 'auth-bff']);
+    });
+
+    it('prefixes namespace/service only for the colliding service name, within this page\'s own loaded set', () => {
+      pageEvents.set([
+        ev({ id: 'a1', deployment_id: 'dep-a', service: 'gateway', namespace: 'org-a' }),
+        ev({ id: 'b1', deployment_id: 'dep-b', service: 'gateway', namespace: 'org-b' }),
+        ev({ id: 'c1', deployment_id: 'dep-c', service: 'auth-bff', namespace: null }),
+      ]);
+      grouped.set(false);
+      const fixture = create();
+      const labels = fixture.debugElement.queryAll(By.css('.feed-service')).map((d) => (d.nativeElement as HTMLElement).textContent?.trim());
+      expect(labels).toEqual(['org-a/gateway', 'org-b/gateway', 'auth-bff']);
+    });
   });
 });

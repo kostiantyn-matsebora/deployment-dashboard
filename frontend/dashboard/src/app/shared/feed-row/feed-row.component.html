@@ -27,8 +27,8 @@
   <!-- 3: time (relative, ISO tooltip on the row) -->
   <span class="feed-time">{{ event().happened_at | timeAgo }}</span>
 
-  <!-- 4: service -->
-  <span class="feed-service">{{ event().service }}</span>
+  <!-- 4: service — render-on-collision namespace prefix (issue #353), computed by the caller -->
+  <span class="feed-service">{{ serviceLabel() ?? event().service }}</span>
 
   <!-- 5: environment -->
   <span class="feed-env">{{ event().environment }}</span>

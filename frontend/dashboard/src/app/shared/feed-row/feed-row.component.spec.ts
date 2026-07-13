@@ -9,6 +9,7 @@
  *   - clicking the run link does not emit toggle
  *   - run link renders only when run_url is present
  *   - every wire field except id and parent_deployments is rendered
+ *   - serviceLabel: overrides the bare service when provided, falls back when omitted
  */
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
@@ -36,7 +37,7 @@ function mkEvent(overrides: Partial<DeploymentEvent> = {}): DeploymentEvent {
 }
 
 function createRow(inputs: Partial<{
-  event: DeploymentEvent; variant: 'flat' | 'group' | 'child'; count: number; expanded: boolean; flash: boolean;
+  event: DeploymentEvent; variant: 'flat' | 'group' | 'child'; count: number; expanded: boolean; flash: boolean; serviceLabel: string;
 }>) {
   const fixture = TestBed.createComponent(FeedRowComponent);
   fixture.componentRef.setInput('event', inputs.event ?? mkEvent());
@@ -44,6 +45,7 @@ function createRow(inputs: Partial<{
   if (inputs.count !== undefined) fixture.componentRef.setInput('count', inputs.count);
   if (inputs.expanded !== undefined) fixture.componentRef.setInput('expanded', inputs.expanded);
   if (inputs.flash !== undefined) fixture.componentRef.setInput('flash', inputs.flash);
+  if (inputs.serviceLabel !== undefined) fixture.componentRef.setInput('serviceLabel', inputs.serviceLabel);
   fixture.detectChanges();
   return fixture;
 }
@@ -129,5 +131,17 @@ describe('FeedRowComponent', () => {
   it('renders no run link when run_url is absent', async () => {
     const fixture = await createRow({ event: mkEvent({ run_url: undefined }) });
     expect(fixture.debugElement.query(By.css('.hist-link'))).toBeNull();
+  });
+
+  it('falls back to the bare event().service when serviceLabel is omitted', async () => {
+    const fixture = await createRow({ event: mkEvent({ service: 'gateway' }) });
+    const cell = fixture.debugElement.query(By.css('.feed-service')).nativeElement as HTMLElement;
+    expect(cell.textContent?.trim()).toBe('gateway');
+  });
+
+  it('renders the caller-supplied serviceLabel (e.g. namespace-prefixed on collision) instead of the bare service', async () => {
+    const fixture = await createRow({ event: mkEvent({ service: 'gateway', namespace: 'org-a' }), serviceLabel: 'org-a/gateway' });
+    const cell = fixture.debugElement.query(By.css('.feed-service')).nativeElement as HTMLElement;
+    expect(cell.textContent?.trim()).toBe('org-a/gateway');
   });
 });
