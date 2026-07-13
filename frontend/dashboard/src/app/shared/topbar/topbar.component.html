@@ -297,8 +297,8 @@
       </div>
     }
 
-    <!-- Fields picker (Matrix + Swimlanes only — not Analytics) ─── -->
-    @if (!isAnalytics()) {
+    <!-- Fields picker (Matrix + Swimlanes only) ─── -->
+    @if (isMatrix() || isSwimlanes()) {
       <div style="position: relative">
         <button
           class="icon-btn"
@@ -354,8 +354,8 @@
       </div>
     }
 
-    <!-- Legend popover (☷) — Matrix + Swimlanes only; hidden on Analytics (no legend needed) -->
-    @if (!isAnalytics()) {
+    <!-- Legend popover (☷) — Matrix + Swimlanes only -->
+    @if (isMatrix() || isSwimlanes()) {
     <div style="position: relative">
       <button
         class="icon-btn"
@@ -433,6 +433,30 @@
       </p-popover>
     </div>
     }
+
+    <!-- Deployment-feed dock toggle — visible on ALL views; disabled while Feed
+         itself is active (the page IS the full log, the dock is redundant there) (#397) -->
+    <div style="position: relative">
+      <button
+        class="icon-btn"
+        [class.is-active]="feedDockOpen()"
+        [disabled]="isFeed()"
+        title="Deployment feed — toggle the live event panel"
+        aria-label="Deployment feed — toggle the live event panel"
+        [attr.aria-pressed]="feedDockOpen()"
+        (click)="toggleFeedDock()"
+      >
+        <svg aria-hidden="true" width="15" height="15" viewBox="0 0 15 15" fill="none"
+             stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="2" cy="3.5" r="0.9" fill="currentColor" stroke="none"/>
+          <path d="M5 3.5h8"/>
+          <circle cx="2" cy="7.5" r="0.9" fill="currentColor" stroke="none"/>
+          <path d="M5 7.5h8"/>
+          <circle cx="2" cy="11.5" r="0.9" fill="currentColor" stroke="none"/>
+          <path d="M5 11.5h8"/>
+        </svg>
+      </button>
+    </div>
 
     <!-- Presets button (⊙) — saves / applies / exports / imports named UI-settings snapshots ── -->
     <div style="position: relative">

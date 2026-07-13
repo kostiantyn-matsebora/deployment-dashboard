@@ -29,6 +29,13 @@ export interface ListDeploymentsParams {
   deployment_id?: string;
   since?: string;
   until?: string;
+  /**
+   * Free-text search — case-insensitive substring match across service,
+   * namespace, environment, version, status, actor, ref, sha, deployment_id,
+   * run_number. Composes by logical AND with the structured filters above.
+   * Contract: docs/api/openapi.yaml — listDeployments `q` param.
+   */
+  q?: string;
   cursor?: string;
   limit?: number;
 }

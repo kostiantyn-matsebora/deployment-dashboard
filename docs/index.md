@@ -51,6 +51,13 @@ hide:
     ![Swimlanes view](_assets/screenshots/swimlanes-dark.png#only-dark){ .dd-shot }
     ![Swimlanes view](_assets/screenshots/swimlanes-light.png#only-light){ .dd-shot }
 
+=== "Feed"
+
+    A chronological log of every deployment event, grouped by deployment with expandable roll-ups, server-side search across the full history, and cursor-based infinite scroll. A toggleable bottom dock mirrors the same log — last 8 events, live via SSE — on every other view.
+
+    ![Feed view](_assets/screenshots/feed-dark.png#only-dark){ .dd-shot }
+    ![Feed view](_assets/screenshots/feed-light.png#only-light){ .dd-shot }
+
 === "Analytics"
 
     DORA Four Keys — deployment frequency, lead time, change failure rate, and MTTR — plus eight supporting charts to spot delivery trends and regressions over 7, 14, or 30 days.

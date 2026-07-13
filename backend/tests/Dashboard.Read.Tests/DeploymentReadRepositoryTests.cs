@@ -38,7 +38,12 @@ public sealed class DeploymentReadRepositoryTests : IDisposable
         string status = DeploymentStatus.Success,
         DateTimeOffset? happenedAt = null,
         string? deploymentId = null,
-        string? @namespace = null)
+        string? @namespace = null,
+        string? version = null,
+        string? actor = null,
+        string? @ref = null,
+        string? sha = null,
+        string? runNumber = null)
     {
         var ev = new DeploymentEvent
         {
@@ -49,6 +54,11 @@ public sealed class DeploymentReadRepositoryTests : IDisposable
             Environment = environment,
             Status = status,
             HappenedAt = happenedAt ?? DateTimeOffset.UtcNow,
+            Version = version,
+            Actor = actor,
+            Ref = @ref,
+            Sha = sha,
+            RunNumber = runNumber,
         };
         _ctx.DeploymentEvents.Add(ev);
         await _ctx.SaveChangesAsync();
@@ -692,6 +702,247 @@ public sealed class DeploymentReadRepositoryTests : IDisposable
         Assert.Equal(early.Id, items[0].Id);
     }
 
+    // ── ListAsync — q free-text filter ────────────────────────────────────────
+
+    [Theory]
+    [InlineData("svc")]        // Service
+    [InlineData("SVC-Q")]      // case-insensitive
+    public async Task ListAsync_QMatchesService_ReturnsRow(string q)
+    {
+        await SeedAsync(service: "svc-q");
+        await SeedAsync(service: "other");
+
+        var (items, _) = await _repo.ListAsync(DefaultQuery() with { Q = q }, CancellationToken.None);
+
+        Assert.Single(items);
+        Assert.Equal("svc-q", items[0].Service);
+    }
+
+    [Fact]
+    public async Task ListAsync_QMatchesNamespace_ReturnsRow()
+    {
+        var seeded = await SeedAsync(@namespace: "org-needle");
+        await SeedAsync(@namespace: "other");
+
+        var (items, _) = await _repo.ListAsync(DefaultQuery() with { Q = "needle" }, CancellationToken.None);
+
+        Assert.Single(items);
+        Assert.Equal(seeded.Id, items[0].Id);
+    }
+
+    [Fact]
+    public async Task ListAsync_QMatchesEnvironment_ReturnsRow()
+    {
+        var seeded = await SeedAsync(environment: "staging-needle");
+        await SeedAsync(environment: "prod");
+
+        var (items, _) = await _repo.ListAsync(DefaultQuery() with { Q = "needle" }, CancellationToken.None);
+
+        Assert.Single(items);
+        Assert.Equal(seeded.Id, items[0].Id);
+    }
+
+    [Fact]
+    public async Task ListAsync_QMatchesVersion_ReturnsRow()
+    {
+        var seeded = await SeedAsync(version: "1.2.3-needle");
+        await SeedAsync(version: "9.9.9");
+
+        var (items, _) = await _repo.ListAsync(DefaultQuery() with { Q = "needle" }, CancellationToken.None);
+
+        Assert.Single(items);
+        Assert.Equal(seeded.Id, items[0].Id);
+    }
+
+    [Fact]
+    public async Task ListAsync_QMatchesStatus_ReturnsRow()
+    {
+        var seeded = await SeedAsync(status: DeploymentStatus.Failure);
+        await SeedAsync(status: DeploymentStatus.Success);
+
+        var (items, _) = await _repo.ListAsync(DefaultQuery() with { Q = "fail" }, CancellationToken.None);
+
+        Assert.Single(items);
+        Assert.Equal(seeded.Id, items[0].Id);
+    }
+
+    [Fact]
+    public async Task ListAsync_QMatchesActor_ReturnsRow()
+    {
+        var seeded = await SeedAsync(actor: "alice-needle");
+        await SeedAsync(actor: "bob");
+
+        var (items, _) = await _repo.ListAsync(DefaultQuery() with { Q = "needle" }, CancellationToken.None);
+
+        Assert.Single(items);
+        Assert.Equal(seeded.Id, items[0].Id);
+    }
+
+    [Fact]
+    public async Task ListAsync_QMatchesRef_ReturnsRow()
+    {
+        var seeded = await SeedAsync(@ref: "refs/heads/needle-branch");
+        await SeedAsync(@ref: "refs/heads/main");
+
+        var (items, _) = await _repo.ListAsync(DefaultQuery() with { Q = "needle" }, CancellationToken.None);
+
+        Assert.Single(items);
+        Assert.Equal(seeded.Id, items[0].Id);
+    }
+
+    [Fact]
+    public async Task ListAsync_QMatchesSha_ReturnsRow()
+    {
+        var seeded = await SeedAsync(sha: "abcneedle123");
+        await SeedAsync(sha: "def456");
+
+        var (items, _) = await _repo.ListAsync(DefaultQuery() with { Q = "needle" }, CancellationToken.None);
+
+        Assert.Single(items);
+        Assert.Equal(seeded.Id, items[0].Id);
+    }
+
+    [Fact]
+    public async Task ListAsync_QMatchesDeploymentId_ReturnsRow()
+    {
+        var seeded = await SeedAsync(deploymentId: "dep-needle-001");
+        await SeedAsync(deploymentId: "dep-other-002");
+
+        var (items, _) = await _repo.ListAsync(DefaultQuery() with { Q = "needle" }, CancellationToken.None);
+
+        Assert.Single(items);
+        Assert.Equal(seeded.Id, items[0].Id);
+    }
+
+    [Fact]
+    public async Task ListAsync_QMatchesRunNumber_ReturnsRow()
+    {
+        var seeded = await SeedAsync(runNumber: "run-needle-42");
+        await SeedAsync(runNumber: "run-other-1");
+
+        var (items, _) = await _repo.ListAsync(DefaultQuery() with { Q = "needle" }, CancellationToken.None);
+
+        Assert.Single(items);
+        Assert.Equal(seeded.Id, items[0].Id);
+    }
+
+    [Fact]
+    public async Task ListAsync_QNoMatchInAnyField_ReturnsEmpty()
+    {
+        await SeedAsync(service: "svc-a", environment: "prod", status: DeploymentStatus.Success,
+            version: "1.0.0", actor: "alice", @ref: "main", sha: "abc123", runNumber: "run-1");
+
+        var (items, _) = await _repo.ListAsync(
+            DefaultQuery() with { Q = "totally-unmatched-needle" }, CancellationToken.None);
+
+        Assert.Empty(items);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null)]
+    public async Task ListAsync_QEmptyOrWhitespace_NoTextFilterApplied(string? q)
+    {
+        await SeedAsync(service: "svc-a");
+        await SeedAsync(service: "svc-b");
+
+        var (items, _) = await _repo.ListAsync(DefaultQuery() with { Q = q }, CancellationToken.None);
+
+        Assert.Equal(2, items.Count);
+    }
+
+    [Fact]
+    public async Task ListAsync_QNullSafeAgainstNullableColumns_DoesNotThrow()
+    {
+        // Namespace/Version/Actor/Ref/Sha/RunNumber are all null on this row — the
+        // OR-composed predicate must be null-safe rather than throwing/mismatching.
+        await SeedAsync(service: "svc-plain");
+
+        var (items, _) = await _repo.ListAsync(
+            DefaultQuery() with { Q = "svc-plain" }, CancellationToken.None);
+
+        Assert.Single(items);
+    }
+
+    [Fact]
+    public async Task ListAsync_QComposesWithServiceFilter_AndSemantics()
+    {
+        await SeedAsync(service: "svc-a", environment: "needle-env");
+        await SeedAsync(service: "svc-b", environment: "needle-env"); // matches q, not service
+        await SeedAsync(service: "svc-a", environment: "other-env");  // matches service, not q
+
+        var (items, _) = await _repo.ListAsync(
+            DefaultQuery() with { Service = "svc-a", Q = "needle" }, CancellationToken.None);
+
+        Assert.Single(items);
+        Assert.Equal("svc-a", items[0].Service);
+        Assert.Equal("needle-env", items[0].Environment);
+    }
+
+    [Fact]
+    public async Task ListAsync_QComposesWithStatusFilter_AndSemantics()
+    {
+        await SeedAsync(status: DeploymentStatus.Success, actor: "needle-actor");
+        await SeedAsync(status: DeploymentStatus.Failure, actor: "needle-actor"); // matches q, not status
+
+        var (items, _) = await _repo.ListAsync(
+            DefaultQuery() with { Status = DeploymentStatus.Success, Q = "needle" }, CancellationToken.None);
+
+        Assert.Single(items);
+        Assert.Equal(DeploymentStatus.Success, items[0].Status);
+    }
+
+    [Fact]
+    public async Task ListAsync_QWithCursor_PageConsistentForFixedQ()
+    {
+        // Only "needle" rows should ever appear across pages when q is held fixed.
+        var t0 = new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero);
+        for (var i = 0; i < 5; i++)
+            await SeedAsync(actor: "needle-actor", happenedAt: t0.AddHours(5 - i));
+        await SeedAsync(actor: "unrelated", happenedAt: t0.AddHours(10));
+
+        var (page1, cursor) = await _repo.ListAsync(
+            DefaultQuery() with { Q = "needle", Limit = 2 }, CancellationToken.None);
+        Assert.Equal(2, page1.Count);
+        Assert.NotNull(cursor);
+        Assert.All(page1, e => Assert.Equal("needle-actor", e.Actor));
+
+        var (page2, cursor2) = await _repo.ListAsync(
+            DefaultQuery() with { Q = "needle", Limit = 2, Cursor = cursor }, CancellationToken.None);
+        Assert.Equal(2, page2.Count);
+        Assert.All(page2, e => Assert.Equal("needle-actor", e.Actor));
+
+        var (page3, cursor3) = await _repo.ListAsync(
+            DefaultQuery() with { Q = "needle", Limit = 2, Cursor = cursor2 }, CancellationToken.None);
+        Assert.Single(page3);
+        Assert.Equal("needle-actor", page3[0].Actor);
+        Assert.Null(cursor3);
+
+        var page1Ids = page1.Select(e => e.Id).ToHashSet();
+        var page2Ids = page2.Select(e => e.Id).ToHashSet();
+        Assert.True(page2Ids.Intersect(page1Ids).Count() == 0, "Pages must not overlap.");
+    }
+
+    [Fact]
+    public async Task ListAsync_QWithActiveServiceFilter_WindowedPathAppliesTextFilter()
+    {
+        // With a non-empty ServiceFilter, ListAsync takes the windowed-loop path
+        // (see the fast-path/windowed-path split above the `serviceFilter.IsEmpty`
+        // branch). The q predicate must still be applied correctly there.
+        var repo = new DeploymentReadRepository(_ctx, ServiceFilter.Parse("excluded-svc"));
+
+        var t0 = new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero);
+        var wanted = await SeedAsync(service: "included-svc", actor: "needle-actor", happenedAt: t0);
+        await SeedAsync(service: "included-svc", actor: "other-actor", happenedAt: t0.AddHours(1));
+        await SeedAsync(service: "excluded-svc", actor: "needle-actor", happenedAt: t0.AddHours(2));
+
+        var (items, _) = await repo.ListAsync(DefaultQuery() with { Q = "needle" }, CancellationToken.None);
+
+        Assert.Single(items);
+        Assert.Equal(wanted.Id, items[0].Id);
+    }
+
     // ── ListAsync — pagination ────────────────────────────────────────────────
 
     [Fact]
@@ -871,5 +1122,5 @@ public sealed class DeploymentReadRepositoryTests : IDisposable
 
     private static DeploymentListQuery DefaultQuery() =>
         new(Service: null, Environment: null, Status: null, DeploymentId: null,
-            Since: null, Until: null, Cursor: null, Limit: 100);
+            Since: null, Until: null, Q: null, Cursor: null, Limit: 100);
 }
