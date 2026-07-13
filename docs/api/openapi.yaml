@@ -240,6 +240,14 @@ paths:
         every page — even rows already in storage are hidden. This is independent
         of the `service` query param below (which targets a single identity). See
         `getMatrix` and `api-guidelines.md` §5.
+
+        **Free-text search.** The optional `q` param narrows the page to rows
+        whose `service`, `namespace`, `environment`, `version`, `status`,
+        `actor`, `ref`, `sha`, `deployment_id`, or `run_number` contains the
+        given value (case-insensitive substring). It composes by logical AND with
+        the structured filters (`service`/`environment`/`status`/`deployment_id`/
+        `since`/`until`) and is applied before cursor pagination, so `next_cursor`
+        pages stay consistent for a fixed `q`.
       parameters:
         - { name: service,       in: query, schema: { type: string }, description: "Filter by service identity. A value without `/` matches the `service` segment across all namespaces; a value containing `/` matches the full `namespace/service` composite (see `getMatrix` for the shared glob semantics)." }
         - { name: environment,   in: query, schema: { type: string }, description: Filter by environment identifier. }
@@ -247,6 +255,7 @@ paths:
         - { name: deployment_id, in: query, schema: { type: string }, description: Filter to all rows of a single logical deployment. }
         - { name: since,         in: query, schema: { type: string, format: date-time }, description: "Only events with `happened_at >= since`." }
         - { name: until,         in: query, schema: { type: string, format: date-time }, description: "Only events with `happened_at <  until`." }
+        - { name: q,             in: query, schema: { type: string, maxLength: 200 }, description: "Free-text search. Case-insensitive substring match applied server-side across `service`, `namespace`, `environment`, `version`, `status`, `actor`, `ref`, `sha`, `deployment_id`, and `run_number`; a row matches when **any** of those fields contains the value. Empty or absent ⇒ no text filter. Composes by logical **AND** with the structured filters (`service`/`environment`/`status`/`deployment_id`/`since`/`until`) and is applied **before** cursor pagination, so `next_cursor` pages stay consistent for a fixed `q`." }
         - { name: cursor,        in: query, schema: { type: string }, description: Opaque pagination cursor from a previous page. }
         - { name: limit,         in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
       responses:

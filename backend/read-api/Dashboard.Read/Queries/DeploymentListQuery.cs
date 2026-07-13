@@ -11,5 +11,6 @@ internal sealed record DeploymentListQuery(
     string? DeploymentId,
     DateTimeOffset? Since,
     DateTimeOffset? Until,
+    string? Q,
     string? Cursor,
     int Limit);

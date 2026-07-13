@@ -109,6 +109,7 @@ export class DeploymentsController {
     @Query('deployment_id') deployment_id?: string,
     @Query('since') since?: string,
     @Query('until') until?: string,
+    @Query('q') q?: string,
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
   ) {
@@ -119,6 +120,7 @@ export class DeploymentsController {
       deployment_id,
       since,
       until,
+      q,
       cursor,
       limit: limit ? parseInt(limit, 10) : undefined,
     });

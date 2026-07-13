@@ -1,0 +1,142 @@
+/* FeedDockComponent — pixel-matched to docs/design/mockup/index.html §feed-dock (#397) */
+
+:host { display: contents; }
+
+.feed-dock {
+  position: fixed;
+  left: 18px; right: 18px; bottom: 44px;
+  max-height: 340px;
+  display: flex;
+  flex-direction: column;
+  background: var(--glass);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 1px 0 var(--glass-edge-2) inset,
+    0 30px 80px -40px rgba(0, 0, 0, 0.7);
+  z-index: 25;
+  transform: translateY(calc(100% + 60px));
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.3s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.25s ease;
+}
+.feed-dock.is-open { transform: translateY(0); opacity: 1; pointer-events: auto; }
+
+.feed-dock-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--glass-edge);
+  flex-shrink: 0;
+}
+.feed-dock-title-block .feed-dock-title { font-size: 12px; font-weight: 600; color: var(--ink-0); }
+.feed-dock-title-block .feed-dock-sub { font-size: 10px; color: var(--ink-2); margin-top: 1px; }
+.feed-dock-spacer { flex: 1; }
+.feed-dock-open-link {
+  appearance: none;
+  background: none;
+  border: none;
+  color: var(--ink-2);
+  cursor: pointer;
+  font-size: 11.5px;
+  font-family: inherit;
+  padding: 4px 6px;
+  transition: color 0.15s ease;
+}
+.feed-dock-open-link:hover { color: var(--ink-0); }
+
+.drawer-close {
+  appearance: none;
+  background: var(--kvtag-bg, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--glass-edge);
+  color: var(--ink-1);
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.drawer-close:hover { background: var(--glass-edge-2); color: var(--ink-0); }
+
+.feed-dock-body { overflow-y: auto; overflow-x: auto; padding: 6px 10px 10px; }
+
+.feed-group-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0 0 2px 0;
+}
+
+/* ── Group-by toggle — same accent treatment as the Feed page's toggle ──── */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 4px 10px;
+  background: var(--input-bg);
+  border: 1px solid var(--glass-edge);
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--ink-1);
+  user-select: none;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.toggle:hover { color: var(--ink-0); border-color: var(--glass-edge-2); }
+.toggle .switch {
+  width: 26px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--switch-off-bg);
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.15s ease;
+}
+.toggle .switch::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  background: var(--switch-knob);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.toggle.is-on {
+  color: rgba(var(--accent-rgb), 0.90);
+  border-color: rgba(var(--accent-rgb), 0.45);
+  background: rgba(var(--accent-rgb), 0.10);
+}
+.toggle.is-on .switch { background: rgba(var(--accent-rgb), 1); }
+.toggle.is-on .switch::after { transform: translateX(12px); background: #fff; }
+
+/* ── Live indicator dot — same treatment as the topbar's live-pill dot ──── */
+.live-dot {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--emerald);
+  box-shadow: 0 0 10px var(--emerald-glow);
+  flex-shrink: 0;
+}
+.live-dot::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1px solid var(--emerald);
+  opacity: 0.5;
+  animation: pulseRing 2s ease-out infinite;
+}

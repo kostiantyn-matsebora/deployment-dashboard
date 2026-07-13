@@ -37,8 +37,8 @@ This specification is the **source of truth** for frontend engineers implementin
 | File | Contents |
 |------|----------|
 | [design-tokens.md](design-tokens.md) | Color tokens (dark/light/auto), typography, geometry, effects |
-| [components.md](components.md) | Topbar, matrix tile, 6 box states, swimlane node, drawer, inspector, popovers |
-| [views.md](views.md) | Matrix view layout, swimlanes view layout, ngx-graph integration |
+| [components.md](components.md) | Topbar, matrix tile, 6 box states, swimlane node, feed dock, drawer, inspector, popovers |
+| [views.md](views.md) | Matrix view layout, swimlanes view layout, feed view layout, ngx-graph integration |
 | [libraries.md](libraries.md) | Full dependency inventory, PrimeNG unstyled config, component mapping |
 | [behavior.md](behavior.md) | Field rendering system, interactions, theming, responsive rules |
 | [data-model.md](data-model.md) | Domain model (11 fields), KPIs, field whitelist, derived values |
