@@ -7,6 +7,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 
+## [0.22.0] - 2026-07-13
+
+### Added
+
+- **Deployment feed — a full-history event log, plus a live bottom dock (#397).** A new top-level **Feed** view (tab after Swimlanes) is a full-history, columnar deployment-event log grouped by `deployment_id` — collapse a deployment's events into a roll-up row and expand it back out, or flatten to one row per event. History loads via cursor-paginated infinite scroll, auto-filling further pages on tall viewports so the list never leaves dead space above the fold. A new server-side free-text search — the `q` param on `GET /api/deployments` — matches case-insensitively as a substring across ten fields and composes with the existing service/environment/status/namespace filters (`400` above 200 characters). Alongside it, a toggleable bottom dock surfaces the newest 8 events live over SSE (with the existing flash-on-arrival treatment) on every other view; the toggle persists and is preset-integrated, and the dock is suppressed while the Feed view itself is active. See [Deployment feed](https://kostiantyn-matsebora.github.io/deployment-dashboard/guide/screenshots/#deployment-feed).
+- **Matrix tile flashes on a live effective-status change (#398).** Mirrors the existing Swimlanes card-flash on the Matrix view: when a slot's effective status (success / in-progress / failure) changes live, the affected tile plays a one-shot ~1.2s accent glow that composes with the existing tile styling and then clears — no change to the underlying matrix data or contract.
+
+### Fixed
+
+- **Deployment event ids are now minted via a monotonic UUIDv7 generator, closing a same-millisecond ordering hazard (#330).** The per-slot "latest wins" tiebreak picks the greatest-id row per (service, environment) slot, relying on the UUIDv7 row id being insert-time ordered. .NET's `Guid.CreateVersion7()` encodes only a millisecond timestamp and fills the rest with random bits, so two ids minted within the same millisecond could sort in either order — occasionally surfacing the older of two same-slot, same-`happenedAt` events as "latest" (and, separately, could reorder the `WHERE id > @last ORDER BY id` SSE resume cursor). Deployment ingest now mints ids through a process-monotonic UUIDv7 generator that guarantees strict ordering under both .NET `Guid` and big-endian/Postgres `uuid` comparison. No schema or contract change.
+
+
 ## [0.21.0] - 2026-07-02
 
 ### Fixed
