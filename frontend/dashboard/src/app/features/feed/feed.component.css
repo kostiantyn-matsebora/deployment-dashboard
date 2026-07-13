@@ -1,0 +1,126 @@
+/* FeedComponent — pixel-matched to docs/design/mockup/index.html §view-feed (#397) */
+
+:host { display: block; }
+
+.feed-shell {
+  margin-top: 10px;
+  padding: 14px;
+  background: var(--glass);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 1px 0 var(--glass-edge-2) inset,
+    0 30px 80px -40px rgba(0, 0, 0, 0.7);
+}
+
+.feed-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.feed-title-block .feed-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-0);
+}
+.feed-title-block .feed-sub {
+  font-size: 11px;
+  color: var(--ink-2);
+  margin-top: 2px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.feed-controls { display: flex; align-items: center; gap: 10px; }
+
+.input {
+  appearance: none;
+  background: var(--input-bg);
+  border: 1px solid var(--glass-edge);
+  border-radius: 999px;
+  padding: 7px 13px;
+  font-size: 12.5px;
+  color: var(--ink-0);
+  font-family: inherit;
+  transition: border-color 0.15s ease;
+}
+.input::placeholder { color: var(--ink-3); }
+.input:focus { outline: none; border-color: rgba(var(--accent-rgb), 0.55); }
+.feed-search { min-width: 340px; }
+
+/* ── Group-by toggle — accent ON colour, same treatment as the swimlanes
+   auto-scroll toggle (not the coral "failures only" semantic) ─────────── */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 13px;
+  background: var(--input-bg);
+  border: 1px solid var(--glass-edge);
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--ink-1);
+  user-select: none;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.toggle:hover { color: var(--ink-0); border-color: var(--glass-edge-2); }
+.toggle .switch {
+  width: 30px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--switch-off-bg);
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.15s ease;
+}
+.toggle .switch::after {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  background: var(--switch-knob);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.toggle.is-on {
+  color: rgba(var(--accent-rgb), 0.90);
+  border-color: rgba(var(--accent-rgb), 0.45);
+  background: rgba(var(--accent-rgb), 0.10);
+}
+.toggle.is-on .switch { background: rgba(var(--accent-rgb), 1); }
+.toggle.is-on .switch::after { transform: translateX(14px); background: #fff; }
+
+/* ── Scrollable log ────────────────────────────────────────────────────── */
+.feed-log {
+  height: calc(100vh - 320px);
+  min-height: 320px;
+  overflow-y: auto;
+  overflow-x: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ── Expanded group children wrapper ──────────────────────────────────── */
+.feed-group-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0 0 2px 0;
+}
+
+.feed-loading, .feed-end {
+  text-align: center;
+  padding: 10px;
+  font-size: 11px;
+  color: var(--ink-3);
+  font-style: italic;
+}
+.feed-searching { text-align: center; padding: 10px; font-size: 11px; color: var(--ink-2); }

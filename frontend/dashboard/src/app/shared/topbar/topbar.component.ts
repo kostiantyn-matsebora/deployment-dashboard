@@ -29,6 +29,7 @@ import {
 import { PatternFilterComponent } from '../pattern-filter/pattern-filter.component';
 import { matchesAny } from '../../core/utils/glob.util';
 import { PresetsService, PresetEnvelope } from '../../core/services/presets.service';
+import { FeedService } from '../../core/services/feed.service';
 
 interface ViewOption {
   label: string;
@@ -76,6 +77,7 @@ export class TopbarComponent {
   protected readonly notifService    = inject(BrowserNotificationService);
   protected readonly router          = inject(Router);
   protected readonly presetsService  = inject(PresetsService);
+  protected readonly feedService     = inject(FeedService);
 
   // Popovers
   protected readonly fieldsPopover        = viewChild<Popover>('fieldsPopover');
@@ -114,16 +116,18 @@ export class TopbarComponent {
   protected readonly presetUrlImporting = signal(false);
 
   // ── View tabs ─────────────────────────────────────────────
+  // Tab order is LOCKED: Matrix, Swimlanes, Feed, Analytics (issue #397).
   protected readonly viewOptions: ViewOption[] = [
     { label: 'Matrix',     value: 'matrix' },
     { label: 'Swimlanes',  value: 'swimlanes' },
+    { label: 'Feed',       value: 'feed' },
     { label: 'Analytics',  value: 'analytics' },
   ];
 
   protected readonly activeView = computed(() => this.state.activeView());
 
   protected onViewChange(value: string): void {
-    if (value === 'matrix' || value === 'swimlanes' || value === 'analytics') {
+    if (value === 'matrix' || value === 'swimlanes' || value === 'feed' || value === 'analytics') {
       this.state.activeView.set(value);
       this.router.navigate(['/' + value]);
     }
@@ -295,7 +299,16 @@ export class TopbarComponent {
   // ── View helpers ──────────────────────────────────────────
   protected readonly isMatrix    = computed(() => this.state.activeView() === 'matrix');
   protected readonly isSwimlanes = computed(() => this.state.activeView() === 'swimlanes');
+  protected readonly isFeed      = computed(() => this.state.activeView() === 'feed');
   protected readonly isAnalytics = computed(() => this.state.activeView() === 'analytics');
+
+  // ── Deployment-feed dock toggle — visible on ALL views (#397) ─────────────
+  /** Suppressed + disabled while the Feed view itself is active (the page IS the full log). */
+  protected readonly feedDockOpen = computed(() => this.feedService.dockOpenPref());
+
+  protected toggleFeedDock(): void {
+    this.feedService.setDockOpen(!this.feedService.dockOpenPref());
+  }
 
   // ── Swimlanes collapse/expand controls (#309) ─────────────
   /** True when all lanes are expanded (collapsed set is empty). */

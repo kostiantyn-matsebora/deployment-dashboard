@@ -6,7 +6,7 @@ Requirements distilled from design-iteration conversations. One requirement per 
 
 ### Views
 
-- The dashboard provides two views — **Matrix** and **Swimlanes** — switchable via a top-nav segmented control.
+- The dashboard provides four views — **Matrix**, **Swimlanes**, **Feed**, and **Analytics** — switchable via a top-nav segmented control, in that tab order.
 - The Matrix view renders deployments as a services × environments grid with rows = services and columns = environments.
 - The Swimlanes view renders deployments as per-service DAGs with one horizontal swimlane per service.
 - The Swimlanes view stacks multiple disconnected DAGs within a service's lane vertically (top-to-bottom), not horizontally.
@@ -156,9 +156,24 @@ Sources: [`docs/diagrams/fetcher-rate-limit.md`](../diagrams/fetcher-rate-limit.
 
 - Hovering any version anywhere in the Matrix amber-highlights every tile across environments where the same version is deployed.
 
+### Feed
+
+- The dashboard provides a **deployment-event feed** with two surfaces: a toggleable bottom dock (visible on every view) and a full-page **Feed** view — the 3rd tab in the top-nav segmented control, ordered **Matrix → Swimlanes → Feed → Analytics**.
+- Both surfaces render the same chronological event log, either **flat** (one row per event) or **grouped by `deployment_id`** (roll-up row + expandable detail), driven by one shared grouped/flat toggle state. Default: grouped ON.
+- **Feed dock.**
+  - Opened/closed via a persistent topbar icon button, visible on every view. Collapsed (closed) by default; the open/closed state persists across reloads.
+  - Shows the **last 8** deployment events (or groups), newest-first.
+  - New events arrive via the existing deployment SSE stream and prepend to the dock with a one-shot flash animation — no page reload, no polling.
+  - The dock is suppressed while the Feed view itself is active — the page IS the full log — without discarding the persisted open/closed preference; the topbar toggle button is disabled (dimmed) while on the Feed view.
+  - An "Open feed →" affordance switches to the Feed view/tab.
+- **Feed view.**
+  - A top-level route rendering the full chronological event history, not bounded to the last 8.
+  - Loads pages via cursor-based infinite scroll (`cursor` / `next_cursor`) as the user scrolls near the bottom of the log.
+  - A search input performs **server-side free-text search** via the `q` query param on `GET /api/deployments` — it searches the full history, not only the rows currently rendered, and composes by logical AND with any other active structured filters. A new search resets pagination to the first page.
+
 ### Analytics view
 
-- The dashboard provides a third view — **Analytics** — accessible via the top-nav segmented control as a 3rd tab alongside Matrix and Swimlanes.
+- The dashboard provides a fourth view — **Analytics** — accessible via the top-nav segmented control as the 4th tab, after Matrix, Swimlanes, and Feed.
 - The Analytics view is **read-only** — no user writes; CI/CD writes are the sole data source.
 - The period selector exposes three windows: **7d**, **14d**, **30d**; only one may be active at a time.
 - The active window is **bounded server-side** by `HISTORY_RETENTION_DAYS`; when `window.clamped === true` the SPA surfaces the clamp in the period selector subtitle ("bounded by HISTORY_RETENTION_DAYS").
@@ -276,3 +291,8 @@ Sources: [`docs/diagrams/fetcher-rate-limit.md`](../diagrams/fetcher-rate-limit.
 - KPI counts derive purely from the whitelisted fields (no invented metrics).
 - The `ref` field renders as a branch name or PR number per its domain definition.
 - The `happened_at` field renders as elapsed time on tiles and nodes, and as elapsed plus absolute UTC in drawer and inspector rows.
+
+### Feed grouping and search
+
+- The `deployment_id` field groups feed events into per-deployment roll-ups; group order and event order within a group are newest-first by `happened_at`.
+- Free-text search (`q`) is evaluated **server-side** against `service`, `namespace`, `environment`, `version`, `status`, `actor`, `ref`, `sha`, `deployment_id`, and `run_number` — never computed client-side over already-rendered rows.

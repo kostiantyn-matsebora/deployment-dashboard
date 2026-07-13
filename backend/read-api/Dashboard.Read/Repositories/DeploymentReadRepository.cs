@@ -35,6 +35,11 @@ internal sealed class DeploymentReadRepository(
         if (query.Since.HasValue) q = q.Where(e => e.HappenedAt >= query.Since.Value);
         if (query.Until.HasValue) q = q.Where(e => e.HappenedAt < query.Until.Value);
 
+        // Applied here — before ordering and keyset paging — so it is correct in both
+        // the fast path and the windowed-loop path below, and next_cursor stays
+        // consistent for a fixed q.
+        q = ApplyTextSearch(q, query.Q);
+
         DateTimeOffset? initialCursorAt = null;
         if (query.Cursor is not null && CursorCodec.TryDecode(query.Cursor, out var cursor))
         {
@@ -247,6 +252,40 @@ internal sealed class DeploymentReadRepository(
     }
 
     // ── private helpers ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Free-text search: OR across the ten searchable columns (<c>run_url</c> excluded
+    /// per contract), case-insensitive substring. Column-side <c>ToLower()</c>/<c>Contains()</c>
+    /// (rather than <c>EF.Functions.Like</c>, whose case-folding differs between SQLite
+    /// and Npgsql) translates identically on both providers — that pair must stay inside
+    /// the lambda as written, since <c>ToLowerInvariant()</c> does not translate to SQL.
+    /// The needle itself is lowered client-side with <c>ToLowerInvariant()</c> (not the
+    /// current-culture <c>ToLower()</c>) so a culture-sensitive alphabet (e.g. Turkish I/i)
+    /// can't desync it from the column-side lowering. Empty/whitespace <paramref name="needle"/>
+    /// is a no-op — no text filter is applied.
+    /// </summary>
+    // S1541: A flat OR-chain across ten null-safe substring checks must stay a single
+    // LINQ expression to translate to one SQL predicate; splitting it into
+    // sub-methods would break LINQ-to-SQL translation (same rationale as ListAsync above).
+    [SuppressMessage("SonarAnalyzer", "S1541", Justification = "Ten-column OR-composed free-text predicate: cyclomatic complexity is irreducible without breaking LINQ-to-SQL translation.")]
+    private static IQueryable<DeploymentEvent> ApplyTextSearch(IQueryable<DeploymentEvent> q, string? needle)
+    {
+        if (string.IsNullOrWhiteSpace(needle))
+            return q;
+
+        var lowered = needle.Trim().ToLowerInvariant();
+        return q.Where(e =>
+            e.Service.ToLower().Contains(lowered) ||
+            (e.Namespace != null && e.Namespace.ToLower().Contains(lowered)) ||
+            e.Environment.ToLower().Contains(lowered) ||
+            (e.Version != null && e.Version.ToLower().Contains(lowered)) ||
+            e.Status.ToLower().Contains(lowered) ||
+            (e.Actor != null && e.Actor.ToLower().Contains(lowered)) ||
+            (e.Ref != null && e.Ref.ToLower().Contains(lowered)) ||
+            (e.Sha != null && e.Sha.ToLower().Contains(lowered)) ||
+            e.DeploymentId.ToLower().Contains(lowered) ||
+            (e.RunNumber != null && e.RunNumber.ToLower().Contains(lowered)));
+    }
 
     /// <summary>
     /// Latest event per slot whose status is in <paramref name="statuses"/>: the row for which

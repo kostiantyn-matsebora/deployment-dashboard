@@ -381,6 +381,10 @@
     0 0 14px rgba(var(--accent-rgb), 0.25);
 }
 
+/* ── Feed dock toggle: disabled while the Feed view itself is active —
+   the page IS the full log, the dock is redundant there (#397) ─────────── */
+.icon-btn:disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+
 /* ── Live pill ───────────────────────────────────────────── */
 .live-pill {
   position: relative;

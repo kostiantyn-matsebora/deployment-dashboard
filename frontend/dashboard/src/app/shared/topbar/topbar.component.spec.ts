@@ -24,7 +24,7 @@
  * NO_ERRORS_SCHEMA skips PrimeNG rendering.
  */
 import { NO_ERRORS_SCHEMA, signal } from '@angular/core';
-import { TestBed }                   from '@angular/core/testing';
+import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { Router, RouterModule }      from '@angular/router';
 import { vi }                        from 'vitest';
 
@@ -34,6 +34,7 @@ import { ThemeService }     from '../../core/services/theme.service';
 import { NotificationPrefsService, NotifPrefs } from '../../core/services/notification-prefs.service';
 import { BrowserNotificationService } from '../../core/services/browser-notification.service';
 import { PresetsService }   from '../../core/services/presets.service';
+import { FeedService }      from '../../core/services/feed.service';
 import {
   Matrix,
   MatrixField,
@@ -412,6 +413,171 @@ describe('TopbarComponent — legend popover guard', () => {
     const btn = Array.from<HTMLButtonElement>(f.nativeElement.querySelectorAll('button.icon-btn'))
       .find((b: HTMLButtonElement) => b.getAttribute('aria-label') === 'Legend — status key');
     expect(btn).toBeUndefined();
+  });
+});
+
+// ── Deployment-feed dock toggle + view-gated popovers (issue #397 FIX 2) ────
+//
+// Covers:
+//   - dock-toggle button reflects feedDockOpen()/.is-active class
+//   - dock-toggle [disabled] only while the Feed view itself is active
+//   - toggleFeedDock() delegates to FeedService.setDockOpen(!prev)
+//   - Fields + Legend popovers hidden on Feed (isMatrix()||isSwimlanes() gating)
+//
+// Strategy: mock AppStateService for activeView (same pattern as the legend
+// popover guard suite above); FeedService is REAL (providedIn:'root', no HTTP
+// triggered outside its explicit init()) so setDockOpen()/dockOpenPref run
+// unmocked — same rationale as feed-dock.component.spec.ts.
+
+describe('TopbarComponent — deployment feed dock toggle (issue #397 FIX 2)', () => {
+  async function buildWithView(view: 'matrix' | 'swimlanes' | 'feed' | 'analytics') {
+    const activeViewSig = signal<'matrix' | 'swimlanes' | 'feed' | 'analytics'>(view);
+    const mockState: Partial<AppStateService> = {
+      activeView:             activeViewSig as never,
+      serviceFilter:          signal(''),
+      failuresOnly:           signal(false),
+      serviceFilterMode:      signal('exclude' as const),
+      servicePatterns:        signal([] as string[]),
+      visibleServices:            (svcs: string[]) => svcs,
+      visibleServiceIdentities:   (ids: Array<{ service: string; namespace: string | null | undefined }>) => ids,
+      buildServiceSuggestions:    (rows: Array<{ service: string }>) => rows.map(r => r.service),
+      matrixVisibleFields:    signal(new Set<MatrixField>()),
+      swimlaneVisibleFields:  signal(new Set<SwimlaneField>()),
+      correlationPredicate:   signal('explicit parent' as const),
+      timeWindow:             signal('1 day' as const),
+      sseConnected:           signal(false),
+      kpi:                    signal({ services: 0, environments: 0, inFlight: 0, failed: 0 }) as never,
+      rateLimitMap:           signal(new Map()),
+      matrixData:             signal(null),
+      matrixColHidden:        signal(new Set<string>()),
+      matrixColOrder:         signal([] as string[]),
+      collapsedLanes:         signal(new Set<string>()),
+      autoScrollOnChange:     signal(true),
+      lastEffectiveEvent:     signal(null) as never,
+    };
+    const mockTheme: Partial<ThemeService> = {
+      theme: signal<Theme>('dark'),
+      setTheme: () => {},
+    };
+    const mockNotifPrefs: Partial<NotificationPrefsService> = {
+      prefs:        signal({ enabled: false, statuses: [], serviceMode: 'watch-all-except', serviceChips: [], envMode: 'watch-all-except', envChips: [] }) as never,
+      updatePrefs:  () => {},
+      shouldNotify: () => false,
+    };
+    const mockNotifService: Partial<BrowserNotificationService> = {
+      isSupported:       () => false,
+      requestPermission: () => Promise.resolve('denied' as const),
+      currentPermission: 'default' as const,
+    };
+    await TestBed.configureTestingModule({
+      imports:   [TopbarComponent],
+      providers: [
+        { provide: AppStateService,            useValue: mockState        },
+        { provide: ThemeService,               useValue: mockTheme        },
+        { provide: NotificationPrefsService,   useValue: mockNotifPrefs   },
+        { provide: BrowserNotificationService, useValue: mockNotifService },
+      ],
+      schemas: [NO_ERRORS_SCHEMA],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(TopbarComponent);
+    const feedService = TestBed.inject(FeedService);
+    fixture.detectChanges();
+    return { fixture, feedService };
+  }
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  function dockToggleBtn(fixture: ComponentFixture<TopbarComponent>): HTMLButtonElement {
+    const btn = Array.from<HTMLButtonElement>(fixture.nativeElement.querySelectorAll('button.icon-btn'))
+      .find((b: HTMLButtonElement) => b.getAttribute('aria-label') === 'Deployment feed — toggle the live event panel');
+    if (!btn) throw new Error('dock-toggle button not found');
+    return btn;
+  }
+
+  describe('dock-toggle .is-active reflects feedDockOpen()', () => {
+    it('has is-active when the dock preference is open', async () => {
+      const { fixture, feedService } = await buildWithView('matrix');
+      feedService.setDockOpen(true);
+      fixture.detectChanges();
+      expect(dockToggleBtn(fixture).classList.contains('is-active')).toBe(true);
+    });
+
+    it('has no is-active class when the dock preference is closed', async () => {
+      const { fixture, feedService } = await buildWithView('matrix');
+      feedService.setDockOpen(false);
+      fixture.detectChanges();
+      expect(dockToggleBtn(fixture).classList.contains('is-active')).toBe(false);
+    });
+  });
+
+  describe('dock-toggle [disabled] on the Feed view', () => {
+    it('is disabled when activeView is feed', async () => {
+      const { fixture } = await buildWithView('feed');
+      expect(dockToggleBtn(fixture).disabled).toBe(true);
+    });
+
+    it('is enabled on matrix', async () => {
+      const { fixture } = await buildWithView('matrix');
+      expect(dockToggleBtn(fixture).disabled).toBe(false);
+    });
+
+    it('is enabled on swimlanes', async () => {
+      const { fixture } = await buildWithView('swimlanes');
+      expect(dockToggleBtn(fixture).disabled).toBe(false);
+    });
+
+    it('is enabled on analytics', async () => {
+      const { fixture } = await buildWithView('analytics');
+      expect(dockToggleBtn(fixture).disabled).toBe(false);
+    });
+  });
+
+  describe('toggleFeedDock()', () => {
+    it('delegates to FeedService.setDockOpen(!prev) — closed to open', async () => {
+      const { fixture, feedService } = await buildWithView('matrix');
+      const spy = vi.spyOn(feedService, 'setDockOpen');
+      feedService.dockOpenPref.set(false);
+      priv<() => void>(fixture.componentInstance, 'toggleFeedDock').call(fixture.componentInstance);
+      expect(spy).toHaveBeenCalledWith(true);
+    });
+
+    it('delegates to FeedService.setDockOpen(!prev) — open to closed', async () => {
+      const { fixture, feedService } = await buildWithView('matrix');
+      const spy = vi.spyOn(feedService, 'setDockOpen');
+      feedService.dockOpenPref.set(true);
+      priv<() => void>(fixture.componentInstance, 'toggleFeedDock').call(fixture.componentInstance);
+      expect(spy).toHaveBeenCalledWith(false);
+    });
+  });
+
+  describe('Fields + Legend popovers hidden on Feed (isMatrix()||isSwimlanes() gating)', () => {
+    it('Fields popover button is absent on the feed view', async () => {
+      const { fixture } = await buildWithView('feed');
+      const btn = Array.from<HTMLButtonElement>(fixture.nativeElement.querySelectorAll('button.icon-btn'))
+        .find((b: HTMLButtonElement) => (b.getAttribute('aria-label') ?? '').startsWith('Fields'));
+      expect(btn).toBeUndefined();
+    });
+
+    it('Legend popover button is absent on the feed view', async () => {
+      const { fixture } = await buildWithView('feed');
+      const btn = Array.from<HTMLButtonElement>(fixture.nativeElement.querySelectorAll('button.icon-btn'))
+        .find((b: HTMLButtonElement) => b.getAttribute('aria-label') === 'Legend — status key');
+      expect(btn).toBeUndefined();
+    });
+
+    it('Fields popover button is present on matrix', async () => {
+      const { fixture } = await buildWithView('matrix');
+      const btn = Array.from<HTMLButtonElement>(fixture.nativeElement.querySelectorAll('button.icon-btn'))
+        .find((b: HTMLButtonElement) => (b.getAttribute('aria-label') ?? '').startsWith('Fields'));
+      expect(btn).toBeTruthy();
+    });
+
+    it('Fields popover button is present on swimlanes', async () => {
+      const { fixture } = await buildWithView('swimlanes');
+      const btn = Array.from<HTMLButtonElement>(fixture.nativeElement.querySelectorAll('button.icon-btn'))
+        .find((b: HTMLButtonElement) => (b.getAttribute('aria-label') ?? '').startsWith('Fields'));
+      expect(btn).toBeTruthy();
+    });
   });
 });
 
