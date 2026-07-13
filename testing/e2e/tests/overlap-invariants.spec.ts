@@ -211,6 +211,50 @@ const COMBOS_UNDER_TEST: ComboUnderTest[] = [
       },
     ],
   },
+
+  // ── iteration-2: deployment feed — bottom dock + Feed view (#397) ────────
+
+  {
+    id: 'feed-log-rows-dark',
+    description: 'Feed view — feed-log rows (grouped + expanded group detail) must not overlap — dark theme',
+    setup: async (page) => {
+      await page.goto('http://localhost:4200/feed');
+      await page.waitForSelector('.feed-row', { timeout: 20_000 });
+      await page.waitForTimeout(400);
+      // Expand the first group row (if any) so detail rows are also on-screen
+      // for the overlap check — grouping defaults ON.
+      const groupRow = page.locator('.feed-row.feed-group-row').first();
+      if (await groupRow.count()) {
+        await groupRow.click();
+        await page.waitForTimeout(200);
+      }
+    },
+    overlapGroups: [
+      {
+        label: 'feed rows (head + body)',
+        selector: '.feed-head-row, .feed-log .feed-row',
+      },
+    ],
+  },
+
+  {
+    id: 'feed-dock-rows-dark',
+    description: 'Deployment feed dock — rows must not overlap when open — dark theme',
+    setup: async (page) => {
+      await page.goto('http://localhost:4200/matrix');
+      await page.waitForSelector('app-root', { timeout: 20_000 });
+      await page.waitForTimeout(300);
+      await page.click('button[aria-label="Deployment feed — toggle the live event panel"]');
+      await page.waitForSelector('.feed-dock.is-open .feed-row', { timeout: 20_000 });
+      await page.waitForTimeout(300);
+    },
+    overlapGroups: [
+      {
+        label: 'feed dock rows',
+        selector: '.feed-dock-body .feed-row',
+      },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
