@@ -865,6 +865,14 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
+        '422':
+          description: |
+            Request body validation failed — the `since` XOR `days_back` rule was
+            violated (both or neither supplied), or an unknown field was present on
+            `RecoverRequest` (D5: unknown write fields are rejected).
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
 
   # ───── Control — orchestration SSE stream (API → components) ──────────────
   /api/control/stream:
