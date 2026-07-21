@@ -246,11 +246,11 @@ public sealed class RecoverServiceTests : IDisposable
     // (that full-stack 422 path is also covered by Dashboard.Api.Tests, deferred to CI). This
     // exercises the actual production method — not a reimplementation/mock of its logic.
 
-    private static (DateTimeOffset? Since, IResult? Error) ResolveRecoverSince(RecoverRequest body)
+    private static (DateTimeOffset? Since, IResult? Error) ResolveRecoverSince(RecoverRequest body, ResetOptions? options = null)
     {
         var method = typeof(ControlEndpoints).GetMethod(
             "ResolveRecoverSince", BindingFlags.NonPublic | BindingFlags.Static)!;
-        var result = method.Invoke(null, [body])!;
+        var result = method.Invoke(null, [body, options ?? new ResetOptions()])!;
         var type = result.GetType();
         var since = (DateTimeOffset?)type.GetField("Item1")!.GetValue(result);
         var error = (IResult?)type.GetField("Item2")!.GetValue(result);
@@ -308,6 +308,71 @@ public sealed class RecoverServiceTests : IDisposable
         var (resolved, error) = ResolveRecoverSince(new RecoverRequest { DaysBack = 1 });
         Assert.Null(error);
         Assert.NotNull(resolved);
+    }
+
+    // ── days_back / since bound (RecoverMaxDaysBack — security fix #423) ──────
+    //
+    // Bounds the rewind window so an unbounded days_back can neither overflow
+    // DateTimeOffset.AddDays (int.MaxValue -> ArgumentOutOfRangeException -> uncaught 500) nor
+    // force the fetcher into an unbounded re-poll. The bound is a ResetOptions knob
+    // (RecoverMaxDaysBack, mirrors the Reset:* option style), default 90 days.
+
+    [Fact]
+    public void ResolveRecoverSince_DaysBackExactlyAtMax_IsValid()
+    {
+        var options = new ResetOptions { RecoverMaxDaysBack = 30 };
+        var (resolved, error) = ResolveRecoverSince(new RecoverRequest { DaysBack = 30 }, options);
+
+        Assert.Null(error);
+        Assert.NotNull(resolved);
+    }
+
+    [Fact]
+    public void ResolveRecoverSince_DaysBackOneOverMax_Returns422Error()
+    {
+        var options = new ResetOptions { RecoverMaxDaysBack = 30 };
+        var (_, error) = ResolveRecoverSince(new RecoverRequest { DaysBack = 31 }, options);
+
+        Assert.NotNull(error);
+    }
+
+    [Fact]
+    public void ResolveRecoverSince_DaysBackIntMaxValue_Returns422ErrorWithoutThrowing()
+    {
+        // The historical vulnerability: DateTimeOffset.UtcNow.AddDays(-int.MaxValue) throws
+        // ArgumentOutOfRangeException uncaught -> 500. The bound check must reject this BEFORE
+        // AddDays is ever called, so resolving it must neither throw nor succeed.
+        var (resolved, error) = ResolveRecoverSince(new RecoverRequest { DaysBack = int.MaxValue });
+
+        Assert.NotNull(error);
+        Assert.Null(resolved);
+    }
+
+    [Fact]
+    public void ResolveRecoverSince_SinceWithinMaxDaysBack_IsValid()
+    {
+        var options = new ResetOptions { RecoverMaxDaysBack = 30 };
+        var since = DateTimeOffset.UtcNow.AddDays(-29);
+        var (resolved, error) = ResolveRecoverSince(new RecoverRequest { Since = since }, options);
+
+        Assert.Null(error);
+        Assert.Equal(since, resolved);
+    }
+
+    [Fact]
+    public void ResolveRecoverSince_SinceOlderThanMaxDaysBack_Returns422Error()
+    {
+        var options = new ResetOptions { RecoverMaxDaysBack = 30 };
+        var since = DateTimeOffset.UtcNow.AddDays(-31);
+        var (_, error) = ResolveRecoverSince(new RecoverRequest { Since = since }, options);
+
+        Assert.NotNull(error);
+    }
+
+    [Fact]
+    public void ResolveRecoverSince_DefaultRecoverMaxDaysBack_Is90()
+    {
+        Assert.Equal(90, new ResetOptions().RecoverMaxDaysBack);
     }
 
     // ── Recover state machine transitions (mirrors ResetStateMachine coverage) ─

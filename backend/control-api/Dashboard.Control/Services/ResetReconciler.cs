@@ -199,14 +199,10 @@ internal sealed class ResetReconciler(
         IResetStateNotifier? stateNotifier,
         CancellationToken ct)
     {
-        cycle.State = ResetState.Idle;
-        cycle.CorrelationId = null;
-        cycle.ExpectedComponents = null;
-        cycle.AcksReceived = null;
-        cycle.StartedAt = null;
-        cycle.DeadlineAt = null;
-        cycle.Operation = ControlOperation.Reset;
-        cycle.RecoverSince = null;
+        // Same baseline the orchestrators reset to (see ChoreographyCycleStore.ResetToIdleBaseline) —
+        // shared here too so the "idle" field set has exactly one definition across all three
+        // callers (ResetOrchestrator, RecoverOrchestrator, this reconciler).
+        ChoreographyCycleStore.ResetToIdleBaseline(cycle);
         await db.SaveChangesAsync(ct);
 
         // Notify all instances to update their cached gate flag (Fix C).

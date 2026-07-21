@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using Dashboard.Control.Filters;
 using Dashboard.Control.Models;
 using Dashboard.Control.Notifiers;
+using Dashboard.Control.Options;
 using Dashboard.Control.Repositories;
 using Dashboard.Control.Services;
 using Dashboard.Control.Sse;
@@ -16,6 +17,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Options;
 
 namespace Dashboard.Control;
 
@@ -109,9 +111,10 @@ public static class ControlEndpoints
     private static async Task<IResult> HandleRecoverAsync(
         [FromBody] RecoverRequest body,
         IRecoverService recoverService,
+        IOptions<ResetOptions> resetOptions,
         CancellationToken ct)
     {
-        var (since, validationError) = ResolveRecoverSince(body);
+        var (since, validationError) = ResolveRecoverSince(body, resetOptions.Value);
         if (validationError is not null)
             return validationError;
 
@@ -131,11 +134,20 @@ public static class ControlEndpoints
     }
 
     /// <summary>
-    /// Enforces the <c>since</c> XOR <c>days_back</c> rule and resolves <c>days_back</c> to an
-    /// absolute <c>since = now − days_back days</c>. Returns a <c>422</c> Problem when neither
-    /// or both fields are supplied, or when <c>days_back</c> is not ≥ 1.
+    /// Enforces the <c>since</c> XOR <c>days_back</c> rule, bounds both fields to
+    /// <see cref="ResetOptions.RecoverMaxDaysBack"/>, and resolves <c>days_back</c> to an absolute
+    /// <c>since = now − days_back days</c>. Returns a <c>422</c> Problem when neither or both
+    /// fields are supplied, when <c>days_back</c> is not in <c>[1, RecoverMaxDaysBack]</c>, or when
+    /// an absolute <c>since</c> is older than <c>now - RecoverMaxDaysBack days</c>.
+    ///
+    /// The bound checks run BEFORE any <see cref="DateTimeOffset.AddDays(double)"/> call: an
+    /// unbounded <c>days_back</c> (e.g. <see cref="int.MaxValue"/>) would otherwise overflow
+    /// <c>AddDays</c> into an uncaught <see cref="ArgumentOutOfRangeException"/> (→ 500), and an
+    /// unbounded in-range <c>days_back</c>/`since` would otherwise force the fetcher into an
+    /// unbounded re-poll. Both failure modes are rejected with the same 422 Problem as the
+    /// pre-existing `days_back &gt;= 1` check.
     /// </summary>
-    private static (DateTimeOffset? since, IResult? error) ResolveRecoverSince(RecoverRequest body)
+    private static (DateTimeOffset? since, IResult? error) ResolveRecoverSince(RecoverRequest body, ResetOptions options)
     {
         var hasSince = body.Since is not null;
         var hasDaysBack = body.DaysBack is not null;
@@ -146,15 +158,22 @@ public static class ControlEndpoints
                 detail: "Specify either an absolute `since` timestamp or a relative `days_back` count — not both, not neither.",
                 statusCode: StatusCodes.Status422UnprocessableEntity));
 
-        if (hasDaysBack && body.DaysBack < 1)
-            return (null, Results.Problem(
-                title: "`days_back` must be at least 1.",
-                detail: "`days_back` specifies whole days to rewind and must be a positive integer.",
-                statusCode: StatusCodes.Status422UnprocessableEntity));
+        if (hasDaysBack && (body.DaysBack < 1 || body.DaysBack > options.RecoverMaxDaysBack))
+            return (null, RecoverBoundProblem(options));
+
+        if (hasSince && body.Since!.Value < DateTimeOffset.UtcNow.AddDays(-options.RecoverMaxDaysBack))
+            return (null, RecoverBoundProblem(options));
 
         var resolvedSince = hasSince ? body.Since!.Value : DateTimeOffset.UtcNow.AddDays(-body.DaysBack!.Value);
         return (resolvedSince, null);
     }
+
+    private static IResult RecoverBoundProblem(ResetOptions options) =>
+        Results.Problem(
+            title: "`days_back`/`since` is outside the allowed recovery window.",
+            detail: $"`days_back` must be between 1 and {options.RecoverMaxDaysBack} (inclusive); " +
+                    $"an absolute `since` must not be more than {options.RecoverMaxDaysBack} days in the past.",
+            statusCode: StatusCodes.Status422UnprocessableEntity);
 
     // ── POST /api/control/events ──────────────────────────────────────────────
 

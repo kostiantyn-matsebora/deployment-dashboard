@@ -8,7 +8,6 @@ using Dashboard.Shared.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Npgsql;
 
 namespace Dashboard.Control.Services;
 
@@ -17,9 +16,15 @@ namespace Dashboard.Control.Services;
 /// back to <c>idle</c>. Runs on a dedicated background thread started by
 /// <see cref="ResetService.TryInitiateAsync"/> after the endpoint returns <c>202</c>.
 ///
-/// Advisory lock (fixed key <c>7654321</c>) is held on a <b>dedicated, always-open</b>
-/// Npgsql connection for the duration of the cycle — session-level lock semantics require
-/// the Postgres session to stay alive (D12, NFR-05).
+/// The operation-agnostic saga plumbing — advisory lock acquire/release
+/// (<see cref="ChoreographyLock"/>), the wall-clock/timeout skeleton
+/// (<see cref="ChoreographySagaRunner"/>), the ack-drain/wait loop
+/// (<see cref="ChoreographyAckGate"/>), and cycle load/save/clear
+/// (<see cref="ChoreographyCycleStore"/>, backed by <see cref="IResetCycleRepository"/>) — lives
+/// in exactly one place, shared byte-for-byte with <see cref="RecoverOrchestrator"/>. This class
+/// supplies only the operation-specific step (D14: clear <c>deployment_events</c> +
+/// <c>fetcher_state</c>) and the <c>reset-*</c> event-type/payload shape (no payload, unlike
+/// recover's resolved <c>since</c>).
 ///
 /// On every state transition, emits <c>NOTIFY reset_state &lt;state&gt;</c> so all instances
 /// update their cached ingest-gate flag without a DB round-trip (Fix C).
@@ -29,54 +34,10 @@ internal sealed class ResetOrchestrator(
     ComponentAcksBroadcaster acksBroadcaster,
     ILogger<ResetOrchestrator> logger) : IResetOrchestrator
 {
-    public async Task DriveAsync(
-        Guid resetId,
-        ResetOptions options,
-        CancellationToken appStopping)
-    {
-        var lockConn = await TryOpenAndAcquireLockAsync(appStopping);
-        if (lockConn is null)
-            return;
+    private ChoreographyIdentity Identity => new(logger, "Reset");
 
-        logger.LogInformation("Reset orchestrator: advisory lock acquired for reset {ResetId}.", resetId);
-
-        // Hard wall-clock ceiling on the entire cycle.  If any await inside the cycle
-        // (including ClearDataTablesAsync) hangs past GateMaxTtlSeconds the linked token
-        // fires, the catch below force-aborts with a non-cancelled token, and the finally
-        // releases the advisory lock — guaranteeing the system is never wedged longer than
-        // GateMaxTtlSeconds (D12, §9).
-        await using var _ = lockConn;
-        using var processCts = new CancellationTokenSource(
-            TimeSpan.FromSeconds(options.GateMaxTtlSeconds));
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-            appStopping, processCts.Token);
-
-        try
-        {
-            await RunCycleAsync(resetId, options, linkedCts.Token);
-        }
-        catch (OperationCanceledException) when (
-            processCts.IsCancellationRequested && !appStopping.IsCancellationRequested)
-        {
-            // Wall-clock timeout fired — not a graceful shutdown.  Force the cycle back to
-            // idle and emit reset-completed so components can recover.
-            logger.LogWarning(
-                "Reset orchestrator: GateMaxTtlSeconds ({Ttl}s) wall-clock ceiling reached; " +
-                "force-aborting reset {ResetId}.",
-                options.GateMaxTtlSeconds, resetId);
-            await TryAbortAsync(resetId, appStopping);
-        }
-        catch (Exception ex) when (!appStopping.IsCancellationRequested)
-        {
-            logger.LogError(ex, "Reset orchestrator: unhandled error; forcing abort for reset {ResetId}.", resetId);
-            await TryAbortAsync(resetId, appStopping);
-        }
-        finally
-        {
-            await ReleaseAdvisoryLockAsync(lockConn, appStopping);
-            logger.LogInformation("Reset orchestrator: advisory lock released for reset {ResetId}.", resetId);
-        }
-    }
+    public Task DriveAsync(Guid resetId, ResetOptions options, CancellationToken appStopping) =>
+        ChoreographySagaRunner.RunAsync(services, Identity, resetId, options, appStopping, RunCycleAsync, TryAbortAsync);
 
     // ct is the linked token (appStopping ∪ processCts); it is cancelled when either the
     // application stops or GateMaxTtlSeconds elapses.  Every await here observes it so a
@@ -88,13 +49,15 @@ internal sealed class ResetOrchestrator(
     {
         await using var scope = services.CreateAsyncScope();
         var sp = scope.ServiceProvider;
-        var db = sp.GetRequiredService<DashboardDbContext>();
-        var controlStream = sp.GetRequiredService<IControlStreamRepository>();
-        var notifier = sp.GetRequiredService<IControlEventNotifier>();
-        var stateNotifier = sp.GetService<IResetStateNotifier>();
+        var cycleCtx = new ChoreographyCycleContext(
+            sp.GetRequiredService<DashboardDbContext>(), sp.GetRequiredService<IResetCycleRepository>());
+        var notifyCtx = new ChoreographyNotifyContext(
+            sp.GetRequiredService<IControlStreamRepository>(),
+            sp.GetRequiredService<IControlEventNotifier>(),
+            sp.GetService<IResetStateNotifier>());
 
         // ── Phase: draining — wait for acks or AckTimeout ────────────────────
-        var cycle = await LoadCycleAsync(db, ct);
+        var cycle = await ChoreographyCycleStore.LoadAsync(cycleCtx, ct);
         if (cycle.CorrelationId != resetId)
         {
             logger.LogWarning("Reset orchestrator: correlation_id mismatch; expected {Expected}, got {Actual}. Aborting.",
@@ -109,91 +72,48 @@ internal sealed class ResetOrchestrator(
             return;
         }
 
-        var ackDeadline = cycle.DeadlineAt ?? DateTimeOffset.UtcNow.AddSeconds(options.AckTimeoutSeconds);
-        var gateMaxDeadline = (cycle.StartedAt ?? DateTimeOffset.UtcNow).AddSeconds(options.GateMaxTtlSeconds);
+        var deadlines = new ChoreographyDeadlines(
+            cycle.DeadlineAt ?? DateTimeOffset.UtcNow.AddSeconds(options.AckTimeoutSeconds),
+            (cycle.StartedAt ?? DateTimeOffset.UtcNow).AddSeconds(options.GateMaxTtlSeconds));
 
-        await WaitForAcksOrTimeoutAsync(db, cycle, ackDeadline, gateMaxDeadline, options, ct);
+        await ChoreographyAckGate.WaitForAcksOrTimeoutAsync(acksBroadcaster, Identity, cycleCtx, cycle, deadlines, options, ct);
 
         // Check GateMaxTtl before proceeding to resetting.
-        if (DateTimeOffset.UtcNow >= gateMaxDeadline)
+        if (DateTimeOffset.UtcNow >= deadlines.GateMaxDeadline)
         {
-            await AbortCycleAsync(db, cycle, controlStream, notifier, stateNotifier, ct);
+            await AbortCycleAsync(cycleCtx, notifyCtx, cycle, ct);
             return;
         }
 
         // ── Draining → Resetting ──────────────────────────────────────────────
         var correlationId = cycle.CorrelationId ?? resetId;
         machine.Fire(ResetTrigger.AcksIn);
-        await TransitionToResettingAsync(db, cycle, controlStream, notifier, stateNotifier, correlationId, ct);
+        await TransitionToResettingAsync(cycleCtx, notifyCtx, cycle, correlationId, ct);
 
         // Check GateMaxTtl before clearing.
-        if (DateTimeOffset.UtcNow >= gateMaxDeadline)
+        if (DateTimeOffset.UtcNow >= deadlines.GateMaxDeadline)
         {
-            await AbortCycleAsync(db, cycle, controlStream, notifier, stateNotifier, ct);
+            await AbortCycleAsync(cycleCtx, notifyCtx, cycle, ct);
             return;
         }
 
         // ── Phase: resetting — clear data ─────────────────────────────────────
-        await ClearDataTablesAsync(db, ct);
+        await ClearDataTablesAsync(cycleCtx.Db, ct);
         logger.LogInformation("Reset orchestrator: data cleared for reset {ResetId}.", resetId);
 
         // ── Resetting → Idle ──────────────────────────────────────────────────
         machine.Fire(ResetTrigger.Complete);
-        await TransitionToIdleAsync(db, cycle, controlStream, notifier, stateNotifier, correlationId, ct);
+        await TransitionToIdleAsync(cycleCtx, notifyCtx, cycle, correlationId, ct);
 
         logger.LogInformation("Reset orchestrator: reset {CorrelationId} completed.", correlationId);
-    }
-
-    // ct is the linked token (appStopping ∪ processCts) passed down from RunCycleAsync.
-    // The inner ack-wait creates its own sub-deadline capped at min(ackDeadline, gateMaxDeadline).
-    private async Task WaitForAcksOrTimeoutAsync(
-        DashboardDbContext db,
-        ResetCycle cycle,
-        DateTimeOffset ackDeadline,
-        DateTimeOffset gateMaxDeadline,
-        ResetOptions options,
-        CancellationToken ct)
-    {
-        var expectedComponents = cycle.ExpectedComponents ?? options.ExpectedComponents;
-        var acksReceived = new HashSet<string>(cycle.AcksReceived ?? [], StringComparer.Ordinal);
-
-        if (acksReceived.IsSupersetOf(expectedComponents))
-            return;
-
-        var ackWait = TimeSpan.FromMilliseconds(
-            Math.Max(0, (ackDeadline - DateTimeOffset.UtcNow).TotalMilliseconds));
-        var gateWait = TimeSpan.FromMilliseconds(
-            Math.Max(0, (gateMaxDeadline - DateTimeOffset.UtcNow).TotalMilliseconds));
-        var waitCap = ackWait < gateWait ? ackWait : gateWait;
-
-        using var timeoutCts = new CancellationTokenSource(waitCap);
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
-
-        try
-        {
-            while (await acksBroadcaster.AckReader.WaitToReadAsync(linked.Token))
-            {
-                if (await DrainAckBatchAsync(db, cycle, acksReceived, expectedComponents, ct))
-                    return;
-            }
-        }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-        {
-            // Inner ack-wait timeout elapsed; proceed with however many acks arrived.
-            logger.LogInformation(
-                "Reset orchestrator: ack timeout elapsed for correlation_id {CorrelationId}; proceeding with {Count}/{Total} acks.",
-                cycle.CorrelationId, acksReceived.Count, expectedComponents.Length);
-        }
     }
 
     // abortCt must be a non-cancelled token (appStopping or CancellationToken.None) so the
     // abort steps (DB write + NOTIFY) can complete even when processCts has already fired.
     private async Task AbortCycleAsync(
-        DashboardDbContext db,
+        ChoreographyCycleContext cycleCtx,
+        ChoreographyNotifyContext notifyCtx,
         ResetCycle cycle,
-        IControlStreamRepository controlStream,
-        IControlEventNotifier notifier,
-        IResetStateNotifier? stateNotifier,
         CancellationToken abortCt)
     {
         logger.LogWarning("Reset orchestrator: GateMaxTtl exceeded; aborting reset {CorrelationId}.", cycle.CorrelationId);
@@ -203,97 +123,60 @@ internal sealed class ResetOrchestrator(
         var machine = new ResetStateMachine(cycle);
         if (!machine.IsInState(ResetState.Idle))
             machine.Fire(ResetTrigger.Abort);
-        ClearCycleFields(cycle);
-        await SaveCycleAsync(db, cycle, abortCt);
+        ChoreographyCycleStore.ResetToIdleBaseline(cycle);
+        await ChoreographyCycleStore.SaveAsync(cycleCtx, cycle, abortCt);
 
         // Emit reset-completed so connected components (fetcher, demo-driver) can recover
         // via the control stream — mirrors the reconciler abort path.
         if (abortedResetId != Guid.Empty)
         {
-            var completedEvent = BuildControlEvent("reset-completed", abortedResetId);
-            await controlStream.InsertAsync(completedEvent, abortCt);
-            await notifier.NotifyAsync(completedEvent, abortCt);
+            var completedEvent = ChoreographyEvents.Build("reset-completed", abortedResetId);
+            await notifyCtx.ControlStream.InsertAsync(completedEvent, abortCt);
+            await notifyCtx.Notifier.NotifyAsync(completedEvent, abortCt);
         }
 
         // Release the gate flag on all instances (Fix C).
-        if (stateNotifier is not null)
-            await stateNotifier.NotifyStateAsync(ResetState.Idle, abortCt);
+        if (notifyCtx.StateNotifier is not null)
+            await notifyCtx.StateNotifier.NotifyStateAsync(ResetState.Idle, abortCt);
     }
 
     private async Task TransitionToResettingAsync(
-        DashboardDbContext db,
+        ChoreographyCycleContext cycleCtx,
+        ChoreographyNotifyContext notifyCtx,
         ResetCycle cycle,
-        IControlStreamRepository controlStream,
-        IControlEventNotifier notifier,
-        IResetStateNotifier? stateNotifier,
         Guid correlationId,
         CancellationToken ct)
     {
-        await SaveCycleAsync(db, cycle, ct);
+        await ChoreographyCycleStore.SaveAsync(cycleCtx, cycle, ct);
 
         // Notify all instances that the gate is now ON (Fix C).
-        if (stateNotifier is not null)
-            await stateNotifier.NotifyStateAsync(ResetState.Resetting, ct);
+        if (notifyCtx.StateNotifier is not null)
+            await notifyCtx.StateNotifier.NotifyStateAsync(ResetState.Resetting, ct);
 
-        var resetStartedEvent = BuildControlEvent("reset-started", correlationId);
-        await controlStream.InsertAsync(resetStartedEvent, ct);
-        await notifier.NotifyAsync(resetStartedEvent, ct);
+        var resetStartedEvent = ChoreographyEvents.Build("reset-started", correlationId);
+        await notifyCtx.ControlStream.InsertAsync(resetStartedEvent, ct);
+        await notifyCtx.Notifier.NotifyAsync(resetStartedEvent, ct);
 
         logger.LogInformation("Reset orchestrator: entered resetting phase for {CorrelationId}.", correlationId);
     }
 
     private async Task TransitionToIdleAsync(
-        DashboardDbContext db,
+        ChoreographyCycleContext cycleCtx,
+        ChoreographyNotifyContext notifyCtx,
         ResetCycle cycle,
-        IControlStreamRepository controlStream,
-        IControlEventNotifier notifier,
-        IResetStateNotifier? stateNotifier,
         Guid correlationId,
         CancellationToken ct)
     {
-        ClearCycleFields(cycle);
-        await SaveCycleAsync(db, cycle, ct);
+        ChoreographyCycleStore.ResetToIdleBaseline(cycle);
+        await ChoreographyCycleStore.SaveAsync(cycleCtx, cycle, ct);
 
         // Notify all instances that the gate is now OFF (Fix C).
-        if (stateNotifier is not null)
-            await stateNotifier.NotifyStateAsync(ResetState.Idle, ct);
+        if (notifyCtx.StateNotifier is not null)
+            await notifyCtx.StateNotifier.NotifyStateAsync(ResetState.Idle, ct);
 
-        var resetCompletedEvent = BuildControlEvent("reset-completed", correlationId);
-        await controlStream.InsertAsync(resetCompletedEvent, ct);
-        await notifier.NotifyAsync(resetCompletedEvent, ct);
-    }
-
-    /// <summary>
-    /// Drains all pending acks from <see cref="ComponentAcksBroadcaster.AckReader"/> into
-    /// <paramref name="acksReceived"/>, persists the cycle after each new ack, and returns
-    /// <c>true</c> once all expected components have acknowledged.
-    /// </summary>
-    private async Task<bool> DrainAckBatchAsync(
-        DashboardDbContext db,
-        ResetCycle cycle,
-        HashSet<string> acksReceived,
-        string[] expectedComponents,
-        CancellationToken ct)
-    {
-        while (acksBroadcaster.AckReader.TryRead(out var ack))
-        {
-            if (!Guid.TryParse(ack.CorrelationId, out var ackCorrelationId) || ackCorrelationId != cycle.CorrelationId)
-                continue;
-
-            if (acksReceived.Add(ack.ComponentId))
-            {
-                cycle.AcksReceived = [.. acksReceived];
-                await SaveCycleAsync(db, cycle, ct);
-                logger.LogInformation(
-                    "Reset orchestrator: ack received from {ComponentId} ({Count}/{Total}).",
-                    ack.ComponentId, acksReceived.Count, expectedComponents.Length);
-            }
-
-            if (acksReceived.IsSupersetOf(expectedComponents))
-                return true;
-        }
-
-        return false;
+        var resetCompletedEvent = ChoreographyEvents.Build("reset-completed", correlationId);
+        await notifyCtx.ControlStream.InsertAsync(resetCompletedEvent, ct);
+        await notifyCtx.Notifier.NotifyAsync(resetCompletedEvent, ct);
     }
 
     // Fallback abort for unhandled exceptions.  resetId hint is used if the cycle row has
@@ -304,22 +187,24 @@ internal sealed class ResetOrchestrator(
         {
             await using var abortScope = services.CreateAsyncScope();
             var sp = abortScope.ServiceProvider;
-            var abortDb = sp.GetRequiredService<DashboardDbContext>();
-            var controlStream = sp.GetRequiredService<IControlStreamRepository>();
-            var notifier = sp.GetRequiredService<IControlEventNotifier>();
-            var stateNotifier = sp.GetService<IResetStateNotifier>();
-            var cycle = await LoadCycleAsync(abortDb, appStopping);
+            var cycleCtx = new ChoreographyCycleContext(
+                sp.GetRequiredService<DashboardDbContext>(), sp.GetRequiredService<IResetCycleRepository>());
+            var notifyCtx = new ChoreographyNotifyContext(
+                sp.GetRequiredService<IControlStreamRepository>(),
+                sp.GetRequiredService<IControlEventNotifier>(),
+                sp.GetService<IResetStateNotifier>());
+            var cycle = await ChoreographyCycleStore.LoadAsync(cycleCtx, appStopping);
             if (cycle.State != ResetState.Idle)
             {
-                await AbortCycleAsync(abortDb, cycle, controlStream, notifier, stateNotifier, appStopping);
+                await AbortCycleAsync(cycleCtx, notifyCtx, cycle, appStopping);
             }
             else if (resetId != Guid.Empty)
             {
                 // Cycle already idle (may have been cleaned up), but still emit reset-completed
                 // so any components still waiting on the stream can recover.
-                var completedEvent = BuildControlEvent("reset-completed", resetId);
-                await controlStream.InsertAsync(completedEvent, appStopping);
-                await notifier.NotifyAsync(completedEvent, appStopping);
+                var completedEvent = ChoreographyEvents.Build("reset-completed", resetId);
+                await notifyCtx.ControlStream.InsertAsync(completedEvent, appStopping);
+                await notifyCtx.Notifier.NotifyAsync(completedEvent, appStopping);
             }
         }
         catch (Exception ex)
@@ -335,6 +220,9 @@ internal sealed class ResetOrchestrator(
     /// supplied dependencies. Exposed as <c>internal</c> so <c>Dashboard.Control.Tests</c> can
     /// drive the abort flow with an in-memory SQLite store and a recording notifier without
     /// requiring a real Postgres advisory lock. Production callers use <see cref="TryAbortAsync"/>.
+    /// The repository is constructed directly (rather than resolved from a DI scope) because this
+    /// seam is invoked outside of any scope — it is a thin, dependency-free wrapper over
+    /// <paramref name="db"/> (see <see cref="ResetCycleRepository"/>).
     /// </summary>
     internal async Task ExecuteAbortAsync(
         DashboardDbContext db,
@@ -342,7 +230,11 @@ internal sealed class ResetOrchestrator(
         IControlStreamRepository controlStream,
         IControlEventNotifier notifier,
         CancellationToken ct)
-        => await AbortCycleAsync(db, cycle, controlStream, notifier, stateNotifier: null, ct);
+        => await AbortCycleAsync(
+            new ChoreographyCycleContext(db, new ResetCycleRepository(db)),
+            new ChoreographyNotifyContext(controlStream, notifier, StateNotifier: null),
+            cycle,
+            ct);
 
     // ── Data clearing (D14: only deployment_events + fetcher_state) ───────────
 
@@ -350,124 +242,5 @@ internal sealed class ResetOrchestrator(
     {
         await db.DeploymentEvents.ExecuteDeleteAsync(ct);
         await db.FetcherStates.ExecuteDeleteAsync(ct);
-    }
-
-    // ── Advisory lock helpers ─────────────────────────────────────────────────
-
-    private static async Task<bool> TryAcquireAdvisoryLockAsync(NpgsqlConnection conn, CancellationToken ct)
-    {
-        await using var cmd = new NpgsqlCommand(
-            $"SELECT pg_try_advisory_lock({ResetCoordination.AdvisoryLockKey})", conn);
-        var result = await cmd.ExecuteScalarAsync(ct);
-        return result is true;
-    }
-
-    /// <summary>
-    /// Opens a dedicated Postgres connection and attempts to acquire the advisory lock.
-    /// Returns <c>null</c> when the connection string is missing, the lock is held by
-    /// another instance, or the lock query fails; the caller should return without driving.
-    /// Returns the open connection (non-null) only when the lock is held.
-    /// </summary>
-    private async Task<NpgsqlConnection?> TryOpenAndAcquireLockAsync(CancellationToken ct)
-    {
-        var dataSource = services.GetService<NpgsqlDataSource>();
-
-        if (dataSource is null)
-        {
-            logger.LogWarning("Reset orchestrator: NpgsqlDataSource not available; skipping.");
-            return null;
-        }
-
-        var lockConn = dataSource.CreateConnection();
-        await lockConn.OpenAsync(ct);
-
-        bool lockAcquired;
-        try
-        {
-            lockAcquired = await TryAcquireAdvisoryLockAsync(lockConn, ct);
-        }
-        catch (Exception ex)
-        {
-            await lockConn.DisposeAsync();
-            logger.LogError(ex, "Reset orchestrator: failed to acquire advisory lock.");
-            return null;
-        }
-
-        if (!lockAcquired)
-        {
-            await lockConn.DisposeAsync();
-            logger.LogInformation("Reset orchestrator: advisory lock held by another instance; yielding.");
-            return null;
-        }
-
-        return lockConn;
-    }
-
-    private static async Task ReleaseAdvisoryLockAsync(NpgsqlConnection conn, CancellationToken ct)
-    {
-        try
-        {
-            await using var cmd = new NpgsqlCommand(
-                $"SELECT pg_advisory_unlock({ResetCoordination.AdvisoryLockKey})", conn);
-            await cmd.ExecuteNonQueryAsync(ct);
-        }
-        catch { /* Best-effort: connection may already be closed. */ }
-    }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private static async Task<ResetCycle> LoadCycleAsync(DashboardDbContext db, CancellationToken ct)
-    {
-        db.ChangeTracker.Clear();
-        return await db.ResetCycles.FindAsync([(short)1], ct)
-               ?? new ResetCycle { Id = 1, State = ResetState.Idle };
-    }
-
-    private static async Task SaveCycleAsync(DashboardDbContext db, ResetCycle cycle, CancellationToken ct)
-    {
-        db.ChangeTracker.Clear();
-        var existing = await db.ResetCycles.FindAsync([(short)1], ct);
-        if (existing is null)
-        {
-            db.ResetCycles.Add(cycle);
-        }
-        else
-        {
-            existing.State = cycle.State;
-            existing.CorrelationId = cycle.CorrelationId;
-            existing.ExpectedComponents = cycle.ExpectedComponents;
-            existing.AcksReceived = cycle.AcksReceived;
-            existing.StartedAt = cycle.StartedAt;
-            existing.DeadlineAt = cycle.DeadlineAt;
-            existing.Operation = cycle.Operation;
-            existing.RecoverSince = cycle.RecoverSince;
-        }
-
-        await db.SaveChangesAsync(ct);
-        db.ChangeTracker.Clear();
-    }
-
-    private static ControlStreamEvent BuildControlEvent(string type, Guid correlationId) =>
-        new()
-        {
-            Id = Guid.CreateVersion7(),
-            Type = type,
-            Component = "*",
-            CorrelationId = correlationId,
-            OccurredAt = DateTimeOffset.UtcNow,
-        };
-
-    private static void ClearCycleFields(ResetCycle cycle)
-    {
-        cycle.State = ResetState.Idle;
-        cycle.CorrelationId = null;
-        cycle.ExpectedComponents = null;
-        cycle.AcksReceived = null;
-        cycle.StartedAt = null;
-        cycle.DeadlineAt = null;
-        // Return to the seeded baseline (defensive — the next claim always overwrites both
-        // explicitly anyway; see Repository.TryClaimIdleAsync).
-        cycle.Operation = ControlOperation.Reset;
-        cycle.RecoverSince = null;
     }
 }

@@ -185,12 +185,12 @@ public sealed class RecoverRewindPollTests
 
     private static GhDeploymentStatus MakeStatus(
         long deployId, string state, long runId, DateTimeOffset createdAt) => new()
-    {
-        Id = deployId * 10,
-        State = state,
-        TargetUrl = $"https://github.com/{OwnerA}/{RepoA}/actions/runs/{runId}/jobs/1",
-        CreatedAt = createdAt,
-    };
+        {
+            Id = deployId * 10,
+            State = state,
+            TargetUrl = $"https://github.com/{OwnerA}/{RepoA}/actions/runs/{runId}/jobs/1",
+            CreatedAt = createdAt,
+        };
 
     private static async Task<IReadOnlyList<Dashboard.Shared.Contracts.DeploymentEventIngest>> DrainPollAsync(
         GithubActionsAdapter adapter, string cursor)
