@@ -4,6 +4,32 @@
 pending-floor fix shipped. The fix prevents future occurrences; it does **not** retroactively
 recover pre-existing stranded rows. This runbook covers that manual recovery.
 
+## 0. Prefer `POST /api/control/recover` (#423)
+
+For stranding caused by a **missed poll window** (fetcher down, rate-limited, or paused during a
+reset while the terminal status posted upstream), rewind the fetcher's cursor instead of running
+the manual procedure below:
+
+```bash
+curl -X POST "$DASHBOARD_URL/api/control/recover" \
+  -H "X-Control-API-Key: $CONTROL_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "days_back": 3 }'
+```
+
+- **Non-destructive** — clears no data; no `--force-recreate` / cold restart required.
+- Rewinds every configured repo's cursor `since` to the resolved point (`now − days_back days`, or
+  an absolute `since`) and resumes **incremental** polling from there — not subject to the
+  `BACKFILL_DEPTH` / `BACKFILL_MAX_AGE` caps (those govern the destructive backfill path only).
+- Watch `GET /api/control/stream` for `recover-initiated` → `recover-started` → `recover-completed`
+  (payload carries the resolved `since`). See [`API_SPECIFICATION.md`](../API_SPECIFICATION.md) §2
+  D18 and [`api/api-guidelines.md`](../api/api-guidelines.md) §11.
+- Requires `CONTROL_API_KEY` configured on the API.
+
+**Fall back to the manual procedure below** only when recover doesn't fit — e.g. the stranded
+deployment predates the `since`/`days_back` window you're willing to rewind across, or
+`CONTROL_API_KEY` isn't configured in this environment.
+
 ## 1. Purpose
 
 A deployment held in `waiting` (or another non-terminal status) longer than the fetcher's
