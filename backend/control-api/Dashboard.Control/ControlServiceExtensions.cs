@@ -44,7 +44,17 @@ public static class ControlServiceExtensions
         // ── Reset service (scoped — per-request) ──────────────────────────────
         services.AddScoped<IResetService, ResetService>();
 
-        // ── Fix A: Reconciler background service ──────────────────────────────
+        // ── Recover orchestrator (singleton — holds advisory lock per cycle) ───
+        // Shares the reset choreography's single-flight row + advisory lock (D12); mutually
+        // exclusive with reset, never driven concurrently.
+        services.AddSingleton<RecoverOrchestrator>();
+        services.AddSingleton<IRecoverOrchestrator>(sp => sp.GetRequiredService<RecoverOrchestrator>());
+
+        // ── Recover service (scoped — per-request) ─────────────────────────────
+        services.AddScoped<IRecoverService, RecoverService>();
+
+        // ── Fix A: Reconciler background service (generalized: emits the operation-matched
+        // *-completed for either a stuck reset or a stuck recover) ────────────
         services.AddHostedService<ResetReconciler>();
 
         // ── Control SSE broadcaster: LISTEN control_events ────────────────────

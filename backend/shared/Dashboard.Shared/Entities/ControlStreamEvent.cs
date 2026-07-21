@@ -12,7 +12,8 @@ public sealed class ControlStreamEvent
     public Guid Id { get; set; }
 
     /// <summary>
-    /// Event type: <c>reset-initiated</c> | <c>reset-started</c> | <c>reset-completed</c>.
+    /// Event type: <c>reset-initiated</c> | <c>reset-started</c> | <c>reset-completed</c> |
+    /// <c>recover-initiated</c> | <c>recover-started</c> | <c>recover-completed</c>.
     /// Open string — unknown values are no-ops for components.
     /// </summary>
     public required string Type { get; set; }
@@ -29,4 +30,11 @@ public sealed class ControlStreamEvent
 
     /// <summary>Server-assigned UTC timestamp at emit time.</summary>
     public required DateTimeOffset OccurredAt { get; set; }
+
+    /// <summary>
+    /// Opaque per-event data, or <c>null</c> when the event carries none — mirrors
+    /// <see cref="ComponentEvent.Payload"/>. Carries the resolved rewind point
+    /// (<c>{"since":"…"}</c>) on <c>recover-*</c> frames; <c>null</c> on reset frames.
+    /// </summary>
+    public string? Payload { get; set; }
 }

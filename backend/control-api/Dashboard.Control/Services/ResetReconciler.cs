@@ -115,22 +115,25 @@ internal sealed class ResetReconciler(
             return; // Cycle is alive and within its TTL — leave it alone.
 
         // Orphan detected: abort.
+        var operation = string.IsNullOrEmpty(cycle.Operation) ? ControlOperation.Reset : cycle.Operation;
         logger.LogWarning(
-            "Reset reconciler: orphaned cycle detected (state={State}, correlation_id={CorrelationId}, deadline={Deadline}). Aborting.",
-            cycle.State, cycle.CorrelationId, gateMaxDeadline);
+            "Reset reconciler: orphaned {Operation} cycle detected (state={State}, correlation_id={CorrelationId}, deadline={Deadline}). Aborting.",
+            operation, cycle.State, cycle.CorrelationId, gateMaxDeadline);
 
         var abortedResetId = cycle.CorrelationId ?? Guid.Empty;
+        var recoverSince = cycle.RecoverSince;
         var controlStream = sp.GetRequiredService<IControlStreamRepository>();
         var notifier = sp.GetRequiredService<IControlEventNotifier>();
         var stateNotifier = sp.GetService<IResetStateNotifier>();
 
-        // Emit reset-completed so connected components can recover.
-        await EmitOrphanRecoveryEventAsync(controlStream, notifier, abortedResetId, ct);
+        // Emit the operation-matched *-completed (reset-completed | recover-completed) so
+        // connected components can recover.
+        await EmitOrphanRecoveryEventAsync(controlStream, notifier, abortedResetId, operation, recoverSince, ct);
 
         // Transition cycle to idle.
         await ClearCycleToIdleAsync(db, cycle, stateNotifier, ct);
 
-        logger.LogInformation("Reset reconciler: orphaned cycle aborted; state reset to idle.");
+        logger.LogInformation("Reset reconciler: orphaned {Operation} cycle aborted; state reset to idle.", operation);
     }
 
     /// <summary>
@@ -159,10 +162,17 @@ internal sealed class ResetReconciler(
         }
     }
 
+    /// <summary>
+    /// Emits the operation-matched <c>*-completed</c> event (<c>reset-completed</c> for a stuck
+    /// reset, <c>recover-completed</c> — carrying the resolved <c>{"since":"…"}</c> payload — for
+    /// a stuck recovery) so connected components can recover.
+    /// </summary>
     private static async Task EmitOrphanRecoveryEventAsync(
         IControlStreamRepository controlStream,
         IControlEventNotifier notifier,
         Guid abortedResetId,
+        string operation,
+        DateTimeOffset? recoverSince,
         CancellationToken ct)
     {
         if (abortedResetId == Guid.Empty)
@@ -171,10 +181,13 @@ internal sealed class ResetReconciler(
         var completedEvent = new ControlStreamEvent
         {
             Id = Guid.CreateVersion7(),
-            Type = "reset-completed",
+            Type = $"{operation}-completed",
             Component = "*",
             CorrelationId = abortedResetId,
             OccurredAt = DateTimeOffset.UtcNow,
+            Payload = operation == ControlOperation.Recover && recoverSince is { } since
+                ? RecoverPayload.Build(since)
+                : null,
         };
         await controlStream.InsertAsync(completedEvent, ct);
         await notifier.NotifyAsync(completedEvent, ct);
@@ -192,6 +205,8 @@ internal sealed class ResetReconciler(
         cycle.AcksReceived = null;
         cycle.StartedAt = null;
         cycle.DeadlineAt = null;
+        cycle.Operation = ControlOperation.Reset;
+        cycle.RecoverSince = null;
         await db.SaveChangesAsync(ct);
 
         // Notify all instances to update their cached gate flag (Fix C).
