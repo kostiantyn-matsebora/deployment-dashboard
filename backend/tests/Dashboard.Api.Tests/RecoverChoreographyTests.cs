@@ -6,6 +6,7 @@ using Dashboard.Shared.Data;
 using Dashboard.Shared.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 
 namespace Dashboard.Api.Tests;
 
@@ -30,7 +31,16 @@ public sealed class RecoverChoreographyTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
+        // BARRIER (isolation, not detection — issue #423 flake fix). Absorb any orchestrator
+        // leaked from a prior test in this [Collection("api-postgres")] (this class's own,
+        // ResetChoreographyTests', or the reconciler's) *before* this test touches the shared
+        // reset_cycle (id=1) row. See WaitForNoOrchestratorDrivingAsync for why this makes the
+        // whole class deterministic by construction, not by timing.
+        await WaitForNoOrchestratorDrivingAsync();
+
         await _fixture.ResetAsync();
+        await ForceCleanIdleBaselineAsync();
+
         _factory = new TestApiFactory(_fixture.ConnectionString) { UseRealNotifier = true };
         _client = _factory.CreateClient();
         // Allow the broadcasters to establish LISTEN.
@@ -39,8 +49,101 @@ public sealed class RecoverChoreographyTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
+        // Drain: block until *this* test's own orchestrator (if any — e.g. the
+        // Post_Recover_WhileAlreadyInFlight_Returns409/reset-vs-recover 409 tests never send
+        // acks, so their orchestrator is still driving here) has fully released the advisory
+        // lock, i.e. finished its cycle, before the factory (and its ApplicationStopping token)
+        // is torn down. Disposing the factory first is exactly what used to let the drive keep
+        // running past this test's lifetime and contaminate the next one.
+        await WaitForNoOrchestratorDrivingAsync();
+
         _client.Dispose();
         await _factory.DisposeAsync();
+    }
+
+    // ── Isolation barrier (issue #423 flake fix) ────────────────────────────────
+
+    /// <summary>
+    /// The single Postgres advisory-lock key the reset/recover orchestrator and the reconciler
+    /// contend on (D12, NFR-05) — see
+    /// <c>Dashboard.Control.Services.ResetCoordination.AdvisoryLockKey</c>. Hardcoded here
+    /// (rather than referenced) because that constant is <c>internal</c> to
+    /// <c>Dashboard.Control</c>, which only grants <c>InternalsVisibleTo</c> to
+    /// <c>Dashboard.Control.Tests</c> — not this assembly.
+    /// </summary>
+    private const long AdvisoryLockKey = 7_654_321L;
+
+    /// <summary>
+    /// Blocks, bounded, until the choreography advisory lock is free — i.e. no orchestrator
+    /// instance is currently driving a cycle. <c>pg_advisory_lock</c>/<c>pg_advisory_unlock</c>
+    /// are session-scoped: the driving orchestrator's dedicated connection
+    /// (<c>Dashboard.Control.Services.ChoreographyLock</c>) calls <c>pg_advisory_unlock</c> only
+    /// in its <c>finally</c>, strictly *after* the cycle's last write to <c>reset_cycle</c>
+    /// (<c>ChoreographySagaRunner</c>'s try/finally). So the instant this probe's own
+    /// <c>pg_try_advisory_lock</c> succeeds, every write from whoever last held the lock is
+    /// already committed on the server — there is no window left in which a stale write can
+    /// still land. Calling this at the START of every test absorbs any orchestrator leaked from
+    /// a prior test; calling it again at the END drains this test's own orchestrator before the
+    /// next test's start-barrier even needs to run. Because xUnit runs a collection's tests
+    /// serially, a leaked orchestrator is the *only* possible source of concurrency here — this
+    /// barrier closes it by construction, not by racing a fixed timeout against it.
+    /// Fails (loudly, with a diagnostic) rather than hanging forever if the lock is somehow
+    /// never released — that would be a real orchestrator/reconciler bug, not routine flake.
+    /// </summary>
+    private async Task WaitForNoOrchestratorDrivingAsync()
+    {
+        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(20);
+
+        await using var probe = new NpgsqlConnection(_fixture.ConnectionString);
+        await probe.OpenAsync();
+
+        do
+        {
+            await using (var tryLockCmd = new NpgsqlCommand($"SELECT pg_try_advisory_lock({AdvisoryLockKey})", probe))
+            {
+                var acquired = await tryLockCmd.ExecuteScalarAsync();
+                if (acquired is true)
+                {
+                    await using var unlockCmd = new NpgsqlCommand($"SELECT pg_advisory_unlock({AdvisoryLockKey})", probe);
+                    await unlockCmd.ExecuteNonQueryAsync();
+                    return;
+                }
+            }
+
+            await Task.Delay(50);
+        } while (DateTimeOffset.UtcNow < deadline);
+
+        Assert.Fail(
+            $"Advisory lock {AdvisoryLockKey} was still held after 20s of polling — a driving " +
+            "orchestrator appears wedged well past AckTimeoutSeconds/GateMaxTtlSeconds, which is " +
+            "a real bug, not the routine cross-test leak this barrier is designed to absorb.");
+    }
+
+    /// <summary>
+    /// Force-resets <c>reset_cycle</c> (id=1) to the clean idle baseline (state=idle, no
+    /// correlation/acks/timers, operation=reset, recover_since=null — matching
+    /// <c>ChoreographyCycleStore.ResetToIdleBaseline</c>), independent of and in addition to
+    /// <see cref="PostgresFixture.ResetAsync"/>'s own truncate-and-reseed. Belt-and-suspenders:
+    /// makes the barrier's baseline explicit and self-contained rather than relying on the
+    /// fixture's Respawn/reseed implementation staying exactly as-is.
+    /// </summary>
+    private async Task ForceCleanIdleBaselineAsync()
+    {
+        var optionsBuilder = new DbContextOptionsBuilder<DashboardDbContext>();
+        optionsBuilder.UseNpgsql(_fixture.ConnectionString);
+        await using var db = new DashboardDbContext(optionsBuilder.Options);
+
+        await db.ResetCycles
+            .Where(c => c.Id == 1)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(c => c.State, "idle")
+                .SetProperty(c => c.CorrelationId, (Guid?)null)
+                .SetProperty(c => c.ExpectedComponents, (string[]?)null)
+                .SetProperty(c => c.AcksReceived, (string[]?)null)
+                .SetProperty(c => c.StartedAt, (DateTimeOffset?)null)
+                .SetProperty(c => c.DeadlineAt, (DateTimeOffset?)null)
+                .SetProperty(c => c.Operation, "reset")
+                .SetProperty(c => c.RecoverSince, (DateTimeOffset?)null));
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
