@@ -36,6 +36,14 @@ public sealed class PollLoop(
     public bool IsPaused => _isPaused;
 
     /// <summary>
+    /// This loop's adapter — exposed so the control-plane listener can build a recover
+    /// rewind cursor via <see cref="ICiCdAdapter.RewindTo"/> before calling
+    /// <see cref="RewindAndResume"/> (§5.10.6). The loop still owns cache-clearing /
+    /// cursor-injection; this only lets the caller reach the adapter that produces the cursor.
+    /// </summary>
+    public ICiCdAdapter Adapter => adapter;
+
+    /// <summary>
     /// Pauses the loop after the current in-flight POST completes (§5.10.3).
     /// Idempotent — safe to call while already paused.
     /// </summary>
@@ -65,6 +73,29 @@ public sealed class PollLoop(
         try { _resumeGate.Release(); } catch (SemaphoreFullException) { /* already at capacity — already running */ }
         logger.LogInformation(
             "[{Adapter}] poll loop resumed with clean slate (caches cleared, cursor dropped — backfill will trigger)",
+            adapter.AdapterId);
+    }
+
+    /// <summary>
+    /// Recover saga (§5.10.6): resumes the loop with a caller-supplied, already-rewound
+    /// NON-null cursor (built via <see cref="ICiCdAdapter.RewindTo"/>) instead of dropping it —
+    /// the opposite of <see cref="DropCursorAndResume"/>: recovery stays on the incremental
+    /// poll branch and never triggers backfill. Also clears the adapter's windowed dedup
+    /// caches so a warm conditional-request hit doesn't reuse the narrow pre-rewind window.
+    /// Idempotent.
+    /// </summary>
+    public void RewindAndResume(string cursor)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(cursor);
+
+        adapter.ResetState();
+        _pendingCursorOverride = cursor;
+        _hasPendingCursorOverride = true;
+        _isPaused = false;
+        reporting?.Readiness?.SetPausedForReset(false);
+        try { _resumeGate.Release(); } catch (SemaphoreFullException) { /* already at capacity — already running */ }
+        logger.LogInformation(
+            "[{Adapter}] poll loop resumed via recover rewind (caches cleared, incremental cursor injected)",
             adapter.AdapterId);
     }
 
