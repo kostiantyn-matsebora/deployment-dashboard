@@ -2,6 +2,9 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Dashboard.Api.Tests.Helpers;
+using Dashboard.Shared.Data;
+using Dashboard.Shared.Entities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Dashboard.Api.Tests;
@@ -158,10 +161,50 @@ public sealed class RecoverChoreographyTests : IAsyncLifetime
     {
         var first = await _client.SendAsync(RecoverSinceDaysBack(1));
         Assert.Equal(HttpStatusCode.Accepted, first.StatusCode);
+        var firstBody = await first.Content.ReadFromJsonAsync<JsonElement>();
+        var correlationId = Guid.Parse(firstBody.GetProperty("correlation_id").GetString()!);
+
+        // Deterministically observe our own claim on the shared reset_cycle row (id=1) before
+        // racing the conflicting second request. Without this, a neighboring test's fire-and-forget
+        // orchestrator (RecoverService/ResetService's `_ = Task.Run(...)`) can still be alive
+        // against the same Postgres container after its own WebApplicationFactory was disposed,
+        // occasionally flipping the row back to idle in the gap between these two requests and
+        // making the 409 assertion flaky. This does not change recover/409 semantics — it only
+        // closes the race window by confirming the in-flight state actually landed first.
+        await AssertCycleClaimedAsync(correlationId, "draining", TimeSpan.FromSeconds(2));
 
         var second = await _client.SendAsync(RecoverSinceDaysBack(1));
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
         Assert.Equal("application/problem+json", second.Content.Headers.ContentType?.MediaType);
+    }
+
+    /// <summary>
+    /// Polls <c>reset_cycle</c> (id=1) directly until its <c>state</c>/<c>correlation_id</c> match
+    /// the just-accepted operation, or <paramref name="timeout"/> elapses. Fails with a diagnostic
+    /// message (not a silent pass-through) if the claim never lands as expected — surfacing stale
+    /// cross-test orchestrator contamination distinctly from a genuine 409-semantics regression.
+    /// </summary>
+    private async Task AssertCycleClaimedAsync(Guid expectedCorrelationId, string expectedState, TimeSpan timeout)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
+
+        var deadline = DateTimeOffset.UtcNow + timeout;
+        ResetCycle? cycle;
+        do
+        {
+            cycle = await db.ResetCycles.AsNoTracking().SingleOrDefaultAsync(c => c.Id == 1);
+            if (cycle is not null && cycle.CorrelationId == expectedCorrelationId && cycle.State == expectedState)
+                return;
+
+            await Task.Delay(25);
+        } while (DateTimeOffset.UtcNow < deadline);
+
+        Assert.Fail(
+            $"reset_cycle row did not deterministically reach state='{expectedState}' with " +
+            $"correlation_id={expectedCorrelationId} within {timeout}; observed " +
+            $"state='{cycle?.State}', correlation_id={cycle?.CorrelationId} " +
+            "(likely stale cross-test orchestrator contamination on the shared row).");
     }
 
     [Fact]

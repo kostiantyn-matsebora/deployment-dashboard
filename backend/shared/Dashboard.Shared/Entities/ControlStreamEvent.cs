@@ -1,3 +1,6 @@
+using System.Text.Json.Serialization;
+using Dashboard.Shared.Json;
+
 namespace Dashboard.Shared.Entities;
 
 /// <summary>
@@ -35,6 +38,13 @@ public sealed class ControlStreamEvent
     /// Opaque per-event data, or <c>null</c> when the event carries none — mirrors
     /// <see cref="ComponentEvent.Payload"/>. Carries the resolved rewind point
     /// (<c>{"since":"…"}</c>) on <c>recover-*</c> frames; <c>null</c> on reset frames.
+    /// Stored verbatim as raw JSON text (matches the <c>jsonb</c>/<c>TEXT</c> column — EF Core
+    /// maps it directly, untouched by the converter below). <see cref="RawJsonStringConverter"/>
+    /// makes System.Text.Json (de)serialise it as a nested JSON value — not a doubly-escaped
+    /// string — on every wire path that serialises this entity directly: the SSE
+    /// <c>data:</c> frame and the control-events NOTIFY/broadcaster round-trip (OpenAPI
+    /// <c>ControlStreamEvent.payload</c>: <c>type: object, nullable: true</c>).
     /// </summary>
+    [JsonConverter(typeof(RawJsonStringConverter))]
     public string? Payload { get; set; }
 }
