@@ -838,7 +838,12 @@ paths:
         `since` timestamp or a relative `days_back` count; **exactly one** must be
         supplied. `days_back` is resolved server-side to `since = now − days_back days`.
         The resolved `since` is echoed in the `202` body and carried in the `payload`
-        of every `recover-*` control event.
+        of the terminal `recover-completed` control event only (`{"since": "…"}`); the
+        earlier `recover-initiated` / `recover-started` frames carry `payload: null`.
+
+        **Lookback bound.** `days_back` has a server-configured upper bound (default 90
+        days, operator-tunable); an absolute `since` must likewise fall within that
+        window. A `days_back` or `since` older than the bound is rejected with `422`.
 
         **Mutually exclusive with reset.** Recover and reset share one in-flight slot;
         a `POST` while either a recover or a reset is already draining or running
@@ -868,8 +873,10 @@ paths:
         '422':
           description: |
             Request body validation failed — the `since` XOR `days_back` rule was
-            violated (both or neither supplied), or an unknown field was present on
-            `RecoverRequest` (D5: unknown write fields are rejected).
+            violated (both or neither supplied), the rewind point exceeded the
+            server-configured lookback bound (`days_back` above the maximum, default 90
+            days, or an absolute `since` older than that window), or an unknown field
+            was present on `RecoverRequest` (D5: unknown write fields are rejected).
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
@@ -914,11 +921,12 @@ paths:
         - `reset-completed` — data cleared and gates released; components recover.
 
         **Current event types — recover choreography (`component: "*"`):** the
-        non-destructive counterpart. Same drain/gate/release shape; each frame carries
-        the resolved rewind point in its `payload` (`{"since": "…"}`).
-        - `recover-initiated` — recovery accepted; components drain and ack (as for reset).
-        - `recover-started` — acks in (or ack timeout elapsed); fetcher cursors being rewound.
-        - `recover-completed` — cursors rewound to `since`; components resume incremental polling.
+        non-destructive counterpart. Same drain/gate/release shape; only the terminal
+        `recover-completed` frame carries the resolved rewind point in its `payload`
+        (`{"since": "…"}`) — the earlier frames carry `payload: null`.
+        - `recover-initiated` — recovery accepted; components drain and ack (as for reset). `payload: null`.
+        - `recover-started` — acks in (or ack timeout elapsed); fetcher cursors being rewound. `payload: null`.
+        - `recover-completed` — cursors rewound to `since`; components resume incremental polling. Carries `payload: {"since": "…"}`.
 
         Every frame carries `correlation_id` (the process id). On `reset-initiated`
         it equals the frame's own `id` (origin); on `reset-started` / `reset-completed`
@@ -2120,6 +2128,8 @@ components:
               description: |
                 Absolute UTC instant to rewind fetcher cursors to; events on or after
                 this instant are re-fetched. Must not be combined with `days_back`.
+                Must fall within the server-configured lookback window (default 90 days
+                back); an instant older than the bound is rejected with `422`.
         - title: RelativeDaysBack
           type: object
           required: [days_back]
@@ -2131,6 +2141,9 @@ components:
               description: |
                 Whole days to rewind from the current server time; resolved to
                 `since = now − days_back days`. Must not be combined with `since`.
+                Capped by a server-configured upper bound (default 90 days,
+                operator-tunable — no fixed schema `maximum`); a value above the bound
+                is rejected with `422`.
 
     RecoverAccepted:
       type: object
@@ -2157,7 +2170,8 @@ components:
           description: |
             The **resolved** absolute rewind point — echoed verbatim when supplied as
             `since`, or computed as `now − days_back days`. Carried in the `payload`
-            of every `recover-*` control event (`{"since": "…"}`).
+            of the terminal `recover-completed` control event only (`{"since": "…"}`);
+            the earlier `recover-initiated` / `recover-started` frames carry `payload: null`.
         accepted_at:
           type: string
           format: date-time
@@ -2232,9 +2246,10 @@ components:
           additionalProperties: true
           description: |
             Opaque per-event data, or `null` when the event carries none — mirrors the
-            `payload` on component events. Carries the resolved rewind point on the
-            `recover-*` frames (`{"since":"2026-07-14T00:00:00Z"}`); `null` on the reset
-            choreography frames. Not required; consumers MUST tolerate its absence.
+            `payload` on component events. Carries the resolved rewind point only on the
+            terminal `recover-completed` frame (`{"since":"2026-07-14T00:00:00Z"}`);
+            `null` on the `recover-initiated` / `recover-started` frames and on every
+            reset choreography frame. Not required; consumers MUST tolerate its absence.
 
     ComponentEvent:
       type: object
