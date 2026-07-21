@@ -2,11 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Dashboard.Api.Tests.Helpers;
-using Dashboard.Shared.Data;
-using Dashboard.Shared.Entities;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Npgsql;
 
 namespace Dashboard.Api.Tests;
 
@@ -31,15 +27,10 @@ public sealed class RecoverChoreographyTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        // BARRIER (isolation, not detection — issue #423 flake fix). Absorb any orchestrator
-        // leaked from a prior test in this [Collection("api-postgres")] (this class's own,
-        // ResetChoreographyTests', or the reconciler's) *before* this test touches the shared
-        // reset_cycle (id=1) row. See WaitForNoOrchestratorDrivingAsync for why this makes the
-        // whole class deterministic by construction, not by timing.
-        await WaitForNoOrchestratorDrivingAsync();
-
+        // PostgresFixture.ResetAsync truncates all app tables (Respawn) and re-seeds reset_cycle
+        // (id=1) to a clean idle row — see DisposeAsync for why no orchestrator from a prior
+        // test in this [Collection("api-postgres")] can still be driving when this runs.
         await _fixture.ResetAsync();
-        await ForceCleanIdleBaselineAsync();
 
         _factory = new TestApiFactory(_fixture.ConnectionString) { UseRealNotifier = true };
         _client = _factory.CreateClient();
@@ -49,101 +40,19 @@ public sealed class RecoverChoreographyTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        // Drain: block until *this* test's own orchestrator (if any — e.g. the
-        // Post_Recover_WhileAlreadyInFlight_Returns409/reset-vs-recover 409 tests never send
-        // acks, so their orchestrator is still driving here) has fully released the advisory
-        // lock, i.e. finished its cycle, before the factory (and its ApplicationStopping token)
-        // is torn down. Disposing the factory first is exactly what used to let the drive keep
-        // running past this test's lifetime and contaminate the next one.
-        await WaitForNoOrchestratorDrivingAsync();
+        // Drain (issue #423 flake fix, 2nd pass): block until *this* test's own orchestrator
+        // (if any — e.g. the in-flight-409 tests never send acks, so their orchestrator is
+        // still driving here) has reached its own terminal 'idle' write on reset_cycle (id=1),
+        // BEFORE the factory (and its ApplicationStopping token) is torn down. Disposing the
+        // factory first is exactly what used to let the drive keep running past this test's
+        // lifetime and clobber a later test's claim on the shared row (see
+        // ResetCycleQuiescence for the full root-cause writeup — an advisory-lock-free probe is
+        // NOT sufficient because the lock is acquired only *inside* the fire-and-forget
+        // Task.Run, after the endpoint already returned 202 and claimed the row).
+        await ResetCycleQuiescence.WaitForIdleAsync(_fixture.ConnectionString);
 
         _client.Dispose();
         await _factory.DisposeAsync();
-    }
-
-    // ── Isolation barrier (issue #423 flake fix) ────────────────────────────────
-
-    /// <summary>
-    /// The single Postgres advisory-lock key the reset/recover orchestrator and the reconciler
-    /// contend on (D12, NFR-05) — see
-    /// <c>Dashboard.Control.Services.ResetCoordination.AdvisoryLockKey</c>. Hardcoded here
-    /// (rather than referenced) because that constant is <c>internal</c> to
-    /// <c>Dashboard.Control</c>, which only grants <c>InternalsVisibleTo</c> to
-    /// <c>Dashboard.Control.Tests</c> — not this assembly.
-    /// </summary>
-    private const long AdvisoryLockKey = 7_654_321L;
-
-    /// <summary>
-    /// Blocks, bounded, until the choreography advisory lock is free — i.e. no orchestrator
-    /// instance is currently driving a cycle. <c>pg_advisory_lock</c>/<c>pg_advisory_unlock</c>
-    /// are session-scoped: the driving orchestrator's dedicated connection
-    /// (<c>Dashboard.Control.Services.ChoreographyLock</c>) calls <c>pg_advisory_unlock</c> only
-    /// in its <c>finally</c>, strictly *after* the cycle's last write to <c>reset_cycle</c>
-    /// (<c>ChoreographySagaRunner</c>'s try/finally). So the instant this probe's own
-    /// <c>pg_try_advisory_lock</c> succeeds, every write from whoever last held the lock is
-    /// already committed on the server — there is no window left in which a stale write can
-    /// still land. Calling this at the START of every test absorbs any orchestrator leaked from
-    /// a prior test; calling it again at the END drains this test's own orchestrator before the
-    /// next test's start-barrier even needs to run. Because xUnit runs a collection's tests
-    /// serially, a leaked orchestrator is the *only* possible source of concurrency here — this
-    /// barrier closes it by construction, not by racing a fixed timeout against it.
-    /// Fails (loudly, with a diagnostic) rather than hanging forever if the lock is somehow
-    /// never released — that would be a real orchestrator/reconciler bug, not routine flake.
-    /// </summary>
-    private async Task WaitForNoOrchestratorDrivingAsync()
-    {
-        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(20);
-
-        await using var probe = new NpgsqlConnection(_fixture.ConnectionString);
-        await probe.OpenAsync();
-
-        do
-        {
-            await using (var tryLockCmd = new NpgsqlCommand($"SELECT pg_try_advisory_lock({AdvisoryLockKey})", probe))
-            {
-                var acquired = await tryLockCmd.ExecuteScalarAsync();
-                if (acquired is true)
-                {
-                    await using var unlockCmd = new NpgsqlCommand($"SELECT pg_advisory_unlock({AdvisoryLockKey})", probe);
-                    await unlockCmd.ExecuteNonQueryAsync();
-                    return;
-                }
-            }
-
-            await Task.Delay(50);
-        } while (DateTimeOffset.UtcNow < deadline);
-
-        Assert.Fail(
-            $"Advisory lock {AdvisoryLockKey} was still held after 20s of polling — a driving " +
-            "orchestrator appears wedged well past AckTimeoutSeconds/GateMaxTtlSeconds, which is " +
-            "a real bug, not the routine cross-test leak this barrier is designed to absorb.");
-    }
-
-    /// <summary>
-    /// Force-resets <c>reset_cycle</c> (id=1) to the clean idle baseline (state=idle, no
-    /// correlation/acks/timers, operation=reset, recover_since=null — matching
-    /// <c>ChoreographyCycleStore.ResetToIdleBaseline</c>), independent of and in addition to
-    /// <see cref="PostgresFixture.ResetAsync"/>'s own truncate-and-reseed. Belt-and-suspenders:
-    /// makes the barrier's baseline explicit and self-contained rather than relying on the
-    /// fixture's Respawn/reseed implementation staying exactly as-is.
-    /// </summary>
-    private async Task ForceCleanIdleBaselineAsync()
-    {
-        var optionsBuilder = new DbContextOptionsBuilder<DashboardDbContext>();
-        optionsBuilder.UseNpgsql(_fixture.ConnectionString);
-        await using var db = new DashboardDbContext(optionsBuilder.Options);
-
-        await db.ResetCycles
-            .Where(c => c.Id == 1)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(c => c.State, "idle")
-                .SetProperty(c => c.CorrelationId, (Guid?)null)
-                .SetProperty(c => c.ExpectedComponents, (string[]?)null)
-                .SetProperty(c => c.AcksReceived, (string[]?)null)
-                .SetProperty(c => c.StartedAt, (DateTimeOffset?)null)
-                .SetProperty(c => c.DeadlineAt, (DateTimeOffset?)null)
-                .SetProperty(c => c.Operation, "reset")
-                .SetProperty(c => c.RecoverSince, (DateTimeOffset?)null));
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -262,52 +171,17 @@ public sealed class RecoverChoreographyTests : IAsyncLifetime
     [Fact]
     public async Task Post_Recover_WhileAlreadyInFlight_Returns409()
     {
+        // The first request claims reset_cycle (id=1) SYNCHRONOUSLY (state='draining') before
+        // returning 202 — the fire-and-forget Task.Run only starts *after* that claim lands.
+        // With no leaked orchestrator able to outlive a prior test's DisposeAsync (see that
+        // method's drain-to-idle barrier), the row is guaranteed idle at the top of this test
+        // and non-idle for the immediate second request below — no polling needed.
         var first = await _client.SendAsync(RecoverSinceDaysBack(1));
         Assert.Equal(HttpStatusCode.Accepted, first.StatusCode);
-        var firstBody = await first.Content.ReadFromJsonAsync<JsonElement>();
-        var correlationId = Guid.Parse(firstBody.GetProperty("correlation_id").GetString()!);
-
-        // Deterministically observe our own claim on the shared reset_cycle row (id=1) before
-        // racing the conflicting second request. Without this, a neighboring test's fire-and-forget
-        // orchestrator (RecoverService/ResetService's `_ = Task.Run(...)`) can still be alive
-        // against the same Postgres container after its own WebApplicationFactory was disposed,
-        // occasionally flipping the row back to idle in the gap between these two requests and
-        // making the 409 assertion flaky. This does not change recover/409 semantics — it only
-        // closes the race window by confirming the in-flight state actually landed first.
-        await AssertCycleClaimedAsync(correlationId, "draining", TimeSpan.FromSeconds(2));
 
         var second = await _client.SendAsync(RecoverSinceDaysBack(1));
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
         Assert.Equal("application/problem+json", second.Content.Headers.ContentType?.MediaType);
-    }
-
-    /// <summary>
-    /// Polls <c>reset_cycle</c> (id=1) directly until its <c>state</c>/<c>correlation_id</c> match
-    /// the just-accepted operation, or <paramref name="timeout"/> elapses. Fails with a diagnostic
-    /// message (not a silent pass-through) if the claim never lands as expected — surfacing stale
-    /// cross-test orchestrator contamination distinctly from a genuine 409-semantics regression.
-    /// </summary>
-    private async Task AssertCycleClaimedAsync(Guid expectedCorrelationId, string expectedState, TimeSpan timeout)
-    {
-        using var scope = _factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
-
-        var deadline = DateTimeOffset.UtcNow + timeout;
-        ResetCycle? cycle;
-        do
-        {
-            cycle = await db.ResetCycles.AsNoTracking().SingleOrDefaultAsync(c => c.Id == 1);
-            if (cycle is not null && cycle.CorrelationId == expectedCorrelationId && cycle.State == expectedState)
-                return;
-
-            await Task.Delay(25);
-        } while (DateTimeOffset.UtcNow < deadline);
-
-        Assert.Fail(
-            $"reset_cycle row did not deterministically reach state='{expectedState}' with " +
-            $"correlation_id={expectedCorrelationId} within {timeout}; observed " +
-            $"state='{cycle?.State}', correlation_id={cycle?.CorrelationId} " +
-            "(likely stale cross-test orchestrator contamination on the shared row).");
     }
 
     [Fact]
@@ -515,6 +389,16 @@ public sealed class RecoverReconcilerIntegrationTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
+        // Same drain-to-idle barrier as RecoverChoreographyTests/ResetChoreographyTests
+        // (issue #423 flake fix, 2nd pass): this class's own test already asserts the row
+        // reaches 'idle' via the reconciler abort before this runs, so in practice this
+        // returns immediately — but keeping it here, symmetric with the other
+        // orchestrator-adjacent classes in this collection, means nothing downstream ever
+        // has to assume "the test's own assertion already proved quiescence" as an implicit
+        // teardown contract; the barrier enforces it directly regardless of what a future
+        // edit to the test body does.
+        await ResetCycleQuiescence.WaitForIdleAsync(_fixture.ConnectionString);
+
         _client.Dispose();
         await _factory.DisposeAsync();
     }
