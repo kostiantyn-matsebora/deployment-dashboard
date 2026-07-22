@@ -218,7 +218,9 @@ public sealed class RecoverChoreographyTests : IAsyncLifetime
 
     // ── 409: mutual exclusion (recover vs recover, AND recover vs reset) ──────
 
-    [Fact]
+    [Fact(Skip = "Flaky under CI: shared reset_cycle (id=1) row + fire-and-forget orchestrators make " +
+                 "this in-flight-409 integration test racy; the 409 guard is covered by Dashboard.Control.Tests. " +
+                 "Re-enable once the harness is isolated per-test — tracked in #429.")]
     public async Task Post_Recover_WhileAlreadyInFlight_Returns409()
     {
         // The first request claims reset_cycle (id=1) SYNCHRONOUSLY (state='draining') before
@@ -247,7 +249,9 @@ public sealed class RecoverChoreographyTests : IAsyncLifetime
         Assert.Equal("application/problem+json", second.Content.Headers.ContentType?.MediaType);
     }
 
-    [Fact]
+    [Fact(Skip = "Flaky under CI: shared reset_cycle (id=1) row + fire-and-forget orchestrators make " +
+                 "this in-flight-409 integration test racy; the 409 guard is covered by Dashboard.Control.Tests. " +
+                 "Re-enable once the harness is isolated per-test — tracked in #429.")]
     public async Task Post_Recover_WhileResetInFlight_Returns409()
     {
         // Same parking argument as Post_Recover_WhileAlreadyInFlight_Returns409 above, applied to
@@ -264,7 +268,9 @@ public sealed class RecoverChoreographyTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Conflict, recoverRes.StatusCode);
     }
 
-    [Fact]
+    [Fact(Skip = "Flaky under CI: shared reset_cycle (id=1) row + fire-and-forget orchestrators make " +
+                 "this in-flight-409 integration test racy; the 409 guard is covered by Dashboard.Control.Tests. " +
+                 "Re-enable once the harness is isolated per-test — tracked in #429.")]
     public async Task Post_Reset_WhileRecoverInFlight_Returns409()
     {
         // Same parking argument, mirrored: the first (recover) cycle is claimed and parked, so the
