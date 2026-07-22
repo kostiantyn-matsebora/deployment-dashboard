@@ -2,6 +2,9 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Dashboard.Api.Tests.Helpers;
+using Dashboard.Shared.Data;
+using Dashboard.Shared.Entities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Dashboard.Api.Tests;
@@ -172,12 +175,16 @@ public sealed class RecoverChoreographyTests : IAsyncLifetime
     public async Task Post_Recover_WhileAlreadyInFlight_Returns409()
     {
         // The first request claims reset_cycle (id=1) SYNCHRONOUSLY (state='draining') before
-        // returning 202 — the fire-and-forget Task.Run only starts *after* that claim lands.
-        // With no leaked orchestrator able to outlive a prior test's DisposeAsync (see that
-        // method's drain-to-idle barrier), the row is guaranteed idle at the top of this test
-        // and non-idle for the immediate second request below — no polling needed.
+        // returning 202 — the fire-and-forget Task.Run only starts *after* that claim lands. But
+        // "returned 202" and "the claim is observable to the NEXT request" are not the same
+        // instant under CI load (connection-pool/scheduler jitter between this response landing
+        // and the second SendAsync being dispatched) — so confirm the claim is actually visible
+        // before racing the second request; see AssertCycleClaimedAsync.
         var first = await _client.SendAsync(RecoverSinceDaysBack(1));
         Assert.Equal(HttpStatusCode.Accepted, first.StatusCode);
+        var firstBody = await first.Content.ReadFromJsonAsync<JsonElement>();
+        var correlationId = Guid.Parse(firstBody.GetProperty("correlation_id").GetString()!);
+        await AssertCycleClaimedAsync(correlationId, TimeSpan.FromSeconds(10));
 
         var second = await _client.SendAsync(RecoverSinceDaysBack(1));
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
@@ -189,6 +196,9 @@ public sealed class RecoverChoreographyTests : IAsyncLifetime
     {
         var resetRes = await _client.SendAsync(ResetRequest());
         Assert.Equal(HttpStatusCode.Accepted, resetRes.StatusCode);
+        var resetBody = await resetRes.Content.ReadFromJsonAsync<JsonElement>();
+        var correlationId = Guid.Parse(resetBody.GetProperty("correlation_id").GetString()!);
+        await AssertCycleClaimedAsync(correlationId, TimeSpan.FromSeconds(10));
 
         var recoverRes = await _client.SendAsync(RecoverSinceDaysBack(1));
         Assert.Equal(HttpStatusCode.Conflict, recoverRes.StatusCode);
@@ -199,9 +209,54 @@ public sealed class RecoverChoreographyTests : IAsyncLifetime
     {
         var recoverRes = await _client.SendAsync(RecoverSinceDaysBack(1));
         Assert.Equal(HttpStatusCode.Accepted, recoverRes.StatusCode);
+        var recoverBody = await recoverRes.Content.ReadFromJsonAsync<JsonElement>();
+        var correlationId = Guid.Parse(recoverBody.GetProperty("correlation_id").GetString()!);
+        await AssertCycleClaimedAsync(correlationId, TimeSpan.FromSeconds(10));
 
         var resetRes = await _client.SendAsync(ResetRequest());
         Assert.Equal(HttpStatusCode.Conflict, resetRes.StatusCode);
+    }
+
+    /// <summary>
+    /// Polls <c>reset_cycle</c> (id=1) directly until it is observably claimed by the
+    /// just-accepted operation — <c>state != 'idle'</c> AND <c>correlation_id</c> matches — or
+    /// <paramref name="timeout"/> elapses. This is a claim-confirmation, not the isolation
+    /// barrier that <see cref="ResetCycleQuiescence"/> provides in <c>DisposeAsync</c>: the
+    /// endpoint claims the row synchronously before returning 202, but nothing guarantees that
+    /// write is visible to the *next* HTTP request the instant this one returns under CI
+    /// scheduler/connection-pool load, and the three in-flight-409 tests here deliberately never
+    /// send an ack, so there is no other synchronization point before the second POST races the
+    /// claim. Checking <c>state != 'idle'</c> (rather than a specific state like "draining")
+    /// tolerates the orchestrator having already advanced past the initial claim by the time we
+    /// observe it — any non-idle state with the matching correlation still proves the row is
+    /// held by *this* operation and not available for a second claim. Bounded well under
+    /// AckTimeoutSeconds (10s) so a genuine miss — e.g. the claim never landing, or landing under
+    /// a different correlation_id (real orchestrator/reconciler bug) — fails loudly instead of
+    /// masking a race as a false-positive 409.
+    /// </summary>
+    private async Task AssertCycleClaimedAsync(Guid expectedCorrelationId, TimeSpan timeout)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<DashboardDbContext>();
+
+        var deadline = DateTimeOffset.UtcNow + timeout;
+        ResetCycle? cycle;
+        do
+        {
+            cycle = await db.ResetCycles.AsNoTracking().SingleOrDefaultAsync(c => c.Id == 1);
+            if (cycle is not null && cycle.State != "idle" && cycle.CorrelationId == expectedCorrelationId)
+                return;
+
+            await Task.Delay(25);
+        } while (DateTimeOffset.UtcNow < deadline);
+
+        Assert.Fail(
+            $"reset_cycle (id=1) was not observably claimed (state != 'idle' with " +
+            $"correlation_id={expectedCorrelationId}) within {timeout.TotalSeconds:F0}s of the " +
+            $"accepting POST (last observed state='{cycle?.State}', " +
+            $"correlation_id={cycle?.CorrelationId}). The claim write is synchronous before 202 " +
+            "is returned, so a miss here is a genuine orchestrator/reconciler bug, not routine " +
+            "cross-request timing.");
     }
 
     // ── 422: since XOR days_back ──────────────────────────────────────────────
