@@ -42,6 +42,8 @@ fetcher:
     token: ""             # via secret
     repos: ""
     versionSource: "attribute:sha"
+    rateLimit: 0              # 0 = auto-discover from GitHub /rate_limit on startup (F16)
+    rateLimitBudgetPct: 30
   resources: {}
 
 # ── Secrets ──────────────────────────────────────────────────────────────────

@@ -61,11 +61,12 @@ helm install deployment-dashboard oci://ghcr.io/kostiantyn-matsebora/charts/depl
 |---|---|
 | `image.tag` | Pin to a release tag; empty defaults to the chart's `appVersion`. |
 | `gateway.enabled` | `true` (default) = [Option A](#routing-options) — nginx gateway pod + one Ingress. `false` = [Option B](#routing-options) — native Ingress path routing, no gateway pod. |
-| `ingress.enabled` | Expose the stack through an Ingress Controller. |
+| `ingress.enabled` | `true` (default) — expose the stack through an Ingress Controller. The Install examples set it explicitly for clarity; it's already on. |
 | `ingress.className` | Ingress class to target (e.g. `nginx`). |
 | `ingress.host` | Public hostname routed to the stack. |
 | `ingress.tls` | TLS configuration for the Ingress (secret name, hosts). |
 | `postgresql.enabled` | `true` (default) = bundled in-chart PostgreSQL (full mode). `false` = external managed PostgreSQL via `externalDatabase.*` (standalone mode). |
+| `postgresql.auth.password` | Bundled PostgreSQL password. Required when `postgresql.enabled` and no `postgresql.auth.existingSecret`. |
 | `externalDatabase.host` / `.port` / `.database` / `.username` / `.existingSecret` | External PostgreSQL connection details (standalone mode only). |
 | `fetcher.enabled` | Opt-in pull-mode Fetcher; pair with `fetcher.github.*` for the GitHub token and repos to poll. |
 | `apiKey` | Write-endpoint secret (`X-Api-Key`). Required. |
@@ -107,6 +108,6 @@ Chart versions track dashboard releases in lockstep with `image.tag` — pin bot
 
 ## Networking & security
 
-- The bundled PostgreSQL uses a static password via a Kubernetes Secret (`postgresql.auth.password` or `existingSecret`) — there is no managed-identity auth path on Kubernetes. **Azure managed-identity AAD auth stays Azure-only**, available through the [Azure (Terraform)](./azure-terraform.md) path instead.
+- The bundled PostgreSQL uses a static password via a Kubernetes Secret (`postgresql.auth.password` or `postgresql.auth.existingSecret`) — there is no managed-identity auth path on Kubernetes. **Azure managed-identity AAD auth stays Azure-only**, available through the [Azure (Terraform)](./azure-terraform.md) path instead.
 - With `gateway.enabled: true` (Option A), the gateway pod is the **single public surface** (GW1) — frontend and API stay internal Services, reachable only through the gateway's Ingress.
 - Store `apiKey` / `controlApiKey` in a Secret (`existingSecret`) rather than passing them as plain `--set` values in production — Helm records `--set` values in its release history.

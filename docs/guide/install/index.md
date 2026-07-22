@@ -98,7 +98,7 @@ Two independent axes pick your profile:
 | Method | When to use |
 |---|---|
 | [Docker Compose](./docker-compose.md) | Self-hosted — any Linux/Windows host with Docker installed. Full control of infra. |
-| [Kubernetes (Helm)](./kubernetes.md) | Existing cluster you own — versioned Helm chart, published to GHCR/Artifact Hub. |
+| [Kubernetes (Helm)](./kubernetes.md) | Existing cluster you own — versioned Helm chart, published to GHCR; Artifact Hub listing pending registration. |
 | [Azure (Terraform)](./azure-terraform.md) | Managed cloud — zero-ops Azure Container Apps stack, provisioned end-to-end by Terraform. |
 
 ## Shared prerequisites

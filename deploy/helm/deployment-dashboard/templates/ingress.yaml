@@ -7,9 +7,12 @@ metadata:
     {{- include "deployment-dashboard.labels" . | nindent 4 }}
   annotations:
     {{- if not .Values.gateway.enabled }}
-    # SSE note (docs/GATEWAY_SPECIFICATION.md §5): ingress-nginx passes SSE
-    # through by default. This annotation is added on the api path for safety
-    # so /api/events/stream is never buffered by the ingress controller.
+    # SSE note (docs/GATEWAY_SPECIFICATION.md §5): required so /api/events/stream
+    # is never buffered by the ingress controller. proxy-buffering is an
+    # Ingress-resource-level annotation in ingress-nginx (no per-path scoping
+    # here) — it disables buffering for ALL paths on this Ingress, including
+    # "/" -> frontend static assets, not just /api. That's benign for static
+    # assets, but be aware this is not api-path-scoped.
     nginx.ingress.kubernetes.io/proxy-buffering: "off"
     {{- end }}
     {{- with .Values.ingress.annotations }}

@@ -57,7 +57,9 @@
             "baseUrl": { "type": "string" },
             "token": { "type": "string" },
             "repos": { "type": "string" },
-            "versionSource": { "type": "string" }
+            "versionSource": { "type": "string" },
+            "rateLimit": { "type": "integer", "minimum": 0 },
+            "rateLimitBudgetPct": { "type": "integer", "minimum": 1, "maximum": 100 }
           }
         },
         "resources": { "type": "object" }

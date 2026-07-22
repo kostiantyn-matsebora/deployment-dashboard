@@ -50,6 +50,14 @@ spec:
               value: "demo-org/storefront,demo-org/platform,demo-org/operations,demo-org/data-pipeline"
             - name: GITHUB_VERSION_SOURCE
               value: "artifact:version.txt"
+            - name: GITHUB_RATE_LIMIT
+              value: {{ .Values.fetcher.github.rateLimit | quote }}
+            # Demo mirrors docker-compose.demo.yaml fetcher-host's fixed demo budget.
+            - name: GITHUB_RATE_LIMIT_BUDGET_PCT
+              value: "80"
+            # Slow-cadence preset discovery (issue #391) — demo-only responsiveness tuning.
+            - name: DISCOVERY_INTERVAL_SECONDS
+              value: "30"
             {{- else }}
             - name: POLL_INTERVAL_SECONDS
               value: {{ .Values.fetcher.pollIntervalSeconds | quote }}
@@ -61,6 +69,11 @@ spec:
               value: {{ .Values.fetcher.github.repos | quote }}
             - name: GITHUB_VERSION_SOURCE
               value: {{ .Values.fetcher.github.versionSource | quote }}
+            # GITHUB_RATE_LIMIT = 0 -> discovered from GitHub /rate_limit on startup (F16).
+            - name: GITHUB_RATE_LIMIT
+              value: {{ .Values.fetcher.github.rateLimit | quote }}
+            - name: GITHUB_RATE_LIMIT_BUDGET_PCT
+              value: {{ .Values.fetcher.github.rateLimitBudgetPct | quote }}
             {{- end }}
           livenessProbe:
             httpGet:
