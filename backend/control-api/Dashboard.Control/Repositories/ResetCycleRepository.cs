@@ -64,4 +64,28 @@ internal sealed class ResetCycleRepository(DashboardDbContext db) : IResetCycleR
 
         await db.SaveChangesAsync(ct);
     }
+
+    /// <summary>
+    /// Atomic conditional UPDATE: <c>WHERE id=1 AND (correlation_id=@expectedCorrelationId OR
+    /// state='idle')</c>. See <see cref="IResetCycleRepository.TryReleaseToIdleAsync"/> for the
+    /// rationale behind the two-arm predicate.
+    /// </summary>
+    public async Task<bool> TryReleaseToIdleAsync(Guid expectedCorrelationId, CancellationToken ct)
+    {
+        var affected = await db.ResetCycles
+            .Where(r => r.Id == FixedId
+                        && (r.CorrelationId == expectedCorrelationId || r.State == ResetState.Idle))
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(r => r.State, ResetState.Idle)
+                .SetProperty(r => r.CorrelationId, (Guid?)null)
+                .SetProperty(r => r.ExpectedComponents, (string[]?)null)
+                .SetProperty(r => r.AcksReceived, (string[]?)null)
+                .SetProperty(r => r.StartedAt, (DateTimeOffset?)null)
+                .SetProperty(r => r.DeadlineAt, (DateTimeOffset?)null)
+                .SetProperty(r => r.Operation, ControlOperation.Reset)
+                .SetProperty(r => r.RecoverSince, (DateTimeOffset?)null),
+            ct);
+
+        return affected > 0;
+    }
 }

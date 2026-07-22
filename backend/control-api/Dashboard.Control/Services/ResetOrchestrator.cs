@@ -123,8 +123,16 @@ internal sealed class ResetOrchestrator(
         var machine = new ResetStateMachine(cycle);
         if (!machine.IsInState(ResetState.Idle))
             machine.Fire(ResetTrigger.Abort);
-        ChoreographyCycleStore.ResetToIdleBaseline(cycle);
-        await ChoreographyCycleStore.SaveAsync(cycleCtx, cycle, abortCt);
+
+        // Correlation-guarded release: no-ops (0 rows) if a newer cycle has since superseded
+        // this one on the shared row — see ChoreographyCycleStore.TryReleaseToIdleAsync.
+        if (!await ChoreographyCycleStore.TryReleaseToIdleAsync(cycleCtx, cycle, abortedResetId, abortCt))
+        {
+            logger.LogDebug(
+                "Reset orchestrator: abort no-op for {CorrelationId}; cycle was already superseded.",
+                abortedResetId);
+            return;
+        }
 
         // Emit reset-completed so connected components (fetcher, demo-driver) can recover
         // via the control stream — mirrors the reconciler abort path.
@@ -167,8 +175,15 @@ internal sealed class ResetOrchestrator(
         Guid correlationId,
         CancellationToken ct)
     {
-        ChoreographyCycleStore.ResetToIdleBaseline(cycle);
-        await ChoreographyCycleStore.SaveAsync(cycleCtx, cycle, ct);
+        // Correlation-guarded release: no-ops (0 rows) if a newer cycle has since superseded
+        // this one on the shared row — see ChoreographyCycleStore.TryReleaseToIdleAsync.
+        if (!await ChoreographyCycleStore.TryReleaseToIdleAsync(cycleCtx, cycle, correlationId, ct))
+        {
+            logger.LogDebug(
+                "Reset orchestrator: idle transition no-op for {CorrelationId}; cycle was already superseded.",
+                correlationId);
+            return;
+        }
 
         // Notify all instances that the gate is now OFF (Fix C).
         if (notifyCtx.StateNotifier is not null)

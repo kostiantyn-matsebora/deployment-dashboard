@@ -46,4 +46,30 @@ internal static class ChoreographyCycleStore
         cycle.Operation = ControlOperation.Reset;
         cycle.RecoverSince = null;
     }
+
+    /// <summary>
+    /// Correlation-guarded counterpart of <see cref="SaveAsync"/> for every "return the shared row
+    /// to idle" write (reset/recover normal completion, GateMaxTtl abort, reconciler orphan-clear).
+    /// Delegates to <see cref="Repositories.IResetCycleRepository.TryReleaseToIdleAsync"/> — a
+    /// conditional <c>WHERE id=1 AND (correlation_id=@expectedCorrelationId OR state='idle')</c>
+    /// UPDATE — so a stale/superseded writer's release no-ops instead of clobbering whatever newer
+    /// cycle currently holds the row. When the row still belongs to <paramref name="expectedCorrelationId"/>
+    /// (the normal case), this behaves byte-identically to the previous unconditional save: the
+    /// predicate matches, the row is cleared to baseline, and <paramref name="cycle"/> is updated
+    /// in-memory to match via <see cref="ResetToIdleBaseline"/> so callers can keep using it.
+    /// Returns <c>false</c> when superseded — callers must skip any further notification/event
+    /// emission for this cycle, since it no longer reflects live state.
+    /// </summary>
+    public static async Task<bool> TryReleaseToIdleAsync(
+        ChoreographyCycleContext ctx, ResetCycle cycle, Guid expectedCorrelationId, CancellationToken ct)
+    {
+        ctx.Db.ChangeTracker.Clear();
+        var released = await ctx.CycleRepository.TryReleaseToIdleAsync(expectedCorrelationId, ct);
+        ctx.Db.ChangeTracker.Clear();
+
+        if (released)
+            ResetToIdleBaseline(cycle);
+
+        return released;
+    }
 }

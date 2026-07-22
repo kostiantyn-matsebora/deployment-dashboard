@@ -135,8 +135,16 @@ internal sealed class RecoverOrchestrator(
         var machine = new RecoverStateMachine(cycle);
         if (!machine.IsInState(ResetState.Idle))
             machine.Fire(RecoverTrigger.Abort);
-        ChoreographyCycleStore.ResetToIdleBaseline(cycle);
-        await ChoreographyCycleStore.SaveAsync(cycleCtx, cycle, abortCt);
+
+        // Correlation-guarded release: no-ops (0 rows) if a newer cycle has since superseded
+        // this one on the shared row — see ChoreographyCycleStore.TryReleaseToIdleAsync.
+        if (!await ChoreographyCycleStore.TryReleaseToIdleAsync(cycleCtx, cycle, abortedRecoverId, abortCt))
+        {
+            logger.LogDebug(
+                "Recover orchestrator: abort no-op for {CorrelationId}; cycle was already superseded.",
+                abortedRecoverId);
+            return;
+        }
 
         // Emit recover-completed so connected components (fetcher, demo-driver) can recover
         // via the control stream — mirrors the reconciler abort path.
@@ -180,11 +188,18 @@ internal sealed class RecoverOrchestrator(
         Guid correlationId,
         CancellationToken ct)
     {
-        // Captured before ResetToIdleBaseline wipes it below.
+        // Captured before the release wipes it below.
         var recoverSince = cycle.RecoverSince ?? DateTimeOffset.UtcNow;
 
-        ChoreographyCycleStore.ResetToIdleBaseline(cycle);
-        await ChoreographyCycleStore.SaveAsync(cycleCtx, cycle, ct);
+        // Correlation-guarded release: no-ops (0 rows) if a newer cycle has since superseded
+        // this one on the shared row — see ChoreographyCycleStore.TryReleaseToIdleAsync.
+        if (!await ChoreographyCycleStore.TryReleaseToIdleAsync(cycleCtx, cycle, correlationId, ct))
+        {
+            logger.LogDebug(
+                "Recover orchestrator: idle transition no-op for {CorrelationId}; cycle was already superseded.",
+                correlationId);
+            return;
+        }
 
         // Notify all instances that the gate is now OFF (Fix C).
         if (notifyCtx.StateNotifier is not null)
