@@ -7,9 +7,11 @@
 
 import { ControlStreamSubscriber } from '../src/control/control-stream.subscriber';
 import { ResetCoordinator } from '../src/control/reset-coordinator';
+import { RecoverAckHandler } from '../src/control/recover-ack-handler';
 import { ControlFeed, ControlFrame } from '../src/control/control-feed';
 
 const RESET_ID = '01J9F4WZK3W9G2T6X4QH3DKQF6';
+const CORRELATION_ID = '01J9G5A1B2C3D4E5F6G7H8J9K0';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -48,13 +50,27 @@ function makeCoordinator(): jest.Mocked<ResetCoordinator> {
   } as unknown as jest.Mocked<ResetCoordinator>;
 }
 
+function makeRecoverHandler(): jest.Mocked<RecoverAckHandler> {
+  return {
+    onRecoverInitiated: jest.fn().mockResolvedValue(undefined),
+    onRecoverStarted:   jest.fn(),
+    onRecoverCompleted: jest.fn().mockResolvedValue(undefined),
+    registerEventsClient: jest.fn(),
+  } as unknown as jest.Mocked<RecoverAckHandler>;
+}
+
 function makeSubscriber(
   coord: jest.Mocked<ResetCoordinator>,
   feed?: ControlFeed,
+  recoverHandler?: jest.Mocked<RecoverAckHandler>,
 ): ControlStreamSubscriber {
-  // ControlStreamSubscriber constructor takes two arguments: coordinator + controlFeed.
-  // Bypass NestJS DI — instantiate directly.
-  return new (ControlStreamSubscriber as any)(coord, feed ?? new ControlFeed());
+  // ControlStreamSubscriber constructor takes three arguments: coordinator +
+  // controlFeed + recoverHandler. Bypass NestJS DI — instantiate directly.
+  return new (ControlStreamSubscriber as any)(
+    coord,
+    feed ?? new ControlFeed(),
+    recoverHandler ?? makeRecoverHandler(),
+  );
 }
 
 /**
@@ -138,6 +154,69 @@ describe('ControlStreamSubscriber', () => {
     await driveOneIteration();
 
     expect(coord.onResetCompleted).toHaveBeenCalledWith(RESET_ID);
+  });
+
+  // ── Recover dispatch (#423, D18) ─────────────────────────────────────────
+
+  it('dispatches recover-initiated using the event id as correlation_id', async () => {
+    const sseText =
+      `event: recover-initiated\nid: ${CORRELATION_ID}\ndata: {"id":"${CORRELATION_ID}","component":"*"}\n\n`;
+    globalThis.fetch = fetchOk(sseText) as unknown as typeof globalThis.fetch;
+    const coord    = makeCoordinator();
+    const recover  = makeRecoverHandler();
+    const sub = track(makeSubscriber(coord, undefined, recover));
+
+    sub.onModuleInit();
+    await driveOneIteration();
+
+    expect(recover.onRecoverInitiated).toHaveBeenCalledWith(CORRELATION_ID);
+    // recover-initiated must never touch ResetCoordinator (isolation from block state).
+    expect(coord.onResetInitiated).not.toHaveBeenCalled();
+  });
+
+  it('dispatches recover-started with correlation_id from data body', async () => {
+    const sseText = `event: recover-started\nid: other\ndata: {"correlation_id":"${CORRELATION_ID}"}\n\n`;
+    globalThis.fetch = fetchOk(sseText) as unknown as typeof globalThis.fetch;
+    const coord   = makeCoordinator();
+    const recover = makeRecoverHandler();
+    const sub = track(makeSubscriber(coord, undefined, recover));
+
+    sub.onModuleInit();
+    await driveOneIteration();
+
+    expect(recover.onRecoverStarted).toHaveBeenCalledWith(CORRELATION_ID);
+    expect(coord.onResetStarted).not.toHaveBeenCalled();
+  });
+
+  it('dispatches recover-completed with correlation_id from data body', async () => {
+    const sseText = `event: recover-completed\nid: other\ndata: {"correlation_id":"${CORRELATION_ID}","payload":{"since":"2026-07-19T10:00:00Z"}}\n\n`;
+    globalThis.fetch = fetchOk(sseText) as unknown as typeof globalThis.fetch;
+    const coord   = makeCoordinator();
+    const recover = makeRecoverHandler();
+    const sub = track(makeSubscriber(coord, undefined, recover));
+
+    sub.onModuleInit();
+    await driveOneIteration();
+
+    expect(recover.onRecoverCompleted).toHaveBeenCalledWith(CORRELATION_ID);
+    expect(coord.onResetCompleted).not.toHaveBeenCalled();
+  });
+
+  it('reset-* frames never dispatch to RecoverAckHandler', async () => {
+    const sseText =
+      `event: reset-initiated\nid: ${RESET_ID}\ndata: {"id":"${RESET_ID}","component":"*"}\n\n`;
+    globalThis.fetch = fetchOk(sseText) as unknown as typeof globalThis.fetch;
+    const coord   = makeCoordinator();
+    const recover = makeRecoverHandler();
+    const sub = track(makeSubscriber(coord, undefined, recover));
+
+    sub.onModuleInit();
+    await driveOneIteration();
+
+    expect(coord.onResetInitiated).toHaveBeenCalledWith(RESET_ID);
+    expect(recover.onRecoverInitiated).not.toHaveBeenCalled();
+    expect(recover.onRecoverStarted).not.toHaveBeenCalled();
+    expect(recover.onRecoverCompleted).not.toHaveBeenCalled();
   });
 
   it('treats unknown event types as no-op', async () => {
@@ -326,6 +405,28 @@ describe('ControlStreamSubscriber', () => {
       expect(published).toHaveLength(1);
       expect(published[0].type).toBe('reset-completed');
       expect(coord.onResetCompleted).toHaveBeenCalledWith(RESET_ID);
+    });
+
+    it('publishes a recover-* frame to ControlFeed AND dispatches to RecoverAckHandler', async () => {
+      const sseText =
+        `event: recover-initiated\nid: ${CORRELATION_ID}\ndata: {"id":"${CORRELATION_ID}","component":"*"}\n\n`;
+      globalThis.fetch = fetchOk(sseText) as unknown as typeof globalThis.fetch;
+      const coord   = makeCoordinator();
+      const recover = makeRecoverHandler();
+      const feed    = new ControlFeed();
+      const published: ControlFrame[] = [];
+      feed.frames$.subscribe(f => published.push(f));
+
+      const sub = track(makeSubscriber(coord, feed, recover));
+      sub.onModuleInit();
+      await driveOneIteration();
+
+      expect(published).toHaveLength(1);
+      expect(published[0].type).toBe('recover-initiated');
+      expect(published[0].id).toBe(CORRELATION_ID);
+
+      expect(recover.onRecoverInitiated).toHaveBeenCalledWith(CORRELATION_ID);
+      expect(coord.onResetInitiated).not.toHaveBeenCalled();
     });
   });
 });
