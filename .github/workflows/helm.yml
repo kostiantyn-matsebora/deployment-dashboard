@@ -122,6 +122,17 @@ jobs:
             ghcr.io/kostiantyn-matsebora/deployment-dashboard-gateway-demo:latest \
             --name dashboard-ci
 
+      # Pre-pull + kind-load the third-party postgres image the chart's bundled
+      # PostgreSQL uses (deploy/helm/deployment-dashboard/values.yaml
+      # postgresql.image) for both the prod and demo installs below. Pulling it
+      # from Docker Hub in-cluster during `helm install --wait` can miss the
+      # --timeout window (seen at e9ddcaf: prod-release postgresql-0 stuck
+      # ContainerCreating / "Pulling image \"postgres:17-alpine\"").
+      - name: Pre-pull and load postgres image into kind
+        run: |
+          docker pull postgres:17-alpine
+          kind load docker-image postgres:17-alpine --name dashboard-ci
+
       - name: Install ingress-nginx
         run: |
           kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.13.0/deploy/static/provider/kind/deploy.yaml
