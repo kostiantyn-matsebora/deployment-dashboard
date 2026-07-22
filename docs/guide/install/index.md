@@ -1,9 +1,10 @@
 ---
 title: Install & deploy
 shortTitle: Install & deploy
-intro: 'Choose a deployment method and follow its guide — Docker Compose for self-hosted, Azure (Terraform) for managed cloud.'
+intro: 'Choose a deployment method and follow its guide — Docker Compose for self-hosted, Kubernetes (Helm) for an existing cluster, Azure (Terraform) for managed cloud.'
 children:
   - /docker-compose
+  - /kubernetes
   - /azure-terraform
 ---
 
@@ -19,6 +20,17 @@ How to run Deployment Dashboard for a real team. For a zero-config local trial, 
 - [Configure & run](./docker-compose.md#2-configure--run)
 - [Running from local source](./docker-compose.md#running-from-local-source)
 - [Pinning a release version](./docker-compose.md#pinning-a-release-version)
+
+### `kubernetes.md`
+
+- [Topology](./kubernetes.md#topology)
+- [Prerequisites](./kubernetes.md#prerequisites)
+- [Install](./kubernetes.md#install)
+- [Values reference](./kubernetes.md#values-reference)
+- [Routing options](./kubernetes.md#routing-options)
+- [Demo mode](./kubernetes.md#demo-mode)
+- [Upgrade / uninstall](./kubernetes.md#upgrade--uninstall)
+- [Networking & security](./kubernetes.md#networking--security)
 
 ### `azure-terraform.md`
 
@@ -86,11 +98,12 @@ Two independent axes pick your profile:
 | Method | When to use |
 |---|---|
 | [Docker Compose](./docker-compose.md) | Self-hosted — any Linux/Windows host with Docker installed. Full control of infra. |
+| [Kubernetes (Helm)](./kubernetes.md) | Existing cluster you own — versioned Helm chart, published to GHCR/Artifact Hub. |
 | [Azure (Terraform)](./azure-terraform.md) | Managed cloud — zero-ops Azure Container Apps stack, provisioned end-to-end by Terraform. |
 
 ## Shared prerequisites
 
-Both methods require images from GHCR. No registry credentials are needed for public images.
+All methods pull images (and, for Kubernetes, the Helm chart) from GHCR. No registry credentials are needed for public images.
 
 ## Production checklist
 
@@ -109,6 +122,7 @@ See [Configuration](../configuration/index.md) for every environment variable.
 By default the stack pulls `latest` (tracks `main`). For a reproducible deploy, pin to a release tag — see the method-specific guides for how:
 
 - Docker Compose: set `DASHBOARD_VERSION` in `.env` — see [Pinning a release version](./docker-compose.md#pinning-a-release-version).
+- Kubernetes (Helm): pass `--version <ver>` to `helm install`/`helm upgrade` — see [Install](./kubernetes.md#install).
 - Azure Terraform: set `dashboard_version` in `terraform.tfvars` — see [Deploy](./azure-terraform.md#deploy).
 
 ## Hosting notes

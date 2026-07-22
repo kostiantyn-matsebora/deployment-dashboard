@@ -1,0 +1,9 @@
+# Artifact Hub repository metadata.
+# https://artifacthub.io/docs/topics/repositories/#artifact-hub-repo-metadata-file
+#
+# repositoryID is assigned by Artifact Hub at registration time; leave blank
+# until this repo is registered, then fill in the UUID Artifact Hub returns.
+repositoryID: ""
+owners:
+  - name: Kostiantyn Matsebora
+    email: komkom@duck.com

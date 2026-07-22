@@ -200,6 +200,52 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # ── Helm chart ─────────────────────────────────────────────────────────────────
+  # Packages and publishes the Helm chart as an OCI artifact to GHCR. Runs in
+  # parallel with `images` — the chart itself does not embed image digests
+  # (values.yaml image.tag defaults to .Chart.AppVersion, resolved at install
+  # time), so it has no ordering dependency on the image pushes.
+  #
+  # Chart version tracks the release SemVer lockstep with the images (Chart.yaml
+  # keeps a committed 0.1.0/latest baseline; overridden here at package time —
+  # never hand-edited per release). OCI push is fine for pre-release (-rc) tags;
+  # unlike the image `latest` tag, OCI charts are always fully versioned, so
+  # nothing is skipped for pre-release.
+  helm-chart:
+    name: Helm chart
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Log in to GHCR (Helm OCI registry)
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io \
+            --username ${{ github.actor }} \
+            --password-stdin
+
+      - name: Resolve version (strip leading v)
+        id: ver
+        run: echo "version=$(echo '${{ github.ref_name }}' | sed 's/^v//')" >> "$GITHUB_OUTPUT"
+
+      - name: Package chart
+        run: |
+          helm package deploy/helm/deployment-dashboard \
+            --version ${{ steps.ver.outputs.version }} \
+            --app-version ${{ steps.ver.outputs.version }} \
+            --destination /tmp/helm-package
+
+      - name: Push chart to GHCR
+        run: |
+          helm push /tmp/helm-package/deployment-dashboard-${{ steps.ver.outputs.version }}.tgz \
+            oci://ghcr.io/${{ github.repository_owner }}/charts
+
   # ── Release ────────────────────────────────────────────────────────────────────
   # Runs once after all images are pushed: extract release notes, bundle the
   # compose stack, and publish the GitHub Release.

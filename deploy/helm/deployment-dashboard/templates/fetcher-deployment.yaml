@@ -1,0 +1,73 @@
+{{- if or .Values.fetcher.enabled .Values.demo.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "deployment-dashboard.componentName" (dict "root" . "component" "fetcher") }}
+  labels:
+    {{- include "deployment-dashboard.componentLabels" (dict "root" . "component" "fetcher") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "deployment-dashboard.componentSelectorLabels" (dict "root" . "component" "fetcher") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "deployment-dashboard.componentLabels" (dict "root" . "component" "fetcher") | nindent 8 }}
+    spec:
+      containers:
+        - name: fetcher
+          image: {{ include "deployment-dashboard.image" (dict "root" . "component" "fetcher") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: DASHBOARD_API_BASE_URL
+              value: "http://{{ include "deployment-dashboard.componentName" (dict "root" . "component" "api") }}:8080"
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "deployment-dashboard.apiSecretName" . }}
+                  key: api-key
+            - name: CONTROL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "deployment-dashboard.apiSecretName" . }}
+                  key: control-api-key
+            - name: COMPONENT_ID
+              value: "dashboard-fetcher"
+            {{- if .Values.demo.enabled }}
+            # Demo mirrors docker-compose.demo.yaml fetcher-host overrides: short
+            # poll cadence, repointed at the in-cluster GitHub Emulator.
+            - name: POLL_INTERVAL_SECONDS
+              value: "10"
+            - name: GITHUB_BASE_URL
+              value: "http://{{ include "deployment-dashboard.componentName" (dict "root" . "component" "github-emulator") }}:3100"
+            - name: GITHUB_TOKEN
+              value: "demo-token"
+            - name: GITHUB_REPOS
+              value: "demo-org/storefront,demo-org/platform,demo-org/operations,demo-org/data-pipeline"
+            - name: GITHUB_VERSION_SOURCE
+              value: "artifact:version.txt"
+            {{- else }}
+            - name: POLL_INTERVAL_SECONDS
+              value: {{ .Values.fetcher.pollIntervalSeconds | quote }}
+            - name: GITHUB_BASE_URL
+              value: {{ .Values.fetcher.github.baseUrl | quote }}
+            - name: GITHUB_TOKEN
+              value: {{ .Values.fetcher.github.token | quote }}
+            - name: GITHUB_REPOS
+              value: {{ .Values.fetcher.github.repos | quote }}
+            - name: GITHUB_VERSION_SOURCE
+              value: {{ .Values.fetcher.github.versionSource | quote }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.fetcher.resources | nindent 12 }}
+{{- end }}

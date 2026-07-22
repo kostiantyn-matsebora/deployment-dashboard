@@ -1,0 +1,112 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "deployment-dashboard values",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "image": {
+      "type": "object",
+      "properties": {
+        "registry": { "type": "string" },
+        "repository": { "type": "string" },
+        "tag": { "type": "string" },
+        "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] }
+      }
+    },
+    "gateway": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "dnsResolver": { "type": "string" }
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "className": { "type": "string" },
+        "host": { "type": "string" },
+        "annotations": { "type": "object" },
+        "tls": { "type": "array" }
+      }
+    },
+    "api": {
+      "type": "object",
+      "properties": {
+        "replicaCount": { "type": "integer", "minimum": 1 },
+        "corsAllowedOrigins": { "type": "string" },
+        "historyRetentionDays": { "type": "integer", "minimum": 1 },
+        "resources": { "type": "object" }
+      }
+    },
+    "frontend": {
+      "type": "object",
+      "properties": {
+        "replicaCount": { "type": "integer", "minimum": 1 },
+        "resources": { "type": "object" }
+      }
+    },
+    "fetcher": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "pollIntervalSeconds": { "type": "integer", "minimum": 1 },
+        "github": {
+          "type": "object",
+          "properties": {
+            "baseUrl": { "type": "string" },
+            "token": { "type": "string" },
+            "repos": { "type": "string" },
+            "versionSource": { "type": "string" }
+          }
+        },
+        "resources": { "type": "object" }
+      }
+    },
+    "apiKey": { "type": "string" },
+    "controlApiKey": { "type": "string" },
+    "existingSecret": { "type": "string" },
+    "postgresql": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "type": "string" },
+        "auth": {
+          "type": "object",
+          "properties": {
+            "database": { "type": "string" },
+            "username": { "type": "string" },
+            "password": { "type": "string" },
+            "existingSecret": { "type": "string" }
+          }
+        },
+        "persistence": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "size": { "type": "string" },
+            "storageClass": { "type": "string" }
+          }
+        }
+      }
+    },
+    "externalDatabase": {
+      "type": "object",
+      "properties": {
+        "host": { "type": "string" },
+        "port": { "type": "integer" },
+        "database": { "type": "string" },
+        "username": { "type": "string" },
+        "existingSecret": { "type": "string" },
+        "passwordKey": { "type": "string" }
+      }
+    },
+    "demo": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "emitIntervalMs": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

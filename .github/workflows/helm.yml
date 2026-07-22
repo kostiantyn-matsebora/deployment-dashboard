@@ -1,0 +1,166 @@
+name: helm
+
+# PR gate for the Helm chart (deploy/helm/deployment-dashboard).
+#
+# Called by ci.yml (the _ci-green orchestrator) for PR checks — same reusable-
+# workflow pattern as gateway.yml / api.yml / etc. workflow_call carries no
+# path filter; the orchestrator's paths-filter decides whether to invoke this
+# workflow (see .github/workflows/ci.yml `changes` job, filter key `helm`).
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  # ── Lint + template (both demo states) ───────────────────────────────────────
+  lint-template:
+    name: Lint + template
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: helm lint
+        run: helm lint deploy/helm/deployment-dashboard
+
+      - name: helm template (prod-values)
+        run: |
+          helm template ci-prod deploy/helm/deployment-dashboard \
+            -f deploy/helm/deployment-dashboard/ci/prod-values.yaml \
+            > /tmp/prod-render.yaml
+
+      - name: helm template (demo-values)
+        run: |
+          helm template ci-demo deploy/helm/deployment-dashboard \
+            -f deploy/helm/deployment-dashboard/ci/demo-values.yaml \
+            > /tmp/demo-render.yaml
+
+      # Production-clean invariant: the prod render must carry ZERO demo
+      # artifacts; the demo render must carry them. Asserted by grepping the
+      # rendered manifests (not just that the templates exist).
+      - name: Assert production render is demo-free / demo render is demo-present
+        run: |
+          python3 - <<'EOF'
+          import re
+          import sys
+
+          MARKERS = ["demo-driver", "github-emulator", "gateway-demo", "demo-api-key"]
+
+          def find(path):
+              text = open(path).read()
+              return {m: len(re.findall(re.escape(m), text, re.IGNORECASE)) for m in MARKERS}
+
+          prod = find("/tmp/prod-render.yaml")
+          demo = find("/tmp/demo-render.yaml")
+
+          errors = []
+          for marker, count in prod.items():
+              if count:
+                  errors.append(f"prod render leaks '{marker}' ({count} occurrence(s))")
+          for marker, count in demo.items():
+              if not count:
+                  errors.append(f"demo render is missing '{marker}' (expected present)")
+
+          print("prod render marker counts:", prod)
+          print("demo render marker counts:", demo)
+
+          if errors:
+              for e in errors:
+                  print(f"::error::{e}")
+              sys.exit(1)
+          print("OK: prod render demo-free, demo render demo-present.")
+          EOF
+
+      - name: Upload rendered manifests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: helm-rendered-manifests
+          path: |
+            /tmp/prod-render.yaml
+            /tmp/demo-render.yaml
+          retention-days: 7
+
+  # ── kind install-test (both demo states) ─────────────────────────────────────
+  install-test:
+    name: kind install-test
+    needs: lint-template
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: dashboard-ci
+
+      - name: Install ingress-nginx
+        run: |
+          kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.13.0/deploy/static/provider/kind/deploy.yaml
+          kubectl wait --namespace ingress-nginx \
+            --for=condition=ready pod \
+            --selector=app.kubernetes.io/component=controller \
+            --timeout=180s
+
+      # ── Production install (gateway on, demo off, bundled PG) ────────────────
+      - name: helm install (prod)
+        run: |
+          helm install prod-release deploy/helm/deployment-dashboard \
+            -f deploy/helm/deployment-dashboard/ci/prod-values.yaml \
+            --wait --timeout 5m
+
+      - name: Verify prod rollout
+        run: |
+          kubectl rollout status deployment/prod-release-deployment-dashboard-api --timeout=120s
+          kubectl rollout status deployment/prod-release-deployment-dashboard-frontend --timeout=120s
+          kubectl rollout status deployment/prod-release-deployment-dashboard-gateway --timeout=120s
+          kubectl rollout status statefulset/prod-release-deployment-dashboard-postgresql --timeout=120s
+
+      - name: Curl through the gateway (prod)
+        run: |
+          kubectl port-forward svc/prod-release-deployment-dashboard-gateway 18080:8080 &
+          sleep 3
+          curl -fsS http://localhost:18080/healthz
+          curl -fsS http://localhost:18080/ -o /dev/null
+          kill %1
+
+      - name: Uninstall prod release
+        if: always()
+        run: helm uninstall prod-release --wait --timeout 2m || true
+
+      # ── Demo install (Demo Driver + GitHub Emulator + Fetcher) ───────────────
+      - name: helm install (demo)
+        run: |
+          helm install demo-release deploy/helm/deployment-dashboard \
+            -f deploy/helm/deployment-dashboard/ci/demo-values.yaml \
+            --wait --timeout 5m
+
+      - name: Verify demo rollout
+        run: |
+          kubectl rollout status deployment/demo-release-deployment-dashboard-api --timeout=120s
+          kubectl rollout status deployment/demo-release-deployment-dashboard-demo-driver --timeout=120s
+          kubectl rollout status deployment/demo-release-deployment-dashboard-github-emulator --timeout=120s
+          kubectl rollout status deployment/demo-release-deployment-dashboard-fetcher --timeout=120s
+
+      - name: Curl demo status through the gateway
+        run: |
+          kubectl port-forward svc/demo-release-deployment-dashboard-gateway 18081:8080 &
+          sleep 3
+          curl -fsS http://localhost:18081/demo/status
+          kill %1
+
+      - name: Dump pod state on failure
+        if: failure()
+        run: |
+          kubectl get pods -A
+          kubectl describe pods
+          kubectl logs -l app.kubernetes.io/name=deployment-dashboard --all-containers --tail=200 || true
+
+      - name: Uninstall demo release
+        if: always()
+        run: helm uninstall demo-release --wait --timeout 2m || true

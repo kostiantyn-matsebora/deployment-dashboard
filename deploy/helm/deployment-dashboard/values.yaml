@@ -1,0 +1,77 @@
+# Default values for deployment-dashboard.
+# This is the values INTERFACE (contract) — keep key names stable; docs/ (docs
+# member) documents this table for adopters.
+
+image:
+  registry: ghcr.io
+  repository: kostiantyn-matsebora   # owner prefix; images are <registry>/<repository>/deployment-dashboard-<component>
+  tag: ""                            # defaults to .Chart.AppVersion when empty
+  pullPolicy: IfNotPresent
+
+# ── Public surface / routing ────────────────────────────────────────────────
+# gateway.enabled toggles between the two routing options (docs/GATEWAY_SPECIFICATION.md §4):
+#   true  = Option A — gateway Pod is the single public surface; Ingress -> gateway.
+#   false = Option B — Ingress path-routes directly to api / frontend (and demo-driver).
+gateway:
+  enabled: true
+  dnsResolver: "10.96.0.10"   # demo Option A only: nginx resolver = cluster DNS ClusterIP (kubeadm default; override per cluster)
+
+ingress:
+  enabled: true
+  className: ""       # e.g. "nginx"
+  host: ""             # e.g. dashboard.example.com; empty = no host rule (default backend)
+  annotations: {}
+  tls: []              # standard k8s ingress tls[] passthrough
+
+# ── Components ───────────────────────────────────────────────────────────────
+api:
+  replicaCount: 1
+  corsAllowedOrigins: ""    # empty = CORS off (single-origin gateway/Ingress). Set for split-host Option B (GW6/D6).
+  historyRetentionDays: 365
+  resources: {}
+
+frontend:
+  replicaCount: 1
+  resources: {}
+
+fetcher:
+  enabled: false
+  pollIntervalSeconds: 30
+  github:
+    baseUrl: "https://api.github.com"
+    token: ""             # via secret
+    repos: ""
+    versionSource: "attribute:sha"
+  resources: {}
+
+# ── Secrets ──────────────────────────────────────────────────────────────────
+apiKey: ""                 # required unless existingSecret; -> Secret key API_KEY
+controlApiKey: ""          # optional; -> Secret key CONTROL_API_KEY; empty hides POST /api/control/reset
+existingSecret: ""          # if set, reuse this Secret (keys: api-key, control-api-key) instead of rendering secret-api.yaml
+
+# ── Database axis ────────────────────────────────────────────────────────────
+postgresql:
+  enabled: true             # true = in-chart PG (full); false = external managed PG (standalone)
+  image: postgres:17-alpine
+  auth:
+    database: deployment_dashboard
+    username: dashboard
+    password: ""            # required when enabled & no existingSecret; -> secret-postgres.yaml
+    existingSecret: ""       # reuse a Secret with password
+  persistence:
+    enabled: true
+    size: 8Gi
+    storageClass: ""
+
+externalDatabase:            # used only when postgresql.enabled=false
+  host: ""
+  port: 5432
+  database: deployment_dashboard
+  username: ""
+  existingSecret: ""         # Secret holding the PG password
+  passwordKey: password
+
+# ── Demo mode (opt-in, OFF by default — production installs carry NO demo) ───
+demo:
+  enabled: false
+  emitIntervalMs: 8000
