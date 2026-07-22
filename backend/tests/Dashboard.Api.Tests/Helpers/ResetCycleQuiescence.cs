@@ -3,10 +3,22 @@ using Npgsql;
 namespace Dashboard.Api.Tests.Helpers;
 
 /// <summary>
-/// Deterministic teardown barrier (issue #423 flake fix, 2nd pass) for every
-/// <c>[Collection("api-postgres")]</c> class whose tests start a control orchestrator —
-/// directly via <c>POST /api/control/reset</c>/<c>recover</c>, or indirectly by seeding an
-/// orphaned <c>reset_cycle</c> row for the reconciler background service to pick up.
+/// Deterministic teardown barrier (issue #423 flake fix, 2nd pass) for
+/// <c>[Collection("api-postgres")]</c> classes whose tests start a control orchestrator that is
+/// expected to reach its own terminal 'idle' write within a bounded window — directly via
+/// <c>POST /api/control/reset</c>/<c>recover</c>, or indirectly by seeding an orphaned
+/// <c>reset_cycle</c> row for the reconciler background service to pick up.
+///
+/// <para>
+/// Not used by every such class: <see cref="RecoverChoreographyTests"/>'s three
+/// <c>*WhileInFlight_Returns409</c> tests deliberately configure a much larger
+/// AckTimeoutSeconds/GateMaxTtlSeconds (issue #423 flake fix, 3rd pass — see that class's
+/// <c>InitializeAsync</c>/<c>DisposeAsync</c>) so their un-acked cycle stays observably in-flight
+/// for the whole test instead of self-completing; for that class, waiting here for 'idle' would
+/// itself time out, so its teardown disposes the factory directly instead (cancelling the
+/// orchestrator via <c>ApplicationStopping</c> with no further write) and relies on the next
+/// test's <see cref="PostgresFixture.ResetAsync"/> truncate+reseed for isolation.
+/// </para>
 ///
 /// <para>
 /// Root cause this replaces: the reset/recover orchestrator runs as a fire-and-forget

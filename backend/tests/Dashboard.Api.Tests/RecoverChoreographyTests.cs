@@ -35,7 +35,38 @@ public sealed class RecoverChoreographyTests : IAsyncLifetime
         // test in this [Collection("api-postgres")] can still be driving when this runs.
         await _fixture.ResetAsync();
 
-        _factory = new TestApiFactory(_fixture.ConnectionString) { UseRealNotifier = true };
+        _factory = new TestApiFactory(_fixture.ConnectionString)
+        {
+            UseRealNotifier = true,
+            // Park (issue #423 flake fix, 3rd pass): the three *WhileInFlight_Returns409 tests
+            // below deliberately never send an ack, relying on the claimed cycle staying
+            // observably in-flight (state != 'idle') until their second POST lands. With the
+            // default AckTimeoutSeconds (10 s), an un-acked cycle self-completes to idle on its
+            // own — draining → resetting → idle — with NO further synchronization point, so
+            // under CI load the second POST can race that self-completion and see state='idle'
+            // (→ 202) instead of the expected 409. AssertCycleClaimedAsync only confirms the
+            // *claim* is visible before the second POST; it cannot stop the orchestrator from
+            // finishing in between.
+            //
+            // A large AckTimeoutSeconds keeps the ack gate blocked well past any single test's
+            // runtime, so the cycle cannot self-complete mid-test. A large GateMaxTtlSeconds is
+            // required too: both the orchestrator's own GateMaxTtl check (RunCycleAsync) and the
+            // independent ResetReconciler background service (ticks every 5 s) would otherwise
+            // force-abort the row back to idle once wall-clock time since claim exceeds
+            // GateMaxTtlSeconds (default 60 s) — same self-completion race, just via a different
+            // path. 300 s / 600 s are both far above any realistic test duration, so parking is
+            // guaranteed by construction, not by outrunning CI jitter.
+            //
+            // The acked full-cycle tests in this class (FullCycle_*) are unaffected: the ack gate
+            // (ChoreographyAckGate.WaitForAcksOrTimeoutAsync) returns as soon as every expected
+            // component acks, regardless of how large AckTimeoutSeconds is — see
+            // AckFanInTests.AckDrivenEarlyCompletion_* in ResetChoreographyTests.cs for the same
+            // ack-driven-vs-timeout-driven distinction. ExpectedComponents is left at its
+            // appsettings default (["dashboard-fetcher","demo-driver"]), which the FullCycle
+            // tests already ack by name — unchanged. The 422/401 tests never claim the row at
+            // all, so parking doesn't touch them either.
+            ResetConfig = new ResetConfigOverride(AckTimeoutSeconds: 300, GateMaxTtlSeconds: 600),
+        };
         _client = _factory.CreateClient();
         // Allow the broadcasters to establish LISTEN.
         await Task.Delay(TimeSpan.FromSeconds(2));
@@ -43,17 +74,33 @@ public sealed class RecoverChoreographyTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        // Drain (issue #423 flake fix, 2nd pass): block until *this* test's own orchestrator
-        // (if any — e.g. the in-flight-409 tests never send acks, so their orchestrator is
-        // still driving here) has reached its own terminal 'idle' write on reset_cycle (id=1),
-        // BEFORE the factory (and its ApplicationStopping token) is torn down. Disposing the
-        // factory first is exactly what used to let the drive keep running past this test's
-        // lifetime and clobber a later test's claim on the shared row (see
-        // ResetCycleQuiescence for the full root-cause writeup — an advisory-lock-free probe is
-        // NOT sufficient because the lock is acquired only *inside* the fire-and-forget
-        // Task.Run, after the endpoint already returned 202 and claimed the row).
-        await ResetCycleQuiescence.WaitForIdleAsync(_fixture.ConnectionString);
-
+        // Deterministic clean shutdown (issue #423 flake fix, 3rd pass) — replaces the
+        // WaitForIdleAsync drain used elsewhere in this [Collection("api-postgres")]. That drain
+        // assumed every un-acked orchestrator self-completes to idle within a bounded window; the
+        // parking config above (see InitializeAsync) makes that assumption false BY DESIGN for
+        // the three in-flight-409 tests (AckTimeoutSeconds/GateMaxTtlSeconds = 300 s/600 s), so
+        // polling for 'idle' here would time out and fail teardown even though the test's own
+        // assertions already passed.
+        //
+        // Instead: disposing the factory stops the host, which raises IHostApplicationLifetime's
+        // ApplicationStopping — the exact token ChoreographySagaRunner links into the
+        // orchestrator's cancellation (RecoverService/ResetService pass it to the fire-and-forget
+        // Task.Run). A parked cycle is always still blocked in
+        // ChoreographyAckGate.WaitForAcksOrTimeoutAsync's ack-wait (well short of its 300 s/600 s
+        // deadlines) at this point in every test in this class, so cancellation unwinds it via the
+        // un-caught-by-design OperationCanceledException path (both catch clauses in
+        // ChoreographySagaRunner.RunAsync are guarded by `!appStopping.IsCancellationRequested`,
+        // which is false here) straight to the `finally` — releasing the advisory lock and
+        // performing NO further write to reset_cycle. There is therefore nothing left that could
+        // race a write against the next test's claim.
+        //
+        // Isolation for the next test in this collection still holds without waiting for 'idle'
+        // here: PostgresFixture.ResetAsync() (called from every InitializeAsync) TRUNCATEs
+        // reset_cycle via Respawn and re-seeds id=1='idle' before that test's factory or requests
+        // exist. Even in the hypothetical where some stray write from this test's abandoned
+        // orchestrator lands late, the production correlation-guard
+        // (ChoreographyCycleStore.TryReleaseToIdleAsync's conditional UPDATE) means it can only
+        // ever no-op against a row already reseeded under a different (or absent) correlation_id.
         _client.Dispose();
         await _factory.DisposeAsync();
     }
@@ -180,6 +227,15 @@ public sealed class RecoverChoreographyTests : IAsyncLifetime
         // instant under CI load (connection-pool/scheduler jitter between this response landing
         // and the second SendAsync being dispatched) — so confirm the claim is actually visible
         // before racing the second request; see AssertCycleClaimedAsync.
+        //
+        // That covers the claim-visibility race, but NOT the self-completion race: this test never
+        // sends an ack, so without the parking config in InitializeAsync (AckTimeoutSeconds=300s,
+        // GateMaxTtlSeconds=600s) the orchestrator would proceed to idle on its own well within a
+        // slow CI run, and the second POST below could then observe state='idle' → 202 instead of
+        // 409. With parking, the orchestrator is still blocked on the ack gate (nowhere near its
+        // 300 s deadline) for the entire lifetime of this test, so reset_cycle.state cannot leave
+        // 'draining'/non-idle before the second POST runs — deterministic by construction, not by
+        // outracing CI jitter.
         var first = await _client.SendAsync(RecoverSinceDaysBack(1));
         Assert.Equal(HttpStatusCode.Accepted, first.StatusCode);
         var firstBody = await first.Content.ReadFromJsonAsync<JsonElement>();
@@ -194,6 +250,10 @@ public sealed class RecoverChoreographyTests : IAsyncLifetime
     [Fact]
     public async Task Post_Recover_WhileResetInFlight_Returns409()
     {
+        // Same parking argument as Post_Recover_WhileAlreadyInFlight_Returns409 above, applied to
+        // the cross-operation pairing: the first (reset) cycle is claimed and parked by the same
+        // class-wide AckTimeoutSeconds/GateMaxTtlSeconds override, so it cannot self-complete to
+        // idle before the second (recover) POST races it.
         var resetRes = await _client.SendAsync(ResetRequest());
         Assert.Equal(HttpStatusCode.Accepted, resetRes.StatusCode);
         var resetBody = await resetRes.Content.ReadFromJsonAsync<JsonElement>();
@@ -207,6 +267,8 @@ public sealed class RecoverChoreographyTests : IAsyncLifetime
     [Fact]
     public async Task Post_Reset_WhileRecoverInFlight_Returns409()
     {
+        // Same parking argument, mirrored: the first (recover) cycle is claimed and parked, so the
+        // second (reset) POST deterministically sees it still non-idle.
         var recoverRes = await _client.SendAsync(RecoverSinceDaysBack(1));
         Assert.Equal(HttpStatusCode.Accepted, recoverRes.StatusCode);
         var recoverBody = await recoverRes.Content.ReadFromJsonAsync<JsonElement>();
