@@ -8,6 +8,8 @@ image:
   tag: ""                            # defaults to .Chart.AppVersion when empty
   pullPolicy: IfNotPresent
 
+clusterDomain: cluster.local   # cluster DNS domain used to build FQDNs for runtime-resolved upstreams
+
 # ── Public surface / routing ────────────────────────────────────────────────
 # gateway.enabled toggles between the two routing options (docs/GATEWAY_SPECIFICATION.md §4):
 #   true  = Option A — gateway Pod is the single public surface; Ingress -> gateway.

@@ -32,8 +32,10 @@ spec:
             - name: FRONTEND_UPSTREAM
               value: "{{ include "deployment-dashboard.componentName" (dict "root" . "component" "frontend") }}:80"
             {{- if .Values.demo.enabled }}
+            # FQDN required: nginx `resolver` queries cluster DNS directly and ignores
+            # /etc/resolv.conf search domains, so a bare Service name never resolves here.
             - name: DEMO_DRIVER_UPSTREAM
-              value: "{{ include "deployment-dashboard.componentName" (dict "root" . "component" "demo-driver") }}.{{ .Release.Namespace }}.svc.cluster.local:3001"
+              value: "{{ include "deployment-dashboard.componentName" (dict "root" . "component" "demo-driver") }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}:3001"
             - name: DNS_RESOLVER
               value: {{ .Values.gateway.dnsResolver | quote }}
             {{- end }}
