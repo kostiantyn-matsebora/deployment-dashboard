@@ -99,6 +99,29 @@ jobs:
         with:
           cluster_name: dashboard-ci
 
+      # Branch-build ONLY the gateway pair (gateway + gateway-demo) and load them
+      # into kind — every other component's image is pulled from ghcr `latest`
+      # unchanged. The gateway pair carries routing/config behavior the chart
+      # contracts with directly (upstream env vars, DNS_RESOLVER auto-detect,
+      # /demo/* routing) — chart changes here must be exercised against the
+      # matching branch image or skew is invisible (see run 29961029562: chart
+      # dropped DNS_RESOLVER, published gateway-demo still baked the old
+      # default, install-test passed against the wrong image). Every other
+      # component's runtime behavior is already covered by its own CI job
+      # (api.yml / frontend.yml / fetcher.yml / demo.yml), so pulling `latest`
+      # there is a deliberate scope limit, not an oversight.
+      - name: Build gateway images from branch
+        run: |
+          docker build -t ghcr.io/kostiantyn-matsebora/deployment-dashboard-gateway:latest \
+            -f gateway/Dockerfile gateway
+          docker build --build-arg PROD_IMAGE=ghcr.io/kostiantyn-matsebora/deployment-dashboard-gateway:latest \
+            -t ghcr.io/kostiantyn-matsebora/deployment-dashboard-gateway-demo:latest \
+            -f gateway/Dockerfile.demo gateway
+          kind load docker-image \
+            ghcr.io/kostiantyn-matsebora/deployment-dashboard-gateway:latest \
+            ghcr.io/kostiantyn-matsebora/deployment-dashboard-gateway-demo:latest \
+            --name dashboard-ci
+
       - name: Install ingress-nginx
         run: |
           kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.13.0/deploy/static/provider/kind/deploy.yaml
