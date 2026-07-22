@@ -33,7 +33,7 @@ spec:
               value: "{{ include "deployment-dashboard.componentName" (dict "root" . "component" "frontend") }}:80"
             {{- if .Values.demo.enabled }}
             - name: DEMO_DRIVER_UPSTREAM
-              value: "{{ include "deployment-dashboard.componentName" (dict "root" . "component" "demo-driver") }}:3001"
+              value: "{{ include "deployment-dashboard.componentName" (dict "root" . "component" "demo-driver") }}.{{ .Release.Namespace }}.svc.cluster.local:3001"
             - name: DNS_RESOLVER
               value: {{ .Values.gateway.dnsResolver | quote }}
             {{- end }}
