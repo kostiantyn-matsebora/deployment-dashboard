@@ -16,7 +16,7 @@ clusterDomain: cluster.local   # cluster DNS domain used to build FQDNs for runt
 #   false = Option B — Ingress path-routes directly to api / frontend (and demo-driver).
 gateway:
   enabled: true
-  dnsResolver: "10.96.0.10"   # demo Option A only: nginx resolver = cluster DNS ClusterIP (kubeadm default; override per cluster)
+  dnsResolver: ""   # demo Option A only: nginx resolver IP. Empty (default) = auto-detected from the pod's own /etc/resolv.conf (cluster DNS ClusterIP, any distro); set only to override.
 
 ingress:
   enabled: true

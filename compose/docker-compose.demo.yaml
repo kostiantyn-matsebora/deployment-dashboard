@@ -16,15 +16,17 @@ services:
   # Demo-only: swap the production gateway image for the demo-gateway image.
   # The demo-gateway image (Dockerfile.demo) layers on top of the production image
   # and adds demo.snippet.template, which activates /demo/* routing at runtime.
-  # DNS_RESOLVER and DEMO_DRIVER_UPSTREAM are required by the snippet's resolver
-  # directive and variable-based proxy_pass; they are absent from the prod image.
+  # DEMO_DRIVER_UPSTREAM is required by the snippet's variable-based proxy_pass;
+  # it is absent from the prod image. DNS_RESOLVER (required by the snippet's
+  # resolver directive) is intentionally NOT set here — the demo image
+  # auto-detects it from the container's own /etc/resolv.conf (Docker embedded
+  # DNS, 127.0.0.11), which is exactly Compose's default. Set DNS_RESOLVER in
+  # the shell/`.env` only to override (e.g. running this compose file's image
+  # against a non-Docker DNS).
   gateway:
     image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-gateway-demo:${DASHBOARD_VERSION:-latest}
     environment:
       DEMO_DRIVER_UPSTREAM: "demo-driver:3001"
-      # 127.0.0.11 is the Docker embedded DNS — correct default for Compose.
-      # Override with 168.63.129.16 for Azure Container Apps if running demo there.
-      DNS_RESOLVER: "${DNS_RESOLVER:-127.0.0.11}"
     depends_on:
       demo-driver:
         condition: service_healthy
