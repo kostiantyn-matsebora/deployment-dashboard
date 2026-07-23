@@ -1,0 +1,23 @@
+# helm install-test overlay: gateway on (Option A), demo off, bundled PostgreSQL.
+# Used by .github/workflows/helm.yml lint-template + install-test jobs, and as
+# a lint/render fixture — mirrors a minimal production install.
+
+gateway:
+  enabled: true
+
+ingress:
+  enabled: true
+  className: nginx
+
+apiKey: ci-test-api-key
+controlApiKey: ""
+
+postgresql:
+  enabled: true
+  auth:
+    password: ci-test-postgres-password
+  persistence:
+    enabled: false   # kind has no default StorageClass by default; emptyDir keeps the install-test fast & disposable
+
+demo:
+  enabled: false

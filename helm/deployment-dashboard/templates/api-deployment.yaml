@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "deployment-dashboard.componentName" (dict "root" . "component" "api") }}
+  labels:
+    {{- include "deployment-dashboard.componentLabels" (dict "root" . "component" "api") | nindent 4 }}
+spec:
+  replicas: {{ .Values.api.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "deployment-dashboard.componentSelectorLabels" (dict "root" . "component" "api") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "deployment-dashboard.componentLabels" (dict "root" . "component" "api") | nindent 8 }}
+    spec:
+      containers:
+        - name: api
+          image: {{ include "deployment-dashboard.image" (dict "root" . "component" "api") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: POSTGRES_HOST
+              value: {{ include "deployment-dashboard.postgresHost" . | quote }}
+            - name: POSTGRES_PORT
+              value: {{ include "deployment-dashboard.postgresPort" . | quote }}
+            - name: POSTGRES_DB
+              value: {{ if .Values.postgresql.enabled }}{{ .Values.postgresql.auth.database | quote }}{{ else }}{{ .Values.externalDatabase.database | quote }}{{ end }}
+            - name: POSTGRES_USER
+              value: {{ if .Values.postgresql.enabled }}{{ .Values.postgresql.auth.username | quote }}{{ else }}{{ .Values.externalDatabase.username | quote }}{{ end }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  {{- if .Values.postgresql.enabled }}
+                  name: {{ include "deployment-dashboard.postgresSecretName" . }}
+                  key: password
+                  {{- else }}
+                  name: {{ required "externalDatabase.existingSecret is required when postgresql.enabled=false" .Values.externalDatabase.existingSecret }}
+                  key: {{ .Values.externalDatabase.passwordKey }}
+                  {{- end }}
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "deployment-dashboard.apiSecretName" . }}
+                  key: api-key
+            - name: CONTROL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "deployment-dashboard.apiSecretName" . }}
+                  key: control-api-key
+            - name: CORS_ALLOWED_ORIGINS
+              value: {{ .Values.api.corsAllowedOrigins | quote }}
+            - name: HISTORY_RETENTION_DAYS
+              value: {{ .Values.api.historyRetentionDays | quote }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}

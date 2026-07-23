@@ -54,6 +54,7 @@ jobs:
       demo-driver:     ${{ steps.filter.outputs['demo-driver'] }}
       github-emulator: ${{ steps.filter.outputs['github-emulator'] }}
       api-tests:       ${{ steps.filter.outputs['api-tests'] }}
+      helm:            ${{ steps.filter.outputs.helm }}
       docs:            ${{ steps.filter.outputs.docs }}
       scripts:         ${{ steps.filter.outputs.scripts }}
     steps:
@@ -99,6 +100,9 @@ jobs:
               - 'compose/**'
               - 'testing/api/**'
               - '.github/workflows/api-tests.yml'
+            helm:
+              - 'helm/**'
+              - '.github/workflows/helm.yml'
             docs:
               - '**/*.md'
             scripts:
@@ -187,6 +191,14 @@ jobs:
     if: needs.changes.outputs['api-tests'] == 'true'
     uses: ./.github/workflows/api-tests.yml
 
+  ci-helm:
+    name: CI / helm
+    needs: changes
+    if: needs.changes.outputs.helm == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/helm.yml
+
   ci-docs:
     name: CI / docs
     needs: changes
@@ -219,6 +231,7 @@ jobs:
       - ci-demo-driver
       - ci-github-emulator
       - ci-api-tests
+      - ci-helm
       - ci-docs
       - ci-scripts
     steps:

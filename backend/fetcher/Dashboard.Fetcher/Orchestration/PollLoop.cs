@@ -101,7 +101,9 @@ public sealed class PollLoop(
 
     public async Task RunAsync(CancellationToken ct)
     {
-        var cursor = await state.GetAsync(adapter.AdapterId, ct);
+        var (cancelled, cursor) = await FetchInitialCursorAsync(ct);
+        if (cancelled) return; // ct cancelled before the initial fetch ever succeeded — clean exit, no fault.
+
         logger.LogInformation("[{Adapter}] poll loop starting; cursor={HasCursor}",
             adapter.AdapterId, cursor is not null);
 
@@ -116,6 +118,34 @@ public sealed class PollLoop(
             if (!cont) break;
 
             if (!await WaitIntervalAsync(ct)) break;
+        }
+    }
+
+    // Retries the startup cursor fetch until it succeeds or ct is cancelled. This call happens
+    // once, before the while loop, with no surrounding try/catch there — left unguarded, a
+    // transient failure here (observed in prod: CNI egress race during pod startup) faults
+    // RunAsync's task permanently. FetcherWorker awaits every PollLoop alongside the
+    // never-ending DiscoveryLoop via Task.WhenAll, so that fault is never surfaced: /health
+    // stays 200 while this adapter silently stops polling forever. Returns (true, null) only
+    // when ct is cancelled while still retrying — a clean, un-faulted exit.
+    private async Task<(bool Cancelled, string? Cursor)> FetchInitialCursorAsync(CancellationToken ct)
+    {
+        while (true)
+        {
+            try
+            {
+                return (false, await state.GetAsync(adapter.AdapterId, ct));
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                return (true, null);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "[{Adapter}] initial cursor fetch failed; retrying in {Interval}",
+                    adapter.AdapterId, pollInterval);
+                if (!await WaitIntervalAsync(ct)) return (true, null);
+            }
         }
     }
 
