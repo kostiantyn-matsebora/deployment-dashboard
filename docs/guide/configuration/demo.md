@@ -16,11 +16,11 @@ Other demo vars (`WRITE_API_URL`, `FETCHER_URL`, `GITHUB_EMULATOR_URL`, `MOCK_UR
 
 ### Demo-gateway image vars
 
-The `demo` profile uses the `deployment-dashboard-gateway-demo` image instead of the production gateway. Two additional vars are specific to that image and are set by the demo overlay:
+The `demo` profile uses the `deployment-dashboard-gateway-demo` image instead of the production gateway. Two additional vars are specific to that image:
 
 | Var | Default (in image) | Set by demo overlay | Purpose |
 |---|---|---|---|
-| `DNS_RESOLVER` | `127.0.0.11` | `127.0.0.11` (override with `168.63.129.16` for Azure Container Apps) | DNS resolver for variable-based `proxy_pass` in the demo snippet — required because the demo-driver is an optional service. |
+| `DNS_RESOLVER` | auto-detected from `/etc/resolv.conf` at container start (falls back to `127.0.0.11` if none found) | not set — auto-detect; override with `168.63.129.16` for Azure Container Apps if needed | DNS resolver for variable-based `proxy_pass` in the demo snippet — required because the demo-driver is an optional service. |
 | `DEMO_DRIVER_UPSTREAM` | — | `demo-driver:3001` | Demo driver upstream `host:port`. |
 
-These vars are **absent from the production gateway image** — its `NGINX_ENVSUBST_FILTER` excludes them.
+An explicit `DNS_RESOLVER` env always overrides auto-detection. These vars are **absent from the production gateway image** — its `NGINX_ENVSUBST_FILTER` excludes them.

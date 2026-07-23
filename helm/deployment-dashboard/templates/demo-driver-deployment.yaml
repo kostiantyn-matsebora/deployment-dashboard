@@ -1,0 +1,54 @@
+{{- if .Values.demo.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "deployment-dashboard.componentName" (dict "root" . "component" "demo-driver") }}
+  labels:
+    {{- include "deployment-dashboard.componentLabels" (dict "root" . "component" "demo-driver") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "deployment-dashboard.componentSelectorLabels" (dict "root" . "component" "demo-driver") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "deployment-dashboard.componentLabels" (dict "root" . "component" "demo-driver") | nindent 8 }}
+    spec:
+      containers:
+        - name: demo-driver
+          image: {{ include "deployment-dashboard.image" (dict "root" . "component" "demo-driver") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3001
+          env:
+            - name: WRITE_API_URL
+              value: "http://{{ include "deployment-dashboard.componentName" (dict "root" . "component" "api") }}:8080"
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "deployment-dashboard.apiSecretName" . }}
+                  key: api-key
+            - name: CONTROL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "deployment-dashboard.apiSecretName" . }}
+                  key: control-api-key
+            - name: SCENARIOS_DIR
+              value: /app/data
+            - name: EMIT_INTERVAL_MS
+              value: {{ .Values.demo.emitIntervalMs | quote }}
+            - name: PORT
+              value: "3001"
+            - name: GITHUB_EMULATOR_URL
+              value: "http://{{ include "deployment-dashboard.componentName" (dict "root" . "component" "github-emulator") }}:3100"
+            - name: FETCHER_URL
+              value: "http://{{ include "deployment-dashboard.componentName" (dict "root" . "component" "fetcher") }}:8080"
+          livenessProbe:
+            httpGet:
+              path: /demo/status
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+{{- end }}
