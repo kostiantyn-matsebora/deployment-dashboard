@@ -53,10 +53,11 @@ Two images build from `gateway/` with the same build context.
 
 ```
 gateway/
-  Dockerfile                 # Production image: FROM nginxinc/nginx-unprivileged; COPY default.conf.template
-  Dockerfile.demo            # Demo image: FROM production image; adds DNS_RESOLVER env + demo.snippet.template
-  default.conf.template      # → /etc/nginx/templates/default.conf.template (envsubst at start)
-  demo.snippet.template      # → /etc/nginx/templates/demo.snippet.template (envsubst at start, demo image only)
+  Dockerfile                   # Production image: FROM nginxinc/nginx-unprivileged; COPY default.conf.template
+  Dockerfile.demo              # Demo image: FROM production image; adds 15-detect-dns-resolver.envsh + demo.snippet.template
+  15-detect-dns-resolver.envsh # Entrypoint drop-in — auto-detects DNS_RESOLVER from resolv.conf (demo image only)
+  default.conf.template        # → /etc/nginx/templates/default.conf.template (envsubst at start)
+  demo.snippet.template        # → /etc/nginx/templates/demo.snippet.template (envsubst at start, demo image only)
 ```
 
 **`*.snippet` render + include mechanism.**
