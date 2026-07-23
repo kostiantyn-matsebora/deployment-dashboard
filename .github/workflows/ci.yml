@@ -101,7 +101,7 @@ jobs:
               - 'testing/api/**'
               - '.github/workflows/api-tests.yml'
             helm:
-              - 'deploy/helm/**'
+              - 'helm/**'
               - '.github/workflows/helm.yml'
             docs:
               - '**/*.md'

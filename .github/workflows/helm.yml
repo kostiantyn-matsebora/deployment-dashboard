@@ -1,6 +1,6 @@
 name: helm
 
-# PR gate for the Helm chart (deploy/helm/deployment-dashboard).
+# PR gate for the Helm chart (helm/deployment-dashboard).
 #
 # Called by ci.yml (the _ci-green orchestrator) for PR checks — same reusable-
 # workflow pattern as gateway.yml / api.yml / etc. workflow_call carries no
@@ -23,18 +23,18 @@ jobs:
         uses: azure/setup-helm@v4
 
       - name: helm lint
-        run: helm lint deploy/helm/deployment-dashboard
+        run: helm lint helm/deployment-dashboard
 
       - name: helm template (prod-values)
         run: |
-          helm template ci-prod deploy/helm/deployment-dashboard \
-            -f deploy/helm/deployment-dashboard/ci/prod-values.yaml \
+          helm template ci-prod helm/deployment-dashboard \
+            -f helm/deployment-dashboard/ci/prod-values.yaml \
             > /tmp/prod-render.yaml
 
       - name: helm template (demo-values)
         run: |
-          helm template ci-demo deploy/helm/deployment-dashboard \
-            -f deploy/helm/deployment-dashboard/ci/demo-values.yaml \
+          helm template ci-demo helm/deployment-dashboard \
+            -f helm/deployment-dashboard/ci/demo-values.yaml \
             > /tmp/demo-render.yaml
 
       # Production-clean invariant: the prod render must carry ZERO demo
@@ -123,7 +123,7 @@ jobs:
             --name dashboard-ci
 
       # Pre-pull + kind-load the third-party postgres image the chart's bundled
-      # PostgreSQL uses (deploy/helm/deployment-dashboard/values.yaml
+      # PostgreSQL uses (helm/deployment-dashboard/values.yaml
       # postgresql.image) for both the prod and demo installs below. Pulling it
       # from Docker Hub in-cluster during `helm install --wait` can miss the
       # --timeout window (seen at e9ddcaf: prod-release postgresql-0 stuck
@@ -144,8 +144,8 @@ jobs:
       # ── Production install (gateway on, demo off, bundled PG) ────────────────
       - name: helm install (prod)
         run: |
-          helm install prod-release deploy/helm/deployment-dashboard \
-            -f deploy/helm/deployment-dashboard/ci/prod-values.yaml \
+          helm install prod-release helm/deployment-dashboard \
+            -f helm/deployment-dashboard/ci/prod-values.yaml \
             --wait --timeout 5m
 
       - name: Verify prod rollout
@@ -170,8 +170,8 @@ jobs:
       # ── Demo install (Demo Driver + GitHub Emulator + Fetcher) ───────────────
       - name: helm install (demo)
         run: |
-          helm install demo-release deploy/helm/deployment-dashboard \
-            -f deploy/helm/deployment-dashboard/ci/demo-values.yaml \
+          helm install demo-release helm/deployment-dashboard \
+            -f helm/deployment-dashboard/ci/demo-values.yaml \
             --wait --timeout 5m
 
       - name: Verify demo rollout
