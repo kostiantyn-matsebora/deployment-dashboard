@@ -1,6 +1,6 @@
 import {
   Controller, Get, Post, Param, Body,
-  Res, HttpCode, HttpStatus, NotFoundException, OnModuleDestroy,
+  Res, HttpCode, HttpStatus, NotFoundException, BadRequestException, OnModuleDestroy,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { Subscription } from 'rxjs';
@@ -17,6 +17,11 @@ function resetInProgressProblem(retryAfterSeconds: number): Record<string, unkno
     status: 503,
     detail: 'A system reset is in progress. Retry after the indicated interval.',
   };
+}
+
+/** True only for finite, whole, positive numbers — the days_back contract (#423). */
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0;
 }
 
 @Controller('demo')
@@ -203,6 +208,40 @@ export class DemoController implements OnModuleDestroy {
     this.guardNotBlocked(res);
     if (res.headersSent) return;
     res.json(await this.demoService.resetApi());
+  }
+
+  // ── API Recover ────────────────────────────────────────────────────────────
+
+  /**
+   * POST /demo/api-recover — blocked during reset (#423, D18).
+   * Proxies POST /api/control/recover to the configured write-API target
+   * with the panel's days_back-only input. Non-destructive — the driver's
+   * own surface participates via RecoverAckHandler but is never blocked by
+   * a recover cycle; this guard exists only because recover and reset are
+   * mutually exclusive at the API (409 while either is in flight), so a
+   * request submitted mid-reset would fail anyway.
+   * Validates days_back is a positive integer — else 400.
+   * Returns { ok, http_status, correlation_id?, since? }.
+   */
+  @Post('api-recover')
+  @HttpCode(HttpStatus.OK)
+  async apiRecover(
+    @Body() body: { days_back?: number } = {},
+    @Res({ passthrough: false }) res: Response,
+  ) {
+    this.guardNotBlocked(res);
+    if (res.headersSent) return;
+
+    if (!isPositiveInteger(body?.days_back)) {
+      throw new BadRequestException({
+        type:   'about:blank',
+        title:  'Bad Request',
+        status: 400,
+        detail: 'days_back must be a positive integer.',
+      });
+    }
+
+    res.json(await this.demoService.recoverApi({ days_back: body.days_back }));
   }
 
   // ── Reset (driver state only) ─────────────────────────────────────────────

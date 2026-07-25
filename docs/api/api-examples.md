@@ -143,3 +143,45 @@ X-Control-API-Key: ********
 ```http
 HTTP/1.1 204 No Content
 ```
+
+---
+
+## Control — recover (non-destructive)
+
+`since` XOR `days_back` — exactly one, or `422`. No data is cleared; the fetcher rewinds its cursor and re-polls incrementally (API_SPECIFICATION D18).
+
+```http
+POST /api/control/recover HTTP/1.1
+X-Control-API-Key: ********
+Content-Type: application/json
+
+{ "days_back": 2 }
+```
+
+```http
+HTTP/1.1 202 Accepted
+Content-Type: application/json
+
+{
+  "correlation_id": "01J9G5A1B2C3D4E5F6G7H8J9K0",
+  "state":          "draining",
+  "since":          "2026-07-19T10:00:00Z",
+  "accepted_at":    "2026-07-21T10:00:00Z"
+}
+```
+
+Progress on `GET /api/control/stream` — same `correlation_id` end-to-end; `recover-completed` carries the resolved `since` in `payload`:
+
+```
+event: recover-initiated
+id: 01J9G5A1B2C3D4E5F6G7H8J9K0
+data: {"id":"01J9G5A1B2C3D4E5F6G7H8J9K0","type":"recover-initiated","component":"*","correlation_id":"01J9G5A1B2C3D4E5F6G7H8J9K0","occurred_at":"2026-07-21T10:00:00Z"}
+
+event: recover-started
+id: 01J9G5A2C3D4E5F6G7H8J9K0L1
+data: {"id":"01J9G5A2C3D4E5F6G7H8J9K0L1","type":"recover-started","component":"*","correlation_id":"01J9G5A1B2C3D4E5F6G7H8J9K0","occurred_at":"2026-07-21T10:00:05Z"}
+
+event: recover-completed
+id: 01J9G5A3D4E5F6G7H8J9K0L1M2
+data: {"id":"01J9G5A3D4E5F6G7H8J9K0L1M2","type":"recover-completed","component":"*","correlation_id":"01J9G5A1B2C3D4E5F6G7H8J9K0","occurred_at":"2026-07-21T10:00:06Z","payload":{"since":"2026-07-19T10:00:00Z"}}
+```
