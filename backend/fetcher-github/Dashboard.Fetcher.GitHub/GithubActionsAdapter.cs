@@ -6,6 +6,8 @@ using Dashboard.Fetcher.GitHub.Graph;
 using Dashboard.Fetcher.GitHub.Mapping;
 using Dashboard.Fetcher.GitHub.Models;
 using Dashboard.Shared.Contracts;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Dashboard.Fetcher.GitHub;
 
@@ -18,8 +20,14 @@ public sealed class GithubActionsAdapter(
     GithubAdapterOptions options,
     FetcherOptions fetcherOptions,
     BackfillRunner backfillRunner,
-    DeploymentStatusEventMapper statusEventMapper) : ICiCdAdapter
+    DeploymentStatusEventMapper statusEventMapper,
+    ILogger<GithubActionsAdapter>? logger = null) : ICiCdAdapter
 {
+    // Defaults to a no-op sink so existing call sites that predate the recover guardrail
+    // (added for issue #423) keep compiling without threading a logger through.
+    private readonly ILogger<GithubActionsAdapter> _logger =
+        logger ?? NullLogger<GithubActionsAdapter>.Instance;
+
     // Persists across poll cycles (adapter is a DI singleton) — see §5.5 poll-efficiency note.
     private readonly TerminalDeploymentCache _terminalCache = new();
 
@@ -66,6 +74,39 @@ public sealed class GithubActionsAdapter(
         _terminalCache.Clear();
         _deploymentsListCache.Clear();
         _statusEtagCache.Clear();
+    }
+
+    /// <summary>
+    /// Recover saga (§5.10.6): builds a rewound cursor with every configured repo's
+    /// high-water mark set to <paramref name="since"/> and no backfill markers, so the
+    /// caller's next <see cref="FetchAsync"/> call takes the incremental <see cref="PollAsync"/>
+    /// branch — recovery is non-destructive and must NEVER re-enter backfill. Also clears the
+    /// windowed dedup caches (same effect as <see cref="ResetState"/>) so a warm
+    /// conditional-request hit does not reuse the narrow pre-rewind window and miss the gap
+    /// being recovered.
+    /// Guardrail: when <c>FetcherOptions.Backfill</c> is true, the rewound cursor is still
+    /// returned (so the cursor persisted is correct), but the very next
+    /// <see cref="FetchAsync"/> will re-enter backfill regardless (the BACKFILL flag forces
+    /// <c>shouldBackfill</c>), discarding the rewind — logged here as a warning.
+    /// </summary>
+    public string RewindTo(DateTimeOffset since)
+    {
+        ResetState();
+
+        if (fetcherOptions.Backfill)
+        {
+            _logger.LogWarning(
+                "[{Adapter}] recover rewind requested while BACKFILL=true; the rewound cursor " +
+                "will be discarded — the next fetch re-enters backfill and re-advances since " +
+                "from scratch instead of resuming incrementally",
+                AdapterId);
+        }
+
+        var rewound = new GithubCursor();
+        foreach (var repo in options.RepoList)
+            rewound = rewound.WithRepo(repo, since);
+
+        return rewound.Encode();
     }
 
     // ── normal poll ───────────────────────────────────────────────────────────

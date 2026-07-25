@@ -437,4 +437,63 @@ public sealed class GithubCursorTests
         Assert.Null(cursor.OldestPendingFor("acme/web"));
         Assert.Equal(oldest, cursor.OldestPendingFor("acme/api"));
     }
+
+    // ── Recover rewind cursor shape (issue #423, §5.10.6) ─────────────────────
+    //
+    // GithubActionsAdapter.RewindTo builds its rewound cursor purely via repeated WithRepo
+    // calls (one per configured repo, same `since` for all) — these tests pin down the
+    // resulting GithubCursor shape: non-empty, no backfill markers, every repo's high-water
+    // mark set to the resolved rewind point. End-to-end adapter-level coverage (HTTP-mocked,
+    // asserting FetchAsync takes PollAsync afterwards) lives in
+    // Dashboard.Fetcher.Tests/Poll/RecoverRewindPollTests.cs.
+
+    [Fact]
+    public void RewindShape_MultipleWithRepoCalls_EveryRepoGetsSameSince_NoBackfillSection()
+    {
+        var since = new DateTimeOffset(2026, 7, 14, 0, 0, 0, TimeSpan.Zero);
+
+        // Mirrors RewindTo's `foreach (repo in RepoList) rewound = rewound.WithRepo(repo, since)`.
+        var rewound = new GithubCursor()
+            .WithRepo("acme/api", since)
+            .WithRepo("acme/web", since)
+            .WithRepo("acme/worker", since);
+
+        Assert.Equal(since, rewound.Repos["acme/api"].Since);
+        Assert.Equal(since, rewound.Repos["acme/web"].Since);
+        Assert.Equal(since, rewound.Repos["acme/worker"].Since);
+        Assert.Null(rewound.Backfill);
+        Assert.False(rewound.IsBackfilling);
+        Assert.False(rewound.IsEmpty);
+    }
+
+    [Fact]
+    public void RewindShape_EncodeAndDecode_RoundTripsEveryRepoSince()
+    {
+        var since = DateTimeOffset.UtcNow.AddDays(-5);
+        var rewound = new GithubCursor()
+            .WithRepo("acme/api", since)
+            .WithRepo("acme/web", since);
+
+        var decoded = GithubCursor.Decode(rewound.Encode());
+
+        Assert.Equal(since, decoded.SinceFor("acme/api", TimeSpan.FromDays(7), DateTimeOffset.UtcNow));
+        Assert.Equal(since, decoded.SinceFor("acme/web", TimeSpan.FromDays(7), DateTimeOffset.UtcNow));
+        Assert.False(decoded.IsBackfilling);
+        Assert.False(decoded.IsEmpty);
+    }
+
+    [Fact]
+    public void RewindShape_ReplacesAnyPriorBackfillSection_ForARewoundRepo()
+    {
+        // A repo that was mid-backfill before an outage must NOT still carry a stale backfill
+        // marker after the rewind targets it — WithRepo does not clear Backfill for OTHER
+        // repos, but this documents the case actually exercised by RewindTo: every configured
+        // repo receives a fresh WithRepo(since) call, and RewindTo starts from `new GithubCursor()`
+        // (empty), so the emitted cursor as a whole never carries backfill markers regardless of
+        // what any prior in-flight cursor held.
+        var freshRewind = new GithubCursor().WithRepo("acme/api", DateTimeOffset.UtcNow);
+
+        Assert.Null(freshRewind.BackfillFor("acme/api"));
+        Assert.False(freshRewind.IsBackfilling);
+    }
 }

@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using Dashboard.Control.Filters;
 using Dashboard.Control.Models;
 using Dashboard.Control.Notifiers;
+using Dashboard.Control.Options;
 using Dashboard.Control.Repositories;
 using Dashboard.Control.Services;
 using Dashboard.Control.Sse;
@@ -16,6 +17,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Options;
 
 namespace Dashboard.Control;
 
@@ -45,6 +47,16 @@ public static class ControlEndpoints
            .Produces<ResetAcceptedResponse>(StatusCodes.Status202Accepted)
            .ProducesProblem(StatusCodes.Status401Unauthorized)
            .ProducesProblem(StatusCodes.Status409Conflict);
+
+        app.MapPost("/api/control/recover", HandleRecoverAsync)
+           .AddEndpointFilter<ControlApiKeyEndpointFilter>()
+           .WithName("Recover")
+           .WithTags("Control")
+           .WithSummary("Initiate an asynchronous, non-destructive recovery")
+           .Produces<RecoverAcceptedResponse>(StatusCodes.Status202Accepted)
+           .ProducesProblem(StatusCodes.Status401Unauthorized)
+           .ProducesProblem(StatusCodes.Status409Conflict)
+           .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
 
         app.MapGet("/api/control/stream", HandleStreamAsync)
            .AddEndpointFilter<ControlApiKeyEndpointFilter>()
@@ -94,6 +106,75 @@ public static class ControlEndpoints
             acceptance.AcceptedAt));
     }
 
+    // ── POST /api/control/recover ─────────────────────────────────────────────
+
+    private static async Task<IResult> HandleRecoverAsync(
+        [FromBody] RecoverRequest body,
+        IRecoverService recoverService,
+        IOptions<ResetOptions> resetOptions,
+        CancellationToken ct)
+    {
+        var (since, validationError) = ResolveRecoverSince(body, resetOptions.Value);
+        if (validationError is not null)
+            return validationError;
+
+        var acceptance = await recoverService.TryInitiateAsync(since!.Value, ct);
+
+        if (acceptance is null)
+            return Results.Problem(
+                title: "A control operation is already in progress.",
+                detail: "Only one reset or recover may be in flight at a time. Wait for the current operation to complete.",
+                statusCode: StatusCodes.Status409Conflict);
+
+        return Results.Accepted(value: new RecoverAcceptedResponse(
+            acceptance.CorrelationId,
+            acceptance.State,
+            acceptance.Since,
+            acceptance.AcceptedAt));
+    }
+
+    /// <summary>
+    /// Enforces the <c>since</c> XOR <c>days_back</c> rule, bounds both fields to
+    /// <see cref="ResetOptions.RecoverMaxDaysBack"/>, and resolves <c>days_back</c> to an absolute
+    /// <c>since = now − days_back days</c>. Returns a <c>422</c> Problem when neither or both
+    /// fields are supplied, when <c>days_back</c> is not in <c>[1, RecoverMaxDaysBack]</c>, or when
+    /// an absolute <c>since</c> is older than <c>now - RecoverMaxDaysBack days</c>.
+    ///
+    /// The bound checks run BEFORE any <see cref="DateTimeOffset.AddDays(double)"/> call: an
+    /// unbounded <c>days_back</c> (e.g. <see cref="int.MaxValue"/>) would otherwise overflow
+    /// <c>AddDays</c> into an uncaught <see cref="ArgumentOutOfRangeException"/> (→ 500), and an
+    /// unbounded in-range <c>days_back</c>/`since` would otherwise force the fetcher into an
+    /// unbounded re-poll. Both failure modes are rejected with the same 422 Problem as the
+    /// pre-existing `days_back &gt;= 1` check.
+    /// </summary>
+    private static (DateTimeOffset? since, IResult? error) ResolveRecoverSince(RecoverRequest body, ResetOptions options)
+    {
+        var hasSince = body.Since is not null;
+        var hasDaysBack = body.DaysBack is not null;
+
+        if (hasSince == hasDaysBack) // both supplied, or neither
+            return (null, Results.Problem(
+                title: "Exactly one of `since` or `days_back` is required.",
+                detail: "Specify either an absolute `since` timestamp or a relative `days_back` count — not both, not neither.",
+                statusCode: StatusCodes.Status422UnprocessableEntity));
+
+        if (hasDaysBack && (body.DaysBack < 1 || body.DaysBack > options.RecoverMaxDaysBack))
+            return (null, RecoverBoundProblem(options));
+
+        if (hasSince && body.Since!.Value < DateTimeOffset.UtcNow.AddDays(-options.RecoverMaxDaysBack))
+            return (null, RecoverBoundProblem(options));
+
+        var resolvedSince = hasSince ? body.Since!.Value : DateTimeOffset.UtcNow.AddDays(-body.DaysBack!.Value);
+        return (resolvedSince, null);
+    }
+
+    private static IResult RecoverBoundProblem(ResetOptions options) =>
+        Results.Problem(
+            title: "`days_back`/`since` is outside the allowed recovery window.",
+            detail: $"`days_back` must be between 1 and {options.RecoverMaxDaysBack} (inclusive); " +
+                    $"an absolute `since` must not be more than {options.RecoverMaxDaysBack} days in the past.",
+            statusCode: StatusCodes.Status422UnprocessableEntity);
+
     // ── POST /api/control/events ──────────────────────────────────────────────
 
     private static async Task<IResult> HandlePostEventAsync(
@@ -121,10 +202,11 @@ public static class ControlEndpoints
         // parses the id, fetches the full row, and fans it out to live SSE subscribers.
         await componentEventNotifier.NotifyAsync(entity.Id, ct);
 
-        // For reset-ack events, NOTIFY the component_acks channel using the X-Correlation-Id header
-        // so the driving reset instance can count this ack for the active cycle (§7 ch.3, D16).
-        // A missing or invalid X-Correlation-Id means the ack is recorded (204) but NOT gated.
-        if (body.EventType == "reset-ack" && correlationId is { Length: > 0 })
+        // For reset-ack / recover-ack events, NOTIFY the component_acks channel using the
+        // X-Correlation-Id header so the driving orchestrator (whichever is in flight) can count
+        // this ack for the active cycle (§7 ch.3, D16). A missing or invalid X-Correlation-Id
+        // means the ack is recorded (204) but NOT gated.
+        if (body.EventType is "reset-ack" or "recover-ack" && correlationId is { Length: > 0 })
             await ackNotifier.NotifyAsync(componentId, correlationId, ct);
 
         return Results.NoContent();
