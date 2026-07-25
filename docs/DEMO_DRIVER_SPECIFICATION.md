@@ -312,7 +312,7 @@ The `X-Correlation-Id` (= the `reset-initiated` `correlation_id`, which equals i
 
 Re-broadcasts every frame the driver's control-stream subscriber receives from `GET /api/control/stream` (Â§4.7).
 
-- Named frames carry the upstream `type` (`reset-initiated` / `reset-started` / `reset-completed` / unknown) and the `ControlStreamEvent` JSON as data; unknown types are forwarded verbatim (forward-compat display).
+- Named frames carry the upstream `type` (`reset-initiated` / `reset-started` / `reset-completed` / `recover-initiated` / `recover-started` / `recover-completed` / unknown) and the `ControlStreamEvent` JSON as data; unknown types are forwarded verbatim (forward-compat display). Recover-choreography frames flow through this same feed exactly like reset's â€” the subscriber publishes every parsed frame here regardless of type, before dispatching it to the reset (Â§4.7) or recover (Â§4.14) handler.
 - `: ping` heartbeat every 15 s.
 - **No history replay** â€” only frames received after the panel connects are delivered.
 - **Exempt from reset control-dimming** â€” the feed continues emitting while `reset_state == blocked`; it is a data feed, not an interactive control (same pattern as Â§4.6 `/demo/stream`).
@@ -443,6 +443,63 @@ X-Correlation-Id: <run_id>
 
 **Purpose.** The panel's correlation-id filter (Â§8) can then group both events by the stored `correlation_id`, making the demo/emission runs demonstrable in the component-events feed.
 
+### 4.13 API Recover
+
+| Method Â· Path | Request | Response |
+|---|---|---|
+| `POST /demo/api-recover` | `{ days_back: number }` â€” positive integer | `{ ok: boolean, http_status: number, correlation_id?: string, since?: string }` |
+
+Proxies `POST {WRITE_API_URL}/api/control/recover` with `X-Control-API-Key: CONTROL_API_KEY` and body `{ days_back }` (#423).
+
+Validates `days_back` is a positive integer before proxying â€” `400` (RFC 9457 `application/problem+json`, `detail: "days_back must be a positive integer."`) on invalid input; the request never reaches the write API.
+
+Guarded by the same reset-block guard as the other control routes (Â§4.7) â€” returns `503` while `reset_state == blocked`. This exists only because reset and recover share one in-flight slot at the API (a request submitted mid-reset would `409` anyway) â€” recover itself blocks nothing locally (Â§4.14).
+
+Returns:
+- `{ ok: true, http_status: 202, correlation_id, since }` on success â€” `since` is the resolved rewind point (`now âˆ’ days_back days`; [`openapi.yaml`](api/openapi.yaml) `RecoverAccepted`).
+- `{ ok: false, http_status: 409 }` when a control op (reset or recover) is already in flight â€” reset and recover share one in-flight slot.
+- `{ ok: false, http_status: 422 }` when `days_back` exceeds the API's server-configured lookback bound (default 90 days).
+- `{ ok: false, http_status: 0 }` on network error.
+
+No retry â€” mirrors reset's single-attempt policy (Â§4.5).
+
+**Non-destructive.** Unlike `POST /demo/api-reset`, recovery clears no data â€” deployment history and component state are preserved; only fetcher cursors rewind to `since` so missed events are re-fetched incrementally. The driver's own `/demo/` surface is never blocked by a recover cycle (Â§4.14).
+
+### 4.14 Recover participation (control-stream subscriber)
+
+The driver also participates in the API-driven **recover** choreography (#423) â€” the non-destructive counterpart to Â§4.7's reset participation, dispatched off the same control-stream subscriber (Â§4.7) but routed to a separate `RecoverAckHandler`. This is **distinct** from `POST /demo/api-recover` (Â§4.13):
+
+- **Â§4.13 `/demo/api-recover`** â€” outbound, operator-triggered. The driver *initiates* a recovery by proxying `POST /api/control/recover`.
+- **Â§4.14 subscriber** â€” inbound, API-driven. The driver *reacts* to recover events the API broadcasts (whoever triggered them).
+
+**Why a separate handler.** `RecoverAckHandler` is deliberately its own class rather than folded into `ResetCoordinator` (Â§4.7): reset and recover share the API's single in-flight slot, but only reset drives this driver's local `reset_state` / block. Keeping recover handling separate means the recover choreography can never accidentally flip `reset_state` to `blocked` or dim the control panel.
+
+**On `recover-initiated`** (drain): POST a `recover-ack` via the component-event client â€” a distinct wire `event_type` from `reset-ack`:
+
+```
+POST {WRITE_API_URL}/api/control/events
+X-Api-Key:        <API_KEY>
+X-Component-Id:   demo-driver
+X-Correlation-Id: <recover-initiated event id>   â† required; same correlation-id contract as reset-ack (Â§4.7)
+Content-Type:     application/json; charset=utf-8
+
+{
+  "event_type":  "recover-ack",
+  "state":       "paused",
+  "occurred_at": "<now, RFC 3339 UTC>"
+}
+```
+
+No local state changes and **no surface block** â€” `GET /demo/status` never reports a recover-in-progress state (there is none to report) and every other `/demo/` route stays fully functional throughout the cycle.
+
+**On `recover-started`:** no-op â€” nothing local to react to (no data cleared, no gate on this side). State this explicitly so no double-handling is added.
+
+**On `recover-completed`:** POST a component event reusing the existing `event_type: status` (NOT a new type), `state: running`, header `X-Correlation-Id` = the completed recover's `correlation_id` â€” same reuse pattern as Â§4.7's post-reset `running` event. No unblock step runs because nothing was ever blocked.
+
+**Unknown `event_type`:** no-op (forward-compatibility, per control-stream contract; Â§4.7).
+
+**Resilience.** Same subscriber, same reconnect/backoff and `Last-Event-ID` handling as Â§4.7 â€” a missed `recover-completed` is recovered on replay (2 h `control_stream_events` window). No local safety-timer is needed (unlike Â§4.7's `RESET_GATE_MAX_TTL_MS`) because the driver never enters a blocked state for recover in the first place.
+
 ---
 
 ## 5. GitHub source (emulator proxy)
@@ -522,9 +579,10 @@ Source: `demo/data/events.json#events` (47 events).
 | **Fetcher Â· Rate Limit** | 3 (after GitHub Emulator, before Control API) | Read-only card. See Â§8.1 below. |
 | **Status** | 4 | State badge (`idle` / `running` / `done` / `failed`); progress bar (`events_sent / events_total`); error count; started/finished timestamps |
 | **API** | 5 | **Reset State** button; inline result (`âœ“ Reset OK (204)` / `âœ— HTTP 401`) |
-| **Deployments** | 6 | Real-time `GET /demo/deployments-stream` SSE feed (Â§4.11) â€” proxies `GET /api/events/stream`; all pushers (demo-driver, fetcher, any); `â— LIVE` / `â— RECONNECTING` badge; rows follow unified TimeÂ·SourceÂ·EventÂ·IDÂ·Details format (see below); **Clear** button. Persists latest 10 rows to `localStorage`; hydrates on page load; **Clear** empties localStorage. Stays live during reset. |
-| **Reset (system)** | 7 | Reset-state indicator badge (`IDLE` / `RESET IN PROGRESS`); shows active `correlation_id` when blocked. Reflects API-driven reset participation (Â§4.7) â€” read-only. |
-| **Events** | 8 | Merged feed sourced from BOTH `GET /demo/control-stream` (Â§4.8 SSE) AND `GET /demo/control-events` (Â§4.9 SSE); `EventSource` on each; rows sorted **datetime DESC** (newest first) across both sources; timestamps rendered **with milliseconds**; dedup by `id`; single `â— LIVE` / `â— RECONNECTING` badge; **Clear** button. Fresh connect starts empty â€” fills as events arrive (no server replay on either feed). Persists latest 20 rows to `localStorage`; hydrates on page load; **Clear** empties localStorage. Stays live during reset. |
+| **Recover** | 6 | *Days back* input (default `7`, min `1`); **Recover** button â†’ `POST /demo/api-recover` (Â§4.13). Inline result (`âœ“ Recover OK (202) â€” since ...` / `âœ— A control operation is already in flight (409)` / `âœ— Invalid recover request (422)` / `âœ— <detail>` for a local `400`). Non-destructive â€” unlike the other interactive cards this one is **never dimmed** while `reset_state == blocked`; only its button is disabled, because recover and reset share one in-flight slot at the API and a request mid-reset would just `409` (Â§4.14). |
+| **Deployments** | 7 | Real-time `GET /demo/deployments-stream` SSE feed (Â§4.11) â€” proxies `GET /api/events/stream`; all pushers (demo-driver, fetcher, any); `â— LIVE` / `â— RECONNECTING` badge; rows follow unified TimeÂ·SourceÂ·EventÂ·IDÂ·Details format (see below); **Clear** button. Persists latest 10 rows to `localStorage`; hydrates on page load; **Clear** empties localStorage. Stays live during reset. |
+| **Reset (system)** | 8 | Reset-state indicator badge (`IDLE` / `RESET IN PROGRESS`); shows active `correlation_id` when blocked. Reflects API-driven reset participation (Â§4.7) â€” read-only. |
+| **Events** | 9 | Merged feed sourced from BOTH `GET /demo/control-stream` (Â§4.8 SSE) AND `GET /demo/control-events` (Â§4.9 SSE); `EventSource` on each; rows sorted **datetime DESC** (newest first) across both sources; timestamps rendered **with milliseconds**; dedup by `id`; single `â— LIVE` / `â— RECONNECTING` badge; **Clear** button. Fresh connect starts empty â€” fills as events arrive (no server replay on either feed). Persists latest 20 rows to `localStorage`; hydrates on page load; **Clear** empties localStorage. Stays live during reset. Recover choreography (`recover-initiated` / `recover-started` / `recover-completed`) surfaces here exactly like reset's (Â§4.14). |
 
 **GitHub Emulator card.** All panel calls go to `/demo/github/*` (the proxy â€” Â§5). The Seed sub-section and Live sub-section are interactive controls â€” dimmed and disabled while `reset_state == blocked` (mutator proxy routes return `503`; Â§5.1). The Store sub-section is a data surface and stays live.
 
@@ -580,6 +638,7 @@ Per-feed row mapping:
 
 **Reset blocking (controls only â€” no overlay).** While `reset_state == blocked` (Â§4.7):
 - Interactive control cards (Ingest, GitHub Emulator) are disabled and visually dimmed â€” their controls would return `503` anyway.
+- **Recover card is the one exception (Â§4.14).** Its button is disabled (submitting mid-reset would just `409`, since recover and reset share one in-flight slot) but the card itself is never dimmed â€” recover is non-destructive and the driver's own surface is never blocked by a recover cycle.
 - Data feeds â€” Status, Deployments, Events â€” stay fully live so the operator can watch the reset choreography.
 - Reset state is signalled by the inline `RESET IN PROGRESS` badge (Reset (system) card), not a blocking overlay.
 - Dim/disable clears automatically when `reset_state` returns to `idle`.
@@ -591,6 +650,7 @@ Panel behaviour:
 - Calls `POST /demo/ingest` / `POST /demo/ingest/stop` on Ingest/Stop buttons.
 - Calls `POST /demo/emit` on Live Emission Enable/Disable.
 - Calls `POST /demo/api-reset` on Reset State button.
+- Calls `POST /demo/api-recover` (Â§4.13) with `{ days_back }` on the Recover button, reading `days_back` from the *Days back* input (default `7`).
 - Subscribes to `GET /demo/deployments-stream` (Â§4.11) for the Deployments feed.
 - Subscribes to `GET /demo/control-stream` (Â§4.8) AND `GET /demo/control-events` (Â§4.9) via `EventSource` for the merged Events feed; merges and deduplicates by `id`, sorts datetime DESC.
 - `GET /demo/deployments-stream`, `GET /demo/control-stream`, and `GET /demo/control-events` are data feeds â€” live throughout reset and exempt from reset control-dimming.

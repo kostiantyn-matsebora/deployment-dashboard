@@ -386,6 +386,26 @@ export const PANEL_HTML = `<!DOCTYPE html>
       </div>
     </div>
 
+    <!-- ── Recover card (#423, D18) ──────────────────────────────────────────
+         Non-destructive — no data is cleared, so unlike Reset System this
+         card is never dimmed (not in interactiveCards). The button IS
+         disabled while a reset is in progress (interactiveControls) since
+         recover and reset share one in-flight slot — a request mid-reset
+         would just 409. Choreography progress (recover-initiated →
+         recover-started → recover-completed) is already visible in the
+         Events feed below. -->
+    <div class="card card-control" id="recover-card">
+      <div class="card-title">Recover</div>
+      <div class="controls">
+        <span class="lbl">Days back</span>
+        <input type="number" id="recover-days-input" value="7" min="1" step="1">
+        <button class="btn-run" id="recover-btn" onclick="recoverApi()">Recover</button>
+      </div>
+      <div class="api-msg-row">
+        <span class="api-msg" id="recover-api-msg"></span>
+      </div>
+    </div>
+
   </div>
 
   <!-- ── Feed cards (full width, stacked) ─────────────────────────────────── -->
@@ -475,6 +495,9 @@ export const PANEL_HTML = `<!DOCTYPE html>
     const emitToggleBtn   = $('emit-toggle-btn');
     const resetApiBtn     = $('reset-api-btn');
     const resetApiMsg     = $('reset-api-msg');
+    const recoverBtn        = $('recover-btn');
+    const recoverDaysInput  = $('recover-days-input');
+    const recoverApiMsg     = $('recover-api-msg');
     const liveBadge       = $('live-badge');
     const clearBtn        = $('clear-btn');
     const feedList        = $('feed-list');
@@ -520,13 +543,18 @@ export const PANEL_HTML = `<!DOCTYPE html>
     const corrFilterClearBtn = $('corr-filter-clear-btn');
 
     // Interactive control cards — dimmed while reset_state == blocked.
+    // Recover card is deliberately excluded (#423, D18): recover is
+    // non-destructive and does not block the driver's own surface.
     const interactiveCards = [$('ingest-card'), $('gh-emulator-card'), $('control-api-card')];
 
-    // Interactive controls blocked during reset.
+    // Interactive controls blocked during reset. recoverBtn/recoverDaysInput
+    // ARE included here (unlike their card) — recover shares reset's
+    // single-flight slot at the API, so submitting mid-reset would 409.
     const interactiveControls = [
       ingestBtn, ingestStopBtn, emitToggleBtn, resetApiBtn,
       datasetSelect, countInput, delayInput,
       ghSeedBtn, ghEmitBtn, ghDatasetSelect, ghCountInput,
+      recoverBtn, recoverDaysInput,
     ];
 
     let pollTimer           = null;
@@ -718,6 +746,49 @@ export const PANEL_HTML = `<!DOCTYPE html>
           resetApiMsg.className   = 'api-msg err';
         })
         .finally(() => { resetApiBtn.disabled = isBlocked; refreshStatus(); });
+    }
+
+    // ── API recover (#423, D18) ─────────────────────────────────────────────
+    function recoverApi() {
+      if (isBlocked) return;
+      recoverBtn.disabled = true;
+      recoverApiMsg.textContent = '';
+      recoverApiMsg.className   = 'api-msg';
+
+      const rawDays  = parseInt(recoverDaysInput.value, 10);
+      const daysBack = Number.isFinite(rawDays) && rawDays >= 1 ? rawDays : 7;
+
+      apiFetch('/demo/api-recover', {
+        method: 'POST',
+        body:   JSON.stringify({ days_back: daysBack }),
+      })
+        .then(d => {
+          if (d.status === 400) {
+            // Our own controller rejected the input (RFC 9457 problem body).
+            recoverApiMsg.textContent = '\\u2717 ' + (d.detail || 'Invalid days_back');
+            recoverApiMsg.className   = 'api-msg err';
+          } else if (d.ok) {
+            recoverApiMsg.textContent = '\\u2713 Recover OK (' + d.http_status + ')' +
+              (d.since ? ' \\u2014 since ' + d.since : '');
+            recoverApiMsg.className   = 'api-msg ok';
+            // Recover was accepted — recover-* choreography progresses via
+            // SSE and is already visible in the Events feed.
+          } else if (d.http_status === 409) {
+            recoverApiMsg.textContent = '\\u2717 A control operation is already in flight (409)';
+            recoverApiMsg.className   = 'api-msg err';
+          } else if (d.http_status === 422) {
+            recoverApiMsg.textContent = '\\u2717 Invalid recover request (422)';
+            recoverApiMsg.className   = 'api-msg err';
+          } else {
+            recoverApiMsg.textContent = '\\u2717 HTTP ' + (d.http_status || '—');
+            recoverApiMsg.className   = 'api-msg err';
+          }
+        })
+        .catch(() => {
+          recoverApiMsg.textContent = '\\u2717 Network error';
+          recoverApiMsg.className   = 'api-msg err';
+        })
+        .finally(() => { recoverBtn.disabled = isBlocked; refreshStatus(); });
     }
 
     clearBtn.addEventListener('click', () => {
