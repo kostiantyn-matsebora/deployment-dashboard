@@ -6,6 +6,13 @@ export interface ResetAckPayload {
   occurred_at: string;
 }
 
+/** Ack for a recover cycle (#423, D18) — a distinct wire type from reset-ack. */
+export interface RecoverAckPayload {
+  event_type:  'recover-ack';
+  state:       'paused';
+  occurred_at: string;
+}
+
 export interface StatusPayload {
   event_type:  'status';
   state:       'running';
@@ -48,6 +55,16 @@ export class ControlEventsClient {
     await this._postEvent(body, resetId);
   }
 
+  /** Ack a recover-initiated event (#423). Distinct wire type from reset-ack — see RecoverAckPayload. */
+  async postRecoverAck(correlationId: string): Promise<void> {
+    const body: RecoverAckPayload = {
+      event_type:  'recover-ack',
+      state:       'paused',
+      occurred_at: new Date().toISOString(),
+    };
+    await this._postEvent(body, correlationId);
+  }
+
   async postStatusRunning(resetId: string): Promise<void> {
     const body: StatusPayload = {
       event_type:  'status',
@@ -79,7 +96,7 @@ export class ControlEventsClient {
   }
 
   private async _postEvent(
-    body: ResetAckPayload | StatusPayload | RunStatusPayload,
+    body: ResetAckPayload | RecoverAckPayload | StatusPayload | RunStatusPayload,
     correlationId?: string,
   ): Promise<void> {
     const headers: Record<string, string> = {

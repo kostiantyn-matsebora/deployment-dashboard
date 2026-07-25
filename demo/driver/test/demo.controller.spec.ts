@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { Subject } from 'rxjs';
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { DemoController } from '../src/demo/demo.controller';
 import { FAVICON_SVG } from '../src/ui/panel';
 import { DemoService, DemoStatus } from '../src/demo/demo.service';
@@ -123,6 +123,7 @@ describe('DemoController', () => {
             getEmitStatus:         jest.fn(),
             setEmit:               jest.fn(),
             resetApi:              jest.fn(),
+            recoverApi:            jest.fn(),
             isBlocked:             jest.fn().mockReturnValue(false),
             getRetryAfterSeconds:  jest.fn().mockReturnValue(90),
             stream$:               new Subject(),
@@ -365,6 +366,82 @@ describe('DemoController', () => {
       await controller.apiReset(res);
       expect(res.status).toHaveBeenCalledWith(503);
       expect(service.resetApi).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── API Recover (#423, D18) ────────────────────────────────────────────────
+
+  describe('POST /demo/api-recover', () => {
+    it('returns ok=true with correlation_id and since on successful recover', async () => {
+      service.recoverApi.mockResolvedValue({
+        ok: true, http_status: 202, correlation_id: 'corr-1', since: '2026-07-19T10:00:00Z',
+      });
+      const res = makeMockRes();
+      await controller.apiRecover({ days_back: 2 }, res);
+      expect(service.recoverApi).toHaveBeenCalledWith({ days_back: 2 });
+      expect(res.json).toHaveBeenCalledWith({
+        ok: true, http_status: 202, correlation_id: 'corr-1', since: '2026-07-19T10:00:00Z',
+      });
+    });
+
+    it('defaults days_back is NOT applied by the controller — days_back is required', async () => {
+      const res = makeMockRes();
+      await expect(controller.apiRecover({}, res)).rejects.toBeInstanceOf(BadRequestException);
+      expect(service.recoverApi).not.toHaveBeenCalled();
+    });
+
+    it('rejects a non-integer days_back with 400', async () => {
+      const res = makeMockRes();
+      await expect(controller.apiRecover({ days_back: 2.5 }, res)).rejects.toBeInstanceOf(BadRequestException);
+      expect(service.recoverApi).not.toHaveBeenCalled();
+    });
+
+    it('rejects a zero days_back with 400', async () => {
+      const res = makeMockRes();
+      await expect(controller.apiRecover({ days_back: 0 }, res)).rejects.toBeInstanceOf(BadRequestException);
+      expect(service.recoverApi).not.toHaveBeenCalled();
+    });
+
+    it('rejects a negative days_back with 400', async () => {
+      const res = makeMockRes();
+      await expect(controller.apiRecover({ days_back: -3 }, res)).rejects.toBeInstanceOf(BadRequestException);
+      expect(service.recoverApi).not.toHaveBeenCalled();
+    });
+
+    it('400 body mirrors the NotFoundException problem shape (RFC 9457-adjacent), but status 400', async () => {
+      const res = makeMockRes();
+      try {
+        await controller.apiRecover({ days_back: -1 }, res);
+        fail('expected BadRequestException');
+      } catch (err) {
+        expect(err).toBeInstanceOf(BadRequestException);
+        const response = (err as BadRequestException).getResponse() as Record<string, unknown>;
+        expect(response.type).toBe('about:blank');
+        expect(response.status).toBe(400);
+        expect(typeof response.detail).toBe('string');
+      }
+    });
+
+    it('returns 503 while blocked — never validates or calls the service', async () => {
+      service.isBlocked.mockReturnValue(true);
+      const res = makeMockRes();
+      await controller.apiRecover({ days_back: 2 }, res);
+      expect(res.status).toHaveBeenCalledWith(503);
+      expect(service.recoverApi).not.toHaveBeenCalled();
+    });
+
+    it('forwards ok=false/http_status=409 from the service unchanged (already in flight)', async () => {
+      service.recoverApi.mockResolvedValue({ ok: false, http_status: 409 });
+      const res = makeMockRes();
+      await controller.apiRecover({ days_back: 2 }, res);
+      expect(res.json).toHaveBeenCalledWith({ ok: false, http_status: 409 });
+    });
+
+    it('forwards ok=false/http_status=422 from the service unchanged (invalid/bound exceeded)', async () => {
+      service.recoverApi.mockResolvedValue({ ok: false, http_status: 422 });
+      const res = makeMockRes();
+      await controller.apiRecover({ days_back: 9999 }, res);
+      expect(res.json).toHaveBeenCalledWith({ ok: false, http_status: 422 });
     });
   });
 

@@ -60,6 +60,24 @@ public sealed class ControlStreamListenerTests
         }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower });
 
     /// <summary>
+    /// Builds <c>recover-completed</c> event data carrying the resolved <c>since</c> in its
+    /// <c>payload</c> — mirrors the shape <c>RecoverOrchestrator</c>/<c>ResetReconciler</c>
+    /// actually emit (<c>{"since":"…"}</c>). Pass <c>since: null</c> to build the "no resolved
+    /// since" malformed-frame case (§5.10.6 guard).
+    /// </summary>
+    private static string MakeRecoverCompletedData(
+        string id, string? resetId, DateTimeOffset? since) =>
+        JsonSerializer.Serialize(new
+        {
+            id,
+            type = "recover-completed",
+            reset_id = resetId,
+            component = "*",
+            occurred_at = DateTimeOffset.UtcNow,
+            payload = since is { } s ? new { since = s } : null,
+        }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower });
+
+    /// <summary>
     /// Creates a <see cref="IControlStreamClient"/> that yields the given frames then completes.
     /// </summary>
     private static IControlStreamClient MakeStream(params ParsedSseEvent[] frames)
@@ -408,6 +426,228 @@ public sealed class ControlStreamListenerTests
 
         // The cursor passed to FetchAsync after DropCursorAndResume must be null.
         Assert.Null(receivedCursor);
+    }
+
+    // ── §5.10.6 recover-initiated: pause + ack (shares the *-initiated handling) ─
+
+    [Fact]
+    public async Task RecoverInitiated_PausesLoopAndPostsAck()
+    {
+        var recoverId = "01J9RECOVER-INITIATED-ID";
+        var data = MakeEventData(id: recoverId, type: "recover-initiated");
+
+        var loop = MakePollLoop();
+        var events = Substitute.For<IComponentEventClient>();
+        var stream = MakeStream(
+            new ParsedSseEvent(IsPing: false, Id: recoverId, EventType: "recover-initiated", Data: data));
+
+        await RunListenerOnceAsync(stream, events, [loop]);
+
+        Assert.True(loop.IsPaused, "Poll loop must be paused after recover-initiated");
+        await events.Received(1).PostAckAsync(recoverId, Arg.Any<CancellationToken>());
+    }
+
+    // ── §5.10.6 recover-started: no-op (already paused by recover-initiated) ────
+
+    [Fact]
+    public async Task RecoverStarted_IsNoOp_NeitherAckNorRunningPosted()
+    {
+        var id = "01J9RECOVER-STARTED";
+        var data = MakeEventData(id: id, type: "recover-started", resetId: "01J9RECOVER-INIT");
+
+        var loop = MakePollLoop();
+        loop.Pause(); // already paused by prior recover-initiated
+
+        var events = Substitute.For<IComponentEventClient>();
+        var stream = MakeStream(
+            new ParsedSseEvent(IsPing: false, Id: id, EventType: "recover-started", Data: data));
+
+        await RunListenerOnceAsync(stream, events, [loop]);
+
+        Assert.True(loop.IsPaused, "Loop must remain paused on recover-started");
+        await events.DidNotReceive().PostAckAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await events.DidNotReceive().PostRunningAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    // ── §5.10.6 recover-completed: rewinds the adapter + injects a non-null cursor ──
+
+    [Fact]
+    public async Task RecoverCompleted_RewindsAdapterAndResumesWithRewoundCursorAndPostsRunning()
+    {
+        var recoverId = "01J9RECOVER-INITIATED-ID";
+        var completedId = "01J9RECOVER-COMPLETED-ID";
+        var since = new DateTimeOffset(2026, 7, 14, 0, 0, 0, TimeSpan.Zero);
+        var data = MakeRecoverCompletedData(id: completedId, resetId: recoverId, since: since);
+
+        const string rewoundCursor = "rewound-non-empty-cursor";
+        var adapter = Substitute.For<ICiCdAdapter>();
+        adapter.AdapterId.Returns("github-actions");
+        adapter.RewindTo(since).Returns(rewoundCursor);
+        adapter.FetchAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(EmptyChunks());
+
+        var state = Substitute.For<IFetcherStateClient>();
+        state.GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns((string?)null);
+        var ingest = Substitute.For<IIngestClient>();
+
+        var loop = MakePollLoop(adapter: adapter, ingest: ingest, state: state);
+        loop.Pause(); // already paused by prior recover-initiated
+
+        var events = Substitute.For<IComponentEventClient>();
+        var stream = MakeStream(
+            new ParsedSseEvent(IsPing: false, Id: completedId, EventType: "recover-completed", Data: data));
+
+        await RunListenerOnceAsync(stream, events, [loop]);
+
+        // The adapter must have been asked to rewind to the resolved `since`, and the loop
+        // resumed with that NON-null cursor (recover is never the DropCursorAndResume/backfill
+        // path — it stays on the incremental branch, unlike reset-completed).
+        adapter.Received(1).RewindTo(since);
+        Assert.False(loop.IsPaused, "Poll loop must be resumed after recover-completed");
+        await events.Received(1).PostRunningAsync(recoverId, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RecoverCompleted_MultipleLoops_EachAdapterRewoundIndependently()
+    {
+        var recoverId = "01J9RECOVER-INIT-MULTI";
+        var completedId = "01J9RECOVER-COMPLETED-MULTI";
+        var since = DateTimeOffset.UtcNow.AddDays(-2);
+        var data = MakeRecoverCompletedData(id: completedId, resetId: recoverId, since: since);
+
+        var adapter1 = Substitute.For<ICiCdAdapter>();
+        adapter1.AdapterId.Returns("github-actions");
+        adapter1.RewindTo(since).Returns("cursor-1");
+        adapter1.FetchAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(EmptyChunks());
+
+        var adapter2 = Substitute.For<ICiCdAdapter>();
+        adapter2.AdapterId.Returns("other-adapter");
+        adapter2.RewindTo(since).Returns("cursor-2");
+        adapter2.FetchAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(EmptyChunks());
+
+        var loop1 = MakePollLoop(adapter: adapter1);
+        var loop2 = MakePollLoop(adapter: adapter2);
+        loop1.Pause();
+        loop2.Pause();
+
+        var events = Substitute.For<IComponentEventClient>();
+        var stream = MakeStream(
+            new ParsedSseEvent(IsPing: false, Id: completedId, EventType: "recover-completed", Data: data));
+
+        await RunListenerOnceAsync(stream, events, [loop1, loop2]);
+
+        adapter1.Received(1).RewindTo(since);
+        adapter2.Received(1).RewindTo(since);
+        Assert.False(loop1.IsPaused);
+        Assert.False(loop2.IsPaused);
+    }
+
+    // ── §5.10.6 recover-completed: malformed frame (no resolved since) is ignored ──
+
+    [Fact]
+    public async Task RecoverCompleted_NoSincePayload_LoopsRemainPaused_NoRewindNoAck()
+    {
+        var completedId = "01J9RECOVER-NO-SINCE";
+        var data = MakeRecoverCompletedData(id: completedId, resetId: "01J9RECOVER-INIT", since: null);
+
+        var adapter = Substitute.For<ICiCdAdapter>();
+        adapter.AdapterId.Returns("github-actions");
+        adapter.FetchAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(EmptyChunks());
+
+        var loop = MakePollLoop(adapter: adapter);
+        loop.Pause();
+
+        var events = Substitute.For<IComponentEventClient>();
+        var stream = MakeStream(
+            new ParsedSseEvent(IsPing: false, Id: completedId, EventType: "recover-completed", Data: data));
+
+        await RunListenerOnceAsync(stream, events, [loop]);
+
+        // No resolved `since` → the handler must not act: loop stays paused, adapter is
+        // never asked to rewind, and no "running" status is posted (§5.10.6 malformed guard).
+        Assert.True(loop.IsPaused, "Loop must remain paused when recover-completed carries no since");
+        adapter.DidNotReceive().RewindTo(Arg.Any<DateTimeOffset>());
+        await events.DidNotReceive().PostRunningAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    // ── PollLoop.RewindAndResume unit (recover saga cache-clear + cursor-injection) ─
+
+    [Fact]
+    public void RewindAndResume_ResetsAdapterState_LikeDropCursorAndResume()
+    {
+        var adapter = Substitute.For<ICiCdAdapter>();
+        adapter.AdapterId.Returns("github-actions");
+        var ingest = Substitute.For<IIngestClient>();
+        var state = Substitute.For<IFetcherStateClient>();
+
+        var loop = new PollLoop(adapter, ingest, state,
+            pollInterval: TimeSpan.FromMilliseconds(10),
+            NullLogger<PollLoop>.Instance);
+
+        loop.RewindAndResume("rewound-cursor");
+
+        adapter.Received(1).ResetState();
+    }
+
+    [Fact]
+    public async Task RewindAndResume_InjectsTheSuppliedNonNullCursorOnNextPoll()
+    {
+        var adapter = Substitute.For<ICiCdAdapter>();
+        adapter.AdapterId.Returns("github-actions");
+
+        // Record EVERY cursor FetchAsync is invoked with (not just the last) — the fake
+        // adapter's chunks always carry a null Cursor (EmptyChunks()), so PollLoop persists
+        // null again immediately after consuming the injected override on the very next
+        // cycle; only the injected-cursor cycle itself proves the override was applied.
+        var receivedCursors = new List<string?>();
+        adapter.FetchAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+               .Returns(args =>
+               {
+                   lock (receivedCursors) receivedCursors.Add((string?)args[0]);
+                   return EmptyChunks();
+               });
+
+        var ingest = Substitute.For<IIngestClient>();
+        var state = Substitute.For<IFetcherStateClient>();
+        // Simulate: prior to recover, the persisted cursor was null (e.g. fresh instance).
+        state.GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns((string?)null);
+
+        var loop = new PollLoop(adapter, ingest, state,
+            pollInterval: TimeSpan.FromMilliseconds(20),
+            NullLogger<PollLoop>.Instance);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+        var runTask = loop.RunAsync(cts.Token);
+
+        await Task.Delay(10, CancellationToken.None);
+        loop.Pause();
+        await Task.Delay(30, CancellationToken.None);
+        loop.RewindAndResume("rewound-non-empty-cursor");
+
+        await Task.Delay(80, CancellationToken.None);
+        cts.Cancel();
+        await runTask;
+
+        // Unlike DropCursorAndResume (which injects null), the recover rewind cursor is
+        // NON-null so FetchAsync takes the incremental poll branch, never backfill.
+        lock (receivedCursors)
+            Assert.Contains("rewound-non-empty-cursor", receivedCursors);
+    }
+
+    [Fact]
+    public void RewindAndResume_EmptyCursor_Throws()
+    {
+        var adapter = Substitute.For<ICiCdAdapter>();
+        adapter.AdapterId.Returns("github-actions");
+        var ingest = Substitute.For<IIngestClient>();
+        var state = Substitute.For<IFetcherStateClient>();
+
+        var loop = new PollLoop(adapter, ingest, state,
+            pollInterval: TimeSpan.FromMilliseconds(10),
+            NullLogger<PollLoop>.Instance);
+
+        // The recover saga must always supply a non-null, non-empty cursor — guards against
+        // accidentally re-entering the backfill path (which a null/empty cursor would trigger).
+        Assert.Throws<ArgumentException>(() => loop.RewindAndResume(""));
     }
 
     // ── Nested helper ─────────────────────────────────────────────────────────

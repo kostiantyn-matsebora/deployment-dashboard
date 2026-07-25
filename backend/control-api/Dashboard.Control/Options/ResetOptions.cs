@@ -4,7 +4,7 @@ namespace Dashboard.Control.Options;
 /// Configuration for the reset choreography state machine, bound from the <c>Reset</c> appsettings
 /// section and overridable via flat SCREAMING_SNAKE environment variables
 /// (<c>RESET_ACK_TIMEOUT_SECONDS</c>, <c>RESET_GATE_MAX_TTL_SECONDS</c>,
-/// <c>RESET_EXPECTED_COMPONENTS</c> as a CSV) per §9.
+/// <c>RESET_EXPECTED_COMPONENTS</c> as a CSV, <c>RESET_RECOVER_MAX_DAYS_BACK</c>) per §9.
 /// </summary>
 public sealed class ResetOptions
 {
@@ -41,4 +41,17 @@ public sealed class ResetOptions
     /// Default: 60 s. Override via <c>RESET_GATE_MAX_TTL_SECONDS</c> env var.
     /// </summary>
     public int GateMaxTtlSeconds { get; set; } = 60;
+
+    /// <summary>
+    /// Upper bound, in whole days, on how far <c>POST /api/control/recover</c> may rewind fetcher
+    /// cursors — applies to both the relative <c>days_back</c> field (must be <c>&lt;=</c> this
+    /// value) and the absolute <c>since</c> field (must not be older than <c>now - this many
+    /// days</c>). Guards against an unbounded re-poll cost and against <c>days_back</c> values
+    /// large enough to overflow <see cref="DateTimeOffset.AddDays(double)"/> (e.g.
+    /// <see cref="int.MaxValue"/>), which would otherwise throw
+    /// <see cref="ArgumentOutOfRangeException"/> uncaught (→ 500) — the endpoint validates this
+    /// bound before calling <c>AddDays</c>. Default: 90 days. Override via
+    /// <c>RESET_RECOVER_MAX_DAYS_BACK</c> env var.
+    /// </summary>
+    public int RecoverMaxDaysBack { get; set; } = 90;
 }

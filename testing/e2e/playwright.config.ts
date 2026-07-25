@@ -70,5 +70,21 @@ export default defineConfig({
       },
       testMatch: /app-.*\.spec\.ts/,
     },
+
+    /**
+     * outage-recovery — black-box API scenario against the REAL backend stack (Dashboard.Api +
+     * PostgreSQL + demo-driver + gateway + github-emulator + fetcher-host), reached via
+     * BASE_URL (default http://localhost:8080) — the same target testing/api's integration
+     * suite drives. No `page`/browser fixture is used (global fetch only), so `devices` here is
+     * inert; the shared `webServer` array still boots mock+dashboard regardless (unused by this
+     * project) — the same "acceptable overhead" the `mockup` project already documents above.
+     * Requires the full compose profile (db,api,demo-driver,gateway,github-emulator,
+     * fetcher-host) to be running — see outage-recovery.spec.ts's header comment.
+     */
+    {
+      name: 'outage-recovery',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: /outage-recovery\.spec\.ts/,
+    },
   ],
 });
