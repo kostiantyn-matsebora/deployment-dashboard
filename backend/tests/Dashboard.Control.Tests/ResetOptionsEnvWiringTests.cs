@@ -39,6 +39,7 @@ public sealed class ResetOptionsEnvWiringTests
             ["RESET_ACK_TIMEOUT_SECONDS"] = "7",
             ["RESET_GATE_MAX_TTL_SECONDS"] = "42",
             ["RESET_EXPECTED_COMPONENTS"] = "a,b,c",
+            ["RESET_RECOVER_MAX_DAYS_BACK"] = "30",
         });
 
         var provider = BuildProvider(config);
@@ -50,6 +51,7 @@ public sealed class ResetOptionsEnvWiringTests
         Assert.Equal(7, opts.AckTimeoutSeconds);
         Assert.Equal(42, opts.GateMaxTtlSeconds);
         Assert.Equal(["a", "b", "c"], opts.ExpectedComponents);
+        Assert.Equal(30, opts.RecoverMaxDaysBack);
     }
 
     [Fact]
@@ -113,6 +115,39 @@ public sealed class ResetOptionsEnvWiringTests
         Assert.Equal(7, opts.AckTimeoutSeconds);
         Assert.Equal(60, opts.GateMaxTtlSeconds);  // bound default survives
         Assert.Equal(["dashboard-fetcher", "demo-driver"], opts.ExpectedComponents); // bound default survives
+    }
+
+    [Fact]
+    public void AddControlServices_RecoverMaxDaysBack_OverridesIndependently()
+    {
+        var config = BuildConfig(new Dictionary<string, string?>
+        {
+            ["Reset:AckTimeoutSeconds"] = "10",
+            ["Reset:GateMaxTtlSeconds"] = "60",
+            ["Reset:RecoverMaxDaysBack"] = "90",
+            ["RESET_RECOVER_MAX_DAYS_BACK"] = "14",
+            // Other env overrides absent — must not be affected.
+        });
+
+        var provider = BuildProvider(config);
+        var opts = provider.GetRequiredService<IOptions<ResetOptions>>().Value;
+
+        Assert.Equal(14, opts.RecoverMaxDaysBack);
+        Assert.Equal(10, opts.AckTimeoutSeconds); // unrelated field survives
+    }
+
+    [Fact]
+    public void AddControlServices_RecoverMaxDaysBack_WhenEnvVarAbsent_FallsBackToBoundDefault()
+    {
+        var config = BuildConfig(new Dictionary<string, string?>
+        {
+            ["Reset:RecoverMaxDaysBack"] = "90",
+        });
+
+        var provider = BuildProvider(config);
+        var opts = provider.GetRequiredService<IOptions<ResetOptions>>().Value;
+
+        Assert.Equal(90, opts.RecoverMaxDaysBack);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

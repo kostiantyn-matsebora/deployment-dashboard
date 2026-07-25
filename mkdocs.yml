@@ -90,6 +90,7 @@ nav:
   - Install & deploy:
       - guide/install/index.md
       - Docker Compose: guide/install/docker-compose.md
+      - Kubernetes (Helm): guide/install/kubernetes.md
       - Azure (Terraform): guide/install/azure-terraform.md
   - Guide:
       - guide/index.md
@@ -98,6 +99,7 @@ nav:
       - Install & deploy:
           - guide/install/index.md
           - Docker Compose: guide/install/docker-compose.md
+          - Kubernetes (Helm): guide/install/kubernetes.md
           - Azure (Terraform): guide/install/azure-terraform.md
       - Configuration:
           - guide/configuration/index.md

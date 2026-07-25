@@ -1,0 +1,58 @@
+{{- if .Values.gateway.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "deployment-dashboard.componentName" (dict "root" . "component" "gateway") }}
+  labels:
+    {{- include "deployment-dashboard.componentLabels" (dict "root" . "component" "gateway") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "deployment-dashboard.componentSelectorLabels" (dict "root" . "component" "gateway") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "deployment-dashboard.componentLabels" (dict "root" . "component" "gateway") | nindent 8 }}
+    spec:
+      containers:
+        - name: gateway
+          {{- if .Values.demo.enabled }}
+          image: {{ include "deployment-dashboard.image" (dict "root" . "component" "gateway-demo") }}
+          {{- else }}
+          image: {{ include "deployment-dashboard.image" (dict "root" . "component" "gateway") }}
+          {{- end }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: API_UPSTREAM
+              value: "{{ include "deployment-dashboard.componentName" (dict "root" . "component" "api") }}:8080"
+            - name: FRONTEND_UPSTREAM
+              value: "{{ include "deployment-dashboard.componentName" (dict "root" . "component" "frontend") }}:80"
+            {{- if .Values.demo.enabled }}
+            # FQDN required: nginx `resolver` queries cluster DNS directly and ignores
+            # /etc/resolv.conf search domains, so a bare Service name never resolves here.
+            - name: DEMO_DRIVER_UPSTREAM
+              value: "{{ include "deployment-dashboard.componentName" (dict "root" . "component" "demo-driver") }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}:3001"
+            {{- if .Values.gateway.dnsResolver }}
+            # Omitted when empty (default) — the demo-gateway image auto-detects
+            # the cluster DNS ClusterIP from the pod's own /etc/resolv.conf.
+            - name: DNS_RESOLVER
+              value: {{ .Values.gateway.dnsResolver | quote }}
+            {{- end }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+{{- end }}

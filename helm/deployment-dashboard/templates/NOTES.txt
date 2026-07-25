@@ -1,0 +1,27 @@
+Deployment Dashboard has been installed.
+
+{{- if .Values.ingress.enabled }}
+
+Resolved URL:
+{{- if .Values.ingress.host }}
+  http{{ if .Values.ingress.tls }}s{{ end }}://{{ .Values.ingress.host }}
+{{- else }}
+  Ingress has no host set — reachable via the ingress controller's default backend / load-balancer address:
+    kubectl get ingress {{ include "deployment-dashboard.fullname" . }} -n {{ .Release.Namespace }}
+{{- end }}
+{{- else }}
+
+Ingress is disabled. Port-forward to reach the dashboard:
+{{- if .Values.gateway.enabled }}
+  kubectl port-forward svc/{{ include "deployment-dashboard.componentName" (dict "root" . "component" "gateway") }} 8080:8080 -n {{ .Release.Namespace }}
+  Then open http://localhost:8080
+{{- else }}
+  kubectl port-forward svc/{{ include "deployment-dashboard.componentName" (dict "root" . "component" "frontend") }} 8080:80 -n {{ .Release.Namespace }}
+  kubectl port-forward svc/{{ include "deployment-dashboard.componentName" (dict "root" . "component" "api") }} 8081:8080 -n {{ .Release.Namespace }}
+{{- end }}
+{{- end }}
+
+Routing: {{ if .Values.gateway.enabled }}Option A — gateway Pod (single public surface){{ else }}Option B — native Ingress path routing{{ end }}
+Database: {{ if .Values.postgresql.enabled }}bundled PostgreSQL (in-chart){{ else }}external ({{ .Values.externalDatabase.host }}:{{ .Values.externalDatabase.port }}){{ end }}
+Demo mode: {{ if .Values.demo.enabled }}ENABLED — Demo Driver + GitHub Emulator are running with insecure demo credentials. DO NOT use this release for production.{{ else }}disabled{{ end }}
+Reset surface (POST /api/control/reset): {{ if or .Values.controlApiKey .Values.demo.enabled }}enabled{{ else }}disabled (set controlApiKey to enable){{ end }}

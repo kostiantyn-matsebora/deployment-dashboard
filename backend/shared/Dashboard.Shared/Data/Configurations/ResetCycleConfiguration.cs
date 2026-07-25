@@ -45,10 +45,23 @@ internal sealed class ResetCycleConfiguration : IEntityTypeConfiguration<ResetCy
               .HasColumnName("deadline_at")
               .HasColumnType("timestamptz");
 
+        // Discriminates reset vs recover on the shared single-flight row (D12).
+        entity.Property(e => e.Operation)
+              .HasColumnName("operation")
+              .HasColumnType("text")
+              .HasDefaultValue("reset")
+              .IsRequired();
+
+        // Resolved recovery rewind point; null for reset cycles and while idle.
+        entity.Property(e => e.RecoverSince)
+              .HasColumnName("recover_since")
+              .HasColumnType("timestamptz");
+
         if (_isSqlite)
         {
             entity.Property(e => e.StartedAt).HasConversion(ValueConverters.NullableDateTimeOffsetToUnixMs);
             entity.Property(e => e.DeadlineAt).HasConversion(ValueConverters.NullableDateTimeOffsetToUnixMs);
+            entity.Property(e => e.RecoverSince).HasConversion(ValueConverters.NullableDateTimeOffsetToUnixMs);
             // SQLite has no native array type; store as comma-delimited text.
             entity.Property(e => e.ExpectedComponents).HasConversion(ValueConverters.StringArrayToCsv);
             entity.Property(e => e.AcksReceived).HasConversion(ValueConverters.StringArrayToCsv);

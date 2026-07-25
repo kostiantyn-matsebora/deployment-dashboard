@@ -13,6 +13,7 @@ The tree below is authoritative — *Present today* vs *Reserved* are split into
 | `gateway/` | nginx App Gateway config. |
 | `testing/[type]` | Testing solutions (`api`, `e2e`). |
 | `compose/` | Local-dev Docker Compose stack. |
+| `helm/` | Helm chart (`deployment-dashboard`) for Kubernetes installs + `ci/` install-test overlays. |
 | `scripts/` | PowerShell tooling + hooks. |
 
 **Reserved (planned, not present).** Slots referenced by `.dockerignore` and SAD §7 awaiting implementation:
