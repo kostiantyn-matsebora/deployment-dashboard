@@ -101,6 +101,10 @@ namespace Dashboard.Shared.Migrations
                         .HasColumnType("timestamptz")
                         .HasColumnName("occurred_at");
 
+                    b.Property<string>("Payload")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("payload");
+
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasColumnType("text")
@@ -278,6 +282,17 @@ namespace Dashboard.Shared.Migrations
                     b.PrimitiveCollection<string[]>("ExpectedComponents")
                         .HasColumnType("text[]")
                         .HasColumnName("expected_components");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("reset")
+                        .HasColumnName("operation");
+
+                    b.Property<DateTimeOffset?>("RecoverSince")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("recover_since");
 
                     b.Property<DateTimeOffset?>("StartedAt")
                         .HasColumnType("timestamptz")
