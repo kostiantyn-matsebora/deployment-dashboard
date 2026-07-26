@@ -1,0 +1,37 @@
+#!/bin/sh
+# 15-detect-dns-resolver.envsh — auto-detect DNS_RESOLVER for the demo gateway.
+#
+# WHY: demo.snippet's `resolver ${DNS_RESOLVER} ...;` directive configures
+# nginx's OWN resolver, used for variable-based proxy_pass to the (optional)
+# demo-driver upstream. nginx's resolver directive does not read
+# /etc/resolv.conf itself — it needs an explicit IP. This file is SOURCED
+# (not executed) by the stock nginx entrypoint, before 20-envsubst-on-
+# templates.sh runs, so `export`ing DNS_RESOLVER here reaches envsubst
+# without any image-specific wiring. This makes the demo image zero-config
+# on Docker Compose (embedded DNS 127.0.0.11), any Kubernetes cluster
+# (kube-dns/CoreDNS ClusterIP), and Azure Container Apps (Azure DNS) — each
+# platform writes its own resolver address into the container's resolv.conf.
+#
+# An explicit DNS_RESOLVER env var (set by the caller) always wins — this
+# only fills in the value when one was not supplied.
+#
+# Must stay POSIX sh — the entrypoint sources it via `sh` (dash on Alpine).
+# The nginx entrypoint only sources *.envsh files that carry the exec bit
+# (see docker-entrypoint.sh), so this file must be copied in executable.
+
+# Overridable so tests can source this file against a fixture instead of the
+# real /etc/resolv.conf.
+RESOLV_CONF="${RESOLV_CONF:-/etc/resolv.conf}"
+
+if [ -z "$DNS_RESOLVER" ]; then
+    # `|| true` matters: the entrypoint sources this file under `set -e`, so
+    # a missing/unreadable RESOLV_CONF (awk exiting non-zero) would otherwise
+    # abort the whole container start instead of falling through to the
+    # fallback below.
+    DNS_RESOLVER=$(awk '/^nameserver[ \t]/ { print $2; exit }' "$RESOLV_CONF" 2>/dev/null || true)
+    # No nameserver line found (missing/empty resolv.conf) — fall back to
+    # Docker's embedded-DNS IP, the previous hardcoded default, so the most
+    # common demo target (Compose) keeps working even in this degenerate case.
+    DNS_RESOLVER="${DNS_RESOLVER:-127.0.0.11}"
+    export DNS_RESOLVER
+fi

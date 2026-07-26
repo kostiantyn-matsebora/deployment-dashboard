@@ -1,0 +1,51 @@
+apiVersion: v2
+name: deployment-dashboard
+description: A self-hosted deployment/version dashboard — ingests deployment events (push or pull) and shows current + historical service versions per environment.
+type: application
+# Committed baseline. The release workflow (.github/workflows/release.yml,
+# job `helm-chart`) overrides BOTH version and appVersion to the release SemVer
+# at `helm package` time — never hand-edit these per release.
+version: 0.1.0
+appVersion: "latest"
+icon: https://raw.githubusercontent.com/kostiantyn-matsebora/deployment-dashboard/main/docs/design/logo/logo-512.png
+home: https://kostiantyn-matsebora.github.io/deployment-dashboard/
+sources:
+  - https://github.com/kostiantyn-matsebora/deployment-dashboard
+keywords:
+  - deployment
+  - dashboard
+  - devops
+  - ci-cd
+  - version-tracking
+  - observability
+maintainers:
+  - name: Kostiantyn Matsebora
+    email: komkom@duck.com
+    url: https://github.com/kostiantyn-matsebora
+annotations:
+  artifacthub.io/category: integration-delivery
+  artifacthub.io/license: MIT
+  artifacthub.io/links: |
+    - name: Homepage
+      url: https://kostiantyn-matsebora.github.io/deployment-dashboard/
+    - name: Source
+      url: https://github.com/kostiantyn-matsebora/deployment-dashboard
+    - name: Documentation
+      url: https://kostiantyn-matsebora.github.io/deployment-dashboard/
+  artifacthub.io/images: |
+    - name: api
+      image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-api:latest
+    - name: frontend
+      image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-spa:latest
+    - name: gateway
+      image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-gateway:latest
+    - name: gateway-demo
+      image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-gateway-demo:latest
+    - name: fetcher
+      image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-fetcher:latest
+    - name: demo-driver
+      image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-demo-driver:latest
+    - name: github-emulator
+      image: ghcr.io/kostiantyn-matsebora/deployment-dashboard-github-emulator:latest
+  artifacthub.io/changelog: |
+    See https://github.com/kostiantyn-matsebora/deployment-dashboard/blob/main/CHANGELOG.md

@@ -39,13 +39,16 @@ info:
     component-initiated GET — the API emits into it, but the connection is inbound.
 
     **Event-store semantics.** The persistence model (SAD §11) is an append-only
-    log of deployment **events** — every `POST /api/deployments` appends one row.
-    A single logical deployment emits several rows during its lifecycle
-    (e.g. `in-progress` → `success`/`failure`), all sharing one `deployment_id`.
-    `deployment_id` is therefore an emitter-supplied **correlation key**, NOT a
-    row identity and NOT an idempotency key. Retries from a flaky CI step produce
-    additional rows; the read surface always reduces by `happened_at` (latest wins
-    per `(service, environment)` for the Matrix; full history for the drawer).
+    log of deployment **events**. `POST /api/deployments` is an idempotent append
+    on the natural key `(deployment_id, status, happened_at)`: a new triple inserts
+    one row and returns `201` (plus an SSE `NOTIFY`), while a duplicate triple — a
+    fetcher backfill replay or an at-least-once POST retry — inserts nothing and
+    returns `200` with no SSE event. A single logical deployment emits several rows
+    during its lifecycle (e.g. `in-progress` → `success`/`failure`), all sharing one
+    `deployment_id`. `deployment_id` is therefore an emitter-supplied **correlation
+    key**, NOT a row identity and NOT the idempotency key — the full triple is.
+    The read surface always reduces by `happened_at` (latest wins per
+    `(service, environment)` for the Matrix; full history for the drawer).
 
     **`happened_at` is emitter-supplied**, not server-assigned (SAD §11). It is
     the UTC wall-clock at which the deployment transitioned to the reported
@@ -105,6 +108,12 @@ tags:
     description: Liveness + readiness probes.
   - name: meta
     description: Non-sensitive build metadata (deployed version). Unauthenticated.
+  - name: presets
+    description: |
+      Repo/CI-sourced provided presets (issue #391). A source — a GitHub
+      `owner/repo` — publishes an authoritative bundle of named setting presets
+      via `PUT /api/presets/sources/{source}` (requires `X-Api-Key`); the SPA
+      reads the merged catalog via `GET /api/presets` (unauthenticated).
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Security
@@ -125,13 +134,16 @@ paths:
       description: |
         Push a deployment-state event from a CI/CD pipeline (or the optional fetcher).
 
-        **Pure append-only.** Every accepted call inserts one row. There is no
-        server-side dedup: the server does not compare `(service, deployment_id)`,
-        payload hashes, or any other key against existing rows. A retried POST
-        produces a duplicate row — handling retries is the caller's concern.
+        **Idempotent append.** A new event inserts one row and returns `201`. The
+        natural key `(deployment_id, status, happened_at)` is deduplicated: a replay
+        carrying an already-stored triple (a fetcher backfill replay or an
+        at-least-once POST retry) inserts nothing and returns `200` with the existing
+        row. The server compares only this triple — not `service`, payload hashes, or
+        any other key.
 
-        On success the backend `NOTIFY`s the PostgreSQL `deployment_events` channel,
-        which fans out to every connected SSE client across all API instances.
+        On a new-row `201` the backend `NOTIFY`s the PostgreSQL `deployment_events`
+        channel, which fans out to every connected SSE client across all API
+        instances; an idempotent `200` replay emits no SSE event.
 
         **Reset window.** During the brief data-clearing phase of a system-state reset
         ingest is unavailable and returns `503` with `Retry-After`; clients retry after
@@ -155,6 +167,15 @@ paths:
               standaloneInProgress:
                 $ref: '#/components/examples/IngestInProgressNoParents'
       responses:
+        '200':
+          description: |
+            Event already ingested (idempotent replay); existing deployment event
+            returned. The natural key `(deployment_id, status, happened_at)` matched
+            a stored row, so nothing was inserted and no SSE event was emitted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeploymentEvent'
         '201':
           description: Event appended.
           headers:
@@ -219,6 +240,14 @@ paths:
         every page — even rows already in storage are hidden. This is independent
         of the `service` query param below (which targets a single identity). See
         `getMatrix` and `api-guidelines.md` §5.
+
+        **Free-text search.** The optional `q` param narrows the page to rows
+        whose `service`, `namespace`, `environment`, `version`, `status`,
+        `actor`, `ref`, `sha`, `deployment_id`, or `run_number` contains the
+        given value (case-insensitive substring). It composes by logical AND with
+        the structured filters (`service`/`environment`/`status`/`deployment_id`/
+        `since`/`until`) and is applied before cursor pagination, so `next_cursor`
+        pages stay consistent for a fixed `q`.
       parameters:
         - { name: service,       in: query, schema: { type: string }, description: "Filter by service identity. A value without `/` matches the `service` segment across all namespaces; a value containing `/` matches the full `namespace/service` composite (see `getMatrix` for the shared glob semantics)." }
         - { name: environment,   in: query, schema: { type: string }, description: Filter by environment identifier. }
@@ -226,6 +255,7 @@ paths:
         - { name: deployment_id, in: query, schema: { type: string }, description: Filter to all rows of a single logical deployment. }
         - { name: since,         in: query, schema: { type: string, format: date-time }, description: "Only events with `happened_at >= since`." }
         - { name: until,         in: query, schema: { type: string, format: date-time }, description: "Only events with `happened_at <  until`." }
+        - { name: q,             in: query, schema: { type: string, maxLength: 200 }, description: "Free-text search. Case-insensitive substring match applied server-side across `service`, `namespace`, `environment`, `version`, `status`, `actor`, `ref`, `sha`, `deployment_id`, and `run_number`; a row matches when **any** of those fields contains the value. Empty or absent ⇒ no text filter. Composes by logical **AND** with the structured filters (`service`/`environment`/`status`/`deployment_id`/`since`/`until`) and is applied **before** cursor pagination, so `next_cursor` pages stay consistent for a fixed `q`." }
         - { name: cursor,        in: query, schema: { type: string }, description: Opaque pagination cursor from a previous page. }
         - { name: limit,         in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
       responses:
@@ -681,6 +711,65 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  # ───── Presets — repo/CI-sourced provided presets (issue #391) ────────────
+  /api/presets/sources/{source}:
+    parameters:
+      - name: source
+        in: path
+        required: true
+        schema: { type: string, minLength: 1 }
+        description: |
+          Source identifier — the GitHub `owner/repo` that owns this bundle
+          (e.g. `acme/web`). **It contains a slash**, so the backend matches it
+          with a catch-all route; the full `owner/repo` value (slash included) is
+          the storage key. There is no GET on this path — the source-scoped write
+          is authoritative-replace only.
+
+    put:
+      tags: [presets]
+      operationId: putPresetSource
+      summary: Publish the authoritative preset bundle for a source.
+      description: |
+        Replaces the entire set of presets owned by `{source}` with the supplied
+        bundle (authoritative per source; last write wins). An empty
+        `presets: []` is a valid authoritative-empty bundle that prunes every
+        preset previously published by this source. The request body is capped at
+        256 KiB (262144 bytes); larger bodies are rejected with `413`.
+      security:
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PresetBundle' }
+      responses:
+        '204': { description: Bundle stored; this source's presets now equal the bundle. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413':
+          description: Bundle exceeds the 256 KiB limit.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/presets:
+    get:
+      tags: [presets]
+      operationId: getPresets
+      summary: List all provided presets across every source.
+      description: |
+        Returns the merged catalog of provided presets from all sources, for the
+        SPA to offer as ready-made setting bundles.
+
+        **Unauthenticated — public read.** No `X-Api-Key` and no
+        `X-Control-API-Key`. Same trust tier as `/api/version` and the other SPA
+        reads; it exposes only the presets that sources chose to publish.
+      responses:
+        '200':
+          description: The merged provided-preset catalog.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProvidedPresets' }
+
   # ───── Control — destructive reset ────────────────────────────────────────
   /api/control/reset:
     post:
@@ -718,6 +807,76 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '409':
           description: A reset is already in progress (draining or resetting).
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  # ───── Control — non-destructive recover ──────────────────────────────────
+  /api/control/recover:
+    post:
+      tags: [control]
+      operationId: recoverState
+      summary: Initiate an asynchronous, non-destructive recovery.
+      description: |
+        Initiates an asynchronous recovery that rewinds fetcher cursors to a chosen
+        point in time so components re-poll and pick up any events missed during an
+        outage. Returns `202` immediately; progress is signalled on the control stream
+        as `recover-initiated` → `recover-started` → `recover-completed`.
+
+        **Non-destructive.** Unlike `POST /api/control/reset`, recovery clears **no**
+        data — deployment history and component state are preserved. It only moves
+        fetcher cursors back to the resolved `since` so missed events are re-fetched
+        incrementally (no full backfill).
+
+        Recovery runs as the same single-flight choreography as reset and shares its
+        coordination: the API first drains connected components (they pause and
+        acknowledge), then briefly gates while it rewinds cursors, then releases the
+        gate and components resume polling from `since`. There is **no status
+        endpoint** — observe the control stream.
+
+        **`since` XOR `days_back`.** The rewind point is given either as an absolute
+        `since` timestamp or a relative `days_back` count; **exactly one** must be
+        supplied. `days_back` is resolved server-side to `since = now − days_back days`.
+        The resolved `since` is echoed in the `202` body and carried in the `payload`
+        of the terminal `recover-completed` control event only (`{"since": "…"}`); the
+        earlier `recover-initiated` / `recover-started` frames carry `payload: null`.
+
+        **Lookback bound.** `days_back` has a server-configured upper bound (default 90
+        days, operator-tunable); an absolute `since` must likewise fall within that
+        window. A `days_back` or `since` older than the bound is rejected with `422`.
+
+        **Mutually exclusive with reset.** Recover and reset share one in-flight slot;
+        a `POST` while either a recover or a reset is already draining or running
+        returns `409`.
+
+        Gated by `X-Control-API-Key` (D8) — the same distinct secret as reset.
+      security:
+        - controlApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RecoverRequest' }
+      responses:
+        '202':
+          description: Recovery accepted; the choreography has started. Watch the control stream for progress.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecoverAccepted' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: A control operation (reset or recover) is already in progress (draining or resetting).
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422':
+          description: |
+            Request body validation failed — the `since` XOR `days_back` rule was
+            violated (both or neither supplied), the rewind point exceeded the
+            server-configured lookback bound (`days_back` above the maximum, default 90
+            days, or an absolute `since` older than that window), or an unknown field
+            was present on `RecoverRequest` (D5: unknown write fields are rejected).
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
@@ -760,6 +919,14 @@ paths:
         - `reset-started` — all acks in (or the ack timeout elapsed); data is being
           cleared, ingest briefly returns `503`.
         - `reset-completed` — data cleared and gates released; components recover.
+
+        **Current event types — recover choreography (`component: "*"`):** the
+        non-destructive counterpart. Same drain/gate/release shape; only the terminal
+        `recover-completed` frame carries the resolved rewind point in its `payload`
+        (`{"since": "…"}`) — the earlier frames carry `payload: null`.
+        - `recover-initiated` — recovery accepted; components drain and ack (as for reset). `payload: null`.
+        - `recover-started` — acks in (or ack timeout elapsed); fetcher cursors being rewound. `payload: null`.
+        - `recover-completed` — cursors rewound to `since`; components resume incremental polling. Carries `payload: {"since": "…"}`.
 
         Every frame carries `correlation_id` (the process id). On `reset-initiated`
         it equals the frame's own `id` (origin); on `reset-started` / `reset-completed`
@@ -1942,6 +2109,74 @@ components:
           format: date-time
           description: Server timestamp when the reset was accepted.
 
+    RecoverRequest:
+      type: object
+      description: |
+        Request body for `POST /api/control/recover`. Specifies the rewind point as
+        **either** an absolute `since` timestamp **or** a relative `days_back` count —
+        **exactly one** must be supplied (`oneOf`; each branch forbids the other field).
+        `days_back` is resolved server-side to `since = now − days_back days`.
+      oneOf:
+        - title: AbsoluteSince
+          type: object
+          required: [since]
+          additionalProperties: false
+          properties:
+            since:
+              type: string
+              format: date-time
+              description: |
+                Absolute UTC instant to rewind fetcher cursors to; events on or after
+                this instant are re-fetched. Must not be combined with `days_back`.
+                Must fall within the server-configured lookback window (default 90 days
+                back); an instant older than the bound is rejected with `422`.
+        - title: RelativeDaysBack
+          type: object
+          required: [days_back]
+          additionalProperties: false
+          properties:
+            days_back:
+              type: integer
+              minimum: 1
+              description: |
+                Whole days to rewind from the current server time; resolved to
+                `since = now − days_back days`. Must not be combined with `since`.
+                Capped by a server-configured upper bound (default 90 days,
+                operator-tunable — no fixed schema `maximum`); a value above the bound
+                is rejected with `422`.
+
+    RecoverAccepted:
+      type: object
+      required: [correlation_id, state, since]
+      description: Acknowledgement body for an accepted `POST /api/control/recover` (`202`).
+      properties:
+        correlation_id:
+          type: string
+          format: uuid
+          description: |
+            The process id for this recovery — the `id` of the emitted
+            `recover-initiated` control event (where `correlation_id == id`). Every
+            downstream command frame (`recover-started` / `recover-completed`) and the
+            components' `recover-ack` / post-recover `status` events carry this same
+            value as `correlation_id`, so the whole saga is filterable by this one key.
+        state:
+          $ref: '#/components/schemas/ResetState'
+          description: |
+            Phase entered by accepting the recovery — always `draining`. Recover shares
+            the reset choreography's single-flight state (`ResetState`).
+        since:
+          type: string
+          format: date-time
+          description: |
+            The **resolved** absolute rewind point — echoed verbatim when supplied as
+            `since`, or computed as `now − days_back days`. Carried in the `payload`
+            of the terminal `recover-completed` control event only (`{"since": "…"}`);
+            the earlier `recover-initiated` / `recover-started` frames carry `payload: null`.
+        accepted_at:
+          type: string
+          format: date-time
+          description: Server timestamp when the recovery was accepted.
+
     ComponentState:
       type: string
       enum: [running, idle, paused, error]
@@ -1961,7 +2196,7 @@ components:
 
         `type` is an open string — components MUST treat unknown values as no-ops
         (forward-compatibility). Known values: `reset-initiated` | `reset-started` |
-        `reset-completed`.
+        `reset-completed` | `recover-initiated` | `recover-started` | `recover-completed`.
 
         `id` and `correlation_id` are independent fields: `id` is this event's own
         row PK / SSE cursor; `correlation_id` is the process key shared across the
@@ -1977,10 +2212,13 @@ components:
         type:
           type: string
           description: |
-            Event type. Known values (reset choreography):
-            - `reset-initiated` — reset accepted; components drain and ack `paused`.
-            - `reset-started`   — acks in or timeout elapsed; data being cleared.
-            - `reset-completed` — data cleared, gates released; components recover.
+            Event type. Known values:
+            - `reset-initiated`   — reset accepted; components drain and ack `paused`.
+            - `reset-started`     — acks in or timeout elapsed; data being cleared.
+            - `reset-completed`   — data cleared, gates released; components recover.
+            - `recover-initiated` — recovery accepted; components drain and ack `paused`.
+            - `recover-started`   — acks in or timeout elapsed; fetcher cursors being rewound.
+            - `recover-completed` — cursors rewound to `since`; components resume polling.
             Treat unknown values as no-op.
         correlation_id:
           type: string
@@ -2002,6 +2240,16 @@ components:
           type: string
           format: date-time
           description: Server-assigned UTC timestamp when the event was generated.
+        payload:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: |
+            Opaque per-event data, or `null` when the event carries none — mirrors the
+            `payload` on component events. Carries the resolved rewind point only on the
+            terminal `recover-completed` frame (`{"since":"2026-07-14T00:00:00Z"}`);
+            `null` on the `recover-initiated` / `recover-started` frames and on every
+            reset choreography frame. Not required; consumers MUST tolerate its absence.
 
     ComponentEvent:
       type: object
@@ -2143,6 +2391,89 @@ components:
           maxLength: 100
           description: Free-form build version string (`vX.Y.Z`, `main+<sha>`, or `0.0.0-dev`).
           examples: ["v0.13.1"]
+
+    # ── Presets (issue #391) ───────────────────────────────────────────────────
+
+    Preset:
+      type: object
+      required: [version, name, settings]
+      additionalProperties: false
+      description: |
+        A single named settings preset, mirroring the SPA settings envelope
+        `{ version, name, settings }`.
+      properties:
+        version:
+          type: integer
+          const: 1
+          description: Envelope schema version. Currently always `1`.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Human-facing preset name; unique within a source's bundle.
+        settings:
+          type: object
+          description: |
+            Opaque settings payload. The backend stores it verbatim (persisted as
+            `settings_json`) and never parses or validates its inner shape — that
+            is the SPA's concern.
+
+    PresetBundle:
+      type: object
+      required: [version, presets]
+      additionalProperties: false
+      description: |
+        Closed authoritative bundle published by one source via
+        `PUT /api/presets/sources/{source}`. The whole request body is size-capped
+        at 256 KiB (262144 bytes); larger bodies → `413`. An empty `presets: []`
+        is a valid authoritative-empty bundle that prunes all presets for the
+        source.
+      properties:
+        version:
+          type: integer
+          const: 1
+          description: Bundle schema version. Currently always `1`.
+        presets:
+          type: array
+          description: The complete set of presets for the source. May be empty (prune-all).
+          items: { $ref: '#/components/schemas/Preset' }
+
+    ProvidedPreset:
+      type: object
+      required: [source, name, version, settings, fetched_at]
+      additionalProperties: false
+      description: |
+        One published preset as served by `GET /api/presets`, tagged with its
+        owning source and the time its bundle was last stored.
+      properties:
+        source:
+          type: string
+          description: The `owner/repo` that published this preset.
+        name:
+          type: string
+          description: Preset name as published in the source's bundle.
+        version:
+          type: integer
+          const: 1
+          description: Envelope schema version. Currently always `1`.
+        settings:
+          type: object
+          description: Opaque settings payload, stored and served verbatim.
+        fetched_at:
+          type: string
+          format: date-time
+          description: Server timestamp when this source's bundle was last published/stored.
+
+    ProvidedPresets:
+      type: object
+      required: [items]
+      additionalProperties: false
+      description: The merged provided-preset catalog served by `GET /api/presets`.
+      properties:
+        items:
+          type: array
+          description: All provided presets across every source. May be empty.
+          items: { $ref: '#/components/schemas/ProvidedPreset' }
 
   examples:
 

@@ -297,8 +297,8 @@
       </div>
     }
 
-    <!-- Fields picker (Matrix + Swimlanes only — not Analytics) ─── -->
-    @if (!isAnalytics()) {
+    <!-- Fields picker (Matrix + Swimlanes only) ─── -->
+    @if (isMatrix() || isSwimlanes()) {
       <div style="position: relative">
         <button
           class="icon-btn"
@@ -354,8 +354,8 @@
       </div>
     }
 
-    <!-- Legend popover (☷) — Matrix + Swimlanes only; hidden on Analytics (no legend needed) -->
-    @if (!isAnalytics()) {
+    <!-- Legend popover (☷) — Matrix + Swimlanes only -->
+    @if (isMatrix() || isSwimlanes()) {
     <div style="position: relative">
       <button
         class="icon-btn"
@@ -434,6 +434,30 @@
     </div>
     }
 
+    <!-- Deployment-feed dock toggle — visible on ALL views; disabled while Feed
+         itself is active (the page IS the full log, the dock is redundant there) (#397) -->
+    <div style="position: relative">
+      <button
+        class="icon-btn"
+        [class.is-active]="feedDockOpen()"
+        [disabled]="isFeed()"
+        title="Deployment feed — toggle the live event panel"
+        aria-label="Deployment feed — toggle the live event panel"
+        [attr.aria-pressed]="feedDockOpen()"
+        (click)="toggleFeedDock()"
+      >
+        <svg aria-hidden="true" width="15" height="15" viewBox="0 0 15 15" fill="none"
+             stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="2" cy="3.5" r="0.9" fill="currentColor" stroke="none"/>
+          <path d="M5 3.5h8"/>
+          <circle cx="2" cy="7.5" r="0.9" fill="currentColor" stroke="none"/>
+          <path d="M5 7.5h8"/>
+          <circle cx="2" cy="11.5" r="0.9" fill="currentColor" stroke="none"/>
+          <path d="M5 11.5h8"/>
+        </svg>
+      </button>
+    </div>
+
     <!-- Presets button (⊙) — saves / applies / exports / imports named UI-settings snapshots ── -->
     <div style="position: relative">
       <button
@@ -483,6 +507,29 @@
                 aria-label="Import a preset from a JSON file"
                 data-testid="presets-import-btn"
               >Import…</button>
+            </div>
+
+            <!-- Import from URL row -->
+            <div class="presets-url-row">
+              <input
+                class="presets-name-input presets-url-input"
+                type="url"
+                placeholder="Import from URL (https://…)"
+                autocomplete="off"
+                spellcheck="false"
+                [(ngModel)]="presetImportUrl"
+                (keydown.enter)="importPresetsFromUrl()"
+                aria-label="Preset JSON URL"
+                data-testid="presets-import-url-input"
+              />
+              <button
+                class="ext-btn is-primary"
+                type="button"
+                [disabled]="presetUrlImporting()"
+                (click)="importPresetsFromUrl()"
+                aria-label="Import preset(s) from URL"
+                data-testid="presets-import-url-btn"
+              >{{ presetUrlImporting() ? '…' : 'Import URL' }}</button>
             </div>
           } @else {
             <!-- Name input for saving -->
@@ -625,6 +672,56 @@
             <p class="presets-empty-hint">No presets saved yet. Save the current settings to create one.</p>
           }
 
+          <!-- Provided presets — read-only, repo/CI-sourced (issue #391) -->
+          @if (hasProvidedPresets()) {
+            <div class="presets-divider" aria-hidden="true"></div>
+            <span class="popover-title">PROVIDED</span>
+            <ul class="presets-list" role="list" aria-label="Provided presets">
+              @for (p of providedPresets(); track p.source + '/' + p.name) {
+                <li
+                  class="presets-row"
+                  [class.is-active]="isProvidedPresetActive(p)"
+                  role="listitem"
+                  [attr.aria-current]="isProvidedPresetActive(p) ? 'true' : null"
+                  data-testid="provided-preset-item"
+                >
+                  <div class="presets-name-col">
+                    <span class="presets-name" [title]="p.name">{{ p.name }}</span>
+                    <span
+                      class="presets-provided-by"
+                      data-testid="provided-preset-source"
+                    >{{ attributionLabel(p) }}</span>
+                  </div>
+                  @if (isProvidedPresetActive(p)) {
+                    <span
+                      class="preset-active-badge"
+                      aria-hidden="true"
+                      data-testid="preset-active-badge"
+                    >Active</span>
+                  }
+                  <div class="presets-row-actions" role="group" [attr.aria-label]="'Actions for ' + p.name">
+                    <button
+                      class="preset-action-btn"
+                      type="button"
+                      [title]="'Apply preset: ' + p.name"
+                      [attr.aria-label]="'Apply preset: ' + p.name"
+                      (click)="applyProvidedPreset(p)"
+                      data-testid="provided-preset-apply-btn"
+                    >✓</button>
+                    <button
+                      class="preset-action-btn"
+                      type="button"
+                      [title]="'Clone to edit: ' + p.name"
+                      [attr.aria-label]="'Clone to edit: ' + p.name"
+                      (click)="cloneProvidedPreset(p)"
+                      data-testid="provided-preset-clone-btn"
+                    >⊕</button>
+                  </div>
+                </li>
+              }
+            </ul>
+          }
+
           <!-- Reset all settings -->
           <div class="presets-divider" aria-hidden="true"></div>
           <button
@@ -758,7 +855,7 @@
     [attr.aria-label]="sseConnected() ? 'Live updates connected' : 'Connecting to live updates'"
   >
     <span class="live-dot" aria-hidden="true"></span>
-    <span>SSE live</span>
+    <span>SSE</span>
   </div>
 
 </header>

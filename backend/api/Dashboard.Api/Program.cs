@@ -53,6 +53,7 @@ app.MapScalarApiReference();
 app.MapOpsEndpoints();
 app.MapWriteEndpoints();
 app.MapFetcherStateEndpoints();
+app.MapPresetEndpoints();
 app.MapReadEndpoints();
 app.MapControlEndpoints();
 

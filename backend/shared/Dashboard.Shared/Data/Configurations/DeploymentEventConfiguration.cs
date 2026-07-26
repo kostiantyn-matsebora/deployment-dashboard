@@ -99,5 +99,11 @@ internal sealed class DeploymentEventConfiguration : IEntityTypeConfiguration<De
         entity.HasIndex(e => new { e.HappenedAt, e.Id })
               .IsDescending(true, true)
               .HasDatabaseName("ix_de_happened_id");
+
+        // Unique natural key: same deployment_id + same status + same timestamp = same transition.
+        // All three columns are non-null. Enforces idempotent ingest (ON CONFLICT → 200 OK).
+        entity.HasIndex(e => new { e.DeploymentId, e.Status, e.HappenedAt })
+              .IsUnique()
+              .HasDatabaseName("ux_de_dedup_natural_key");
     }
 }

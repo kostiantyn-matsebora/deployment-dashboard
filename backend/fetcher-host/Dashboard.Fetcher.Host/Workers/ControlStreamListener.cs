@@ -118,6 +118,19 @@ public sealed class ControlStreamListener(
                 await HandleResetCompletedAsync(data, ct);
                 break;
 
+            case "recover-initiated":
+                await HandleRecoverInitiatedAsync(data, ct);
+                break;
+
+            case "recover-started":
+                // No-op — fetcher already paused on recover-initiated (§5.10.3/§5.10.6).
+                logger.LogInformation("[ControlStream] recover-started received; holding (already paused)");
+                break;
+
+            case "recover-completed":
+                await HandleRecoverCompletedAsync(data, ct);
+                break;
+
             default:
                 // Unknown event types are no-ops (forward-compat — §5.10.2).
                 logger.LogDebug("[ControlStream] Ignoring unknown event type: {EventType}", eventType);
@@ -125,30 +138,39 @@ public sealed class ControlStreamListener(
         }
     }
 
-    private async Task HandleResetInitiatedAsync(string data, CancellationToken ct)
+    private Task HandleResetInitiatedAsync(string data, CancellationToken ct) =>
+        HandlePauseAndAckAsync(data, "reset", ct);
+
+    private Task HandleRecoverInitiatedAsync(string data, CancellationToken ct) =>
+        HandlePauseAndAckAsync(data, "recover", ct);
+
+    // Shared pause+ack handling for both *-initiated events — reset and recover choreograph
+    // this step identically (§5.10.3/§5.10.6): pause every loop, then ack (non-fatal on
+    // failure) so the orchestrator's drain phase can proceed either way.
+    private async Task HandlePauseAndAckAsync(string data, string operation, CancellationToken ct)
     {
         var ev = DeserializeEvent(data);
         if (ev is null) return;
 
-        // reset_id = the event's own id for reset-initiated (§5.10.4).
-        var resetId = ev.Id;
+        // The correlation id = the event's own id for an *-initiated event (§5.10.4).
+        var correlationId = ev.Id;
 
         logger.LogInformation(
-            "[ControlStream] reset-initiated received; reset_id={ResetId}; pausing poll loops",
-            resetId);
+            "[ControlStream] {Operation}-initiated received; correlation_id={CorrelationId}; pausing poll loops",
+            operation, correlationId);
 
         foreach (var loop in pollLoops)
             loop.Pause();
 
         // Post ack — non-fatal on failure (§5.10.4). Guard against throws so the
-        // stream loop continues and can still process reset-completed.
+        // stream loop continues and can still process the matching *-completed event.
         try
         {
-            await eventClient.PostAckAsync(resetId, ct);
+            await eventClient.PostAckAsync(correlationId, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogWarning(ex, "[ControlStream] reset-ack POST failed; remaining paused");
+            logger.LogWarning(ex, "[ControlStream] {Operation}-ack POST failed; remaining paused", operation);
         }
     }
 
@@ -169,6 +191,43 @@ public sealed class ControlStreamListener(
 
         // Report running after resuming (§5.10.5).
         await eventClient.PostRunningAsync(resetId, ct);
+    }
+
+    // Recover saga (§5.10.6): NOT the reset path. Rewinds every loop's adapter to a
+    // NON-null, NON-empty cursor (every repo's since = the resolved rewind point, no
+    // backfill markers) so FetchAsync stays on the incremental poll branch — recovery must
+    // never trigger backfill. The resolved `since` travels in the event payload, not in the
+    // event id/correlation id.
+    private async Task HandleRecoverCompletedAsync(string data, CancellationToken ct)
+    {
+        var ev = DeserializeEvent(data);
+        if (ev is null) return;
+
+        var correlationId = ev.ResetId ?? ev.Id;
+        var since = ev.Payload?.Since;
+
+        if (since is null)
+        {
+            logger.LogWarning(
+                "[ControlStream] recover-completed received without a resolved 'since' in " +
+                "payload; correlation_id={CorrelationId}; ignoring (loops remain paused)",
+                correlationId);
+            return;
+        }
+
+        logger.LogInformation(
+            "[ControlStream] recover-completed received; correlation_id={CorrelationId}; " +
+            "since={Since}; rewinding poll loops",
+            correlationId, since);
+
+        foreach (var loop in pollLoops)
+        {
+            var rewoundCursor = loop.Adapter.RewindTo(since.Value);
+            loop.RewindAndResume(rewoundCursor);
+        }
+
+        // Report running after resuming (§5.10.6, mirrors reset-completed's §5.10.5 ack).
+        await eventClient.PostRunningAsync(correlationId, ct);
     }
 
     private ControlStreamEvent? DeserializeEvent(string data)

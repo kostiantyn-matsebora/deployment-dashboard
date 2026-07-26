@@ -149,6 +149,67 @@ public sealed class PollLoopTests
         Assert.True(callCount >= 2, "Loop should have retried after error");
     }
 
+    // ── startup cursor-fetch resilience (initial state.GetAsync failure must not fault RunAsync) ──
+
+    /// <summary>
+    /// The initial cursor fetch (before the while loop) throws once, then succeeds. The loop
+    /// must retry rather than fault, then proceed to poll using the cursor from the successful call.
+    /// </summary>
+    [Fact]
+    public async Task PollLoop_InitialCursorFetchThrowsThenSucceeds_LoopStartsAndPolls()
+    {
+        var adapter = Substitute.For<ICiCdAdapter>();
+        adapter.AdapterId.Returns("github-actions");
+        adapter.FetchAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(Chunks(new FetchResult([], "cursor-1")));
+
+        var ingest = Substitute.For<IIngestClient>();
+
+        var state = Substitute.For<IFetcherStateClient>();
+        state.GetAsync("github-actions", Arg.Any<CancellationToken>())
+            .Returns<string?>(
+                _ => throw new HttpRequestException("transient startup failure"),
+                _ => null);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        var loop = new PollLoop(adapter, ingest, state,
+            pollInterval: TimeSpan.FromMilliseconds(20),
+            NullLogger<PollLoop>.Instance);
+
+        await loop.RunAsync(cts.Token);
+
+        await state.Received(2).GetAsync("github-actions", Arg.Any<CancellationToken>());
+        adapter.Received().FetchAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// The initial cursor fetch throws on every attempt; cancellation arrives while still
+    /// retrying. RunAsync must complete cleanly (no unobserved fault) rather than propagate
+    /// the exception — the zombie-fetcher bug this guards against.
+    /// </summary>
+    [Fact]
+    public async Task PollLoop_InitialCursorFetchPersistentlyThrows_CancellationExitsCleanly()
+    {
+        var adapter = Substitute.For<ICiCdAdapter>();
+        adapter.AdapterId.Returns("github-actions");
+
+        var ingest = Substitute.For<IIngestClient>();
+
+        var state = Substitute.For<IFetcherStateClient>();
+        state.GetAsync("github-actions", Arg.Any<CancellationToken>())
+            .Returns<string?>(_ => throw new HttpRequestException("persistent startup failure"));
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(60));
+        var loop = new PollLoop(adapter, ingest, state,
+            pollInterval: TimeSpan.FromMilliseconds(20),
+            NullLogger<PollLoop>.Instance);
+
+        // Must not throw: a fault here would reproduce the zombie-fetcher bug.
+        await loop.RunAsync(cts.Token);
+
+        adapter.DidNotReceive().FetchAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>());
+    }
+
     // ── new chunked-streaming tests ────────────────────────────────────────────
 
     /// <summary>

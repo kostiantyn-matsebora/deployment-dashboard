@@ -224,10 +224,9 @@ export class GithubRestController {
     @Req() req: Request,
     @Res() res: Response,
   ): void {
-    applyRateLimitHeaders(res);
-
     const repoStore = this.storeService.getStore().getRepo(owner, repo);
     if (!repoStore) {
+      applyRateLimitHeaders(res);
       res.status(404).json(NOT_FOUND_BODY);
       return;
     }
@@ -241,12 +240,54 @@ export class GithubRestController {
     }
 
     if (!filePath) {
+      applyRateLimitHeaders(res);
       res.status(404).json(NOT_FOUND_BODY);
       return;
     }
 
+    // ── 1. Exact file match in the generic repo-file store (issue #391 —
+    //       preset discovery: `.deployment-dashboard/*.json` fetch). Checked
+    //       before the workflow-YAML lookup so a preset file never falls
+    //       through to that map (which is keyed "path::ref" and would never
+    //       match anyway, but this keeps the two stores clearly ordered). ──
+    const fileContent = repoStore.files.get(filePath);
+    if (fileContent !== undefined) {
+      applyRateLimitHeaders(res);
+      const encoded = Buffer.from(fileContent, 'utf-8').toString('base64');
+      res.json({ content: encoded, encoding: 'base64' });
+      return;
+    }
+
+    // ── 2. Directory listing — any stored file path nested one level under
+    //       filePath (e.g. filePath=".deployment-dashboard",
+    //       ".deployment-dashboard/presets.json" is a direct child). Returns
+    //       GhContentEntry[] ({name, path, type:"file"}), ETag-conditional
+    //       (the fetcher's preset-discovery sends If-None-Match). ──
+    const dirPrefix = `${filePath}/`;
+    const childPaths = [...repoStore.files.keys()].filter(p => p.startsWith(dirPrefix));
+    if (childPaths.length > 0) {
+      const entries = childPaths
+        .map(p => ({ name: p.slice(dirPrefix.length), path: p, type: 'file' as const }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      const etag = computeEtag(entries);
+      res.setHeader('ETag', etag);
+      const ifNoneMatch = req.headers['if-none-match'];
+      if (ifNoneMatch === etag) {
+        // A 304 does NOT consume rate-limit budget (GitHub semantics).
+        applyRateLimitHeadersReadOnly(res);
+        res.status(304).end();
+        return;
+      }
+
+      applyRateLimitHeaders(res);
+      res.json(entries);
+      return;
+    }
+
+    // ── 3. Existing workflow-YAML single-file behavior (§5.6.2) — unchanged. ──
     // Try exact ref first, then any ref that has the file
-    const key      = ref ? `${filePath}::${ref}` : '';
+    const key = ref ? `${filePath}::${ref}` : '';
     let yaml: string | undefined;
 
     if (key) yaml = repoStore.workflowYaml.get(key);
@@ -257,6 +298,8 @@ export class GithubRestController {
         if (k.startsWith(`${filePath}::`)) { yaml = v; break; }
       }
     }
+
+    applyRateLimitHeaders(res);
 
     if (!yaml) {
       res.status(404).json(NOT_FOUND_BODY);

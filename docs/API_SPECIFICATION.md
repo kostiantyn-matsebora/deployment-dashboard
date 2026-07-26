@@ -53,8 +53,9 @@ Implementation contract for `Dashboard.Api` (co-located Write + Read + Control A
 | D15 | **Event vocabulary `reset-initiated` / `reset-started` / `reset-completed`**; the legacy single `reset` type is **dropped (no alias)**. | One phaseless event cannot express drain → clear → recover; additive evolution per guidelines §3 (this surface has no external consumers yet). |
 | D16 | **Ack contract:** `POST /api/control/events` `{event_type: reset-ack, state: paused}` + **required** header `X-Correlation-Id` = the `id` of the `reset-initiated` event. The ack-gate keys on `correlation_id` (#265, Option A — `reset_id` retired). | Reuses the existing component-event inbound endpoint; one universal `correlation_id` correlates + gates acks per cycle, and makes the whole saga filterable end-to-end. |
 | D17 | **No reset status endpoint** — progress is observable via control-stream events only. | Avoids a polled status surface; the stream already carries every phase transition. |
+| D18 | **Recover (`POST /api/control/recover`, #423) is the non-destructive counterpart to reset.** Shares reset's single-flight `reset_cycle` row (id=1) and advisory lock — a reset and a recover are **mutually exclusive** (`409` if either is in flight). The row gains a discriminator: `operation` (`reset` \| `recover`, default `reset`) + `recover_since`. Request body is `since` (absolute) **XOR** `days_back` (relative, resolved server-side to `since = now − days_back days`) — exactly one required, else `422`; both bounded by `Reset:RecoverMaxDaysBack` (`RESET_RECOVER_MAX_DAYS_BACK` env, default `90`, §9) — `days_back` outside `[1, RecoverMaxDaysBack]` or an absolute `since` older than `now − RecoverMaxDaysBack` days → `422`. Event vocabulary `recover-initiated` → `recover-started` → `recover-completed`; only `recover-completed` carries the resolved `since` in a new nullable `payload` on `ControlStreamEvent` (`{"since":"…"}`) — `recover-initiated`/`recover-started` keep `payload: null`, same as reset frames. **No data is cleared** — `resetting` here only gates ingest briefly while `recover-started` is emitted; the actual cursor rewind happens fetcher-side on `recover-completed` (FETCHER_SPECIFICATION §5.10.7, F19). Like reset, **no recover status endpoint** (D17 applies identically). | Reset's destructive clear is wrong for "we missed some events" — recover reuses the proven drain/gate/release choreography and single-flight guard without touching stored data, and the shared row/lock keeps the two operations from ever racing. |
 
-Visual reference: [`docs/diagrams/reset-choreography.md`](diagrams/reset-choreography.md) (sequence + state diagrams).
+Visual reference: [`docs/diagrams/reset-choreography.md`](diagrams/reset-choreography.md) (sequence + state diagrams; recover shares the same state machine shape, tagged by `operation`).
 
 ---
 
@@ -92,7 +93,7 @@ backend/
 | Column | Type | Null | Notes |
 |---|---|---|---|
 | `id` | uuid PK | no | `Guid.CreateVersion7()` — surrogate **and** stream cursor (D2) |
-| `deployment_id` | text | no | correlation key; NOT unique, NO dedup |
+| `deployment_id` | text | no | correlation key; NOT unique (one row per status event); idempotent on natural key `(deployment_id, status, happened_at)` |
 | `service` | text | no | |
 | `namespace` | text | yes | ≤ 128; optional grouping segment scoping `service`. Identity = `namespace/service` when present, bare `service` when null. Two namespaces sharing a service name ⇒ two distinct rows/lanes (#353) |
 | `environment` | text | no | |
@@ -109,6 +110,7 @@ backend/
 
 **Indexes**
 - PK `(id)` — doubles as the SSE resume index (`id >` scan).
+- Unique `(deployment_id, status, happened_at)` — natural idempotency key; `POST /api/deployments` returns **200** on conflict (existing event, no new row, no SSE frame), **201** on insert.
 - `(service, environment, happened_at DESC, id DESC)` — Matrix `current`, history drawer, listing tiebreak.
 - partial `WHERE status='success'` on `(service, environment, happened_at DESC)` — Matrix `last_successful`.
 - `(happened_at DESC, id DESC)` — global listing + cursor.
@@ -121,6 +123,20 @@ backend/
 | `cursor` | text | opaque blob, ≤ 8 KiB → else `413` |
 | `updated_at` | timestamptz | latest write wins |
 
+### `provided_presets` (non-append, authoritative-replace per source, #391)
+
+Repo/CI-sourced setting presets. `PUT /api/presets/sources/{source}` replaces **all** rows for a source with the posted bundle (delete-then-insert / upsert-and-prune); an empty bundle prunes every row for that source. `GET /api/presets` reads the merged catalog across sources.
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| `source` | text | no | publisher `owner/repo`; **MAY contain `/`** → catch-all route key; part of PK |
+| `name` | text | no | preset name; unique within a source → PK `(source, name)` |
+| `version` | smallint | no | envelope schema version; always `1` |
+| `settings_json` | jsonb | no | opaque SPA settings payload, stored verbatim |
+| `fetched_at` | timestamptz | no | when this source's bundle was last published/stored |
+
+**Size cap** — the `PUT` request body is capped at 256 KiB (262144 bytes) → else `413`. **Not append-only**; not history — exempt from `HISTORY_RETENTION_DAYS` and not truncated by a reset.
+
 ### `control_stream_events` (append-only log, 2 h retention)
 
 Persists events emitted on the control SSE stream; enables `Last-Event-ID` replay for reconnecting components.
@@ -130,8 +146,9 @@ Persists events emitted on the control SSE stream; enables `Last-Event-ID` repla
 | `id` | uuid PK | no | `Guid.CreateVersion7()` — SSE resume cursor (D2, D3). Always unique per row; **distinct** from `correlation_id` |
 | `type` | text | no | e.g. `reset-initiated` \| `reset-started` \| `reset-completed`; open string, forward-compatible |
 | `component` | text | no | target component id or `"*"` |
-| `correlation_id` | uuid | no | the process id — on `reset-initiated` equals this row's own `id` (origin); on `reset-started` / `reset-completed` the initiating `reset-initiated` `id`. Present on every reset frame (nullable in schema only for forward-compat with future non-reset types) |
+| `correlation_id` | uuid | no | the process id — on `reset-initiated`/`recover-initiated` equals this row's own `id` (origin); on the `-started`/`-completed` frames the initiating `-initiated` `id`. Present on every reset/recover frame (nullable in schema only for forward-compat with future non-reset types) |
 | `occurred_at` | timestamptz | no | server-assigned at emit time |
+| `payload` | jsonb | yes | opaque; mirrors `component_events.payload`. `null` on reset frames and on `recover-initiated`/`recover-started`; carries the resolved rewind point only on the `recover-completed` frame (`{"since":"…"}`, D18) |
 
 **Indexes**
 - PK `(id)` — SSE resume scan (`id >` query).
@@ -159,21 +176,23 @@ Stores operational events posted by components via `POST /api/control/events`.
 - `(received_at DESC, id DESC)` — global SSE replay + cursor.
 - `(correlation_id)` — the ack-gate matches reset-acks by `correlation_id`, and read surfaces filter the saga by it. Partial `WHERE correlation_id IS NOT NULL` keeps it lean.
 
-### `reset_cycle` (single-row reset state, D12)
+### `reset_cycle` (single-row reset/recover state, D12, D18)
 
-Externally-persisted state for the reset state machine. **Single row** (fixed PK `1`) — the choreography is strictly serial (one reset in flight; `409` otherwise), so a single upserted row is sufficient and simpler than an append log. Loaded per transition; the Stateless machine reads `state`, mutates, writes back under the advisory lock.
+Externally-persisted state for the reset/recover state machine. **Single row** (fixed PK `1`) — the choreography is strictly serial (one reset **or** recover in flight; `409` otherwise), so a single upserted row is sufficient and simpler than an append log. Loaded per transition; the Stateless machine reads `state`, mutates, writes back under the advisory lock. Reset and recover **share this row** — `operation` discriminates which choreography is currently driving it.
 
 | Column | Type | Null | Notes |
 |---|---|---|---|
 | `id` | smallint PK | no | always `1` — enforces single row |
-| `state` | text | no | `idle` \| `draining` \| `resetting` (D12) |
-| `correlation_id` | uuid | yes | the current cycle's process id — the `id` of its `reset-initiated` event; `null` when `idle`. The ack-gate matches incoming reset-ack `correlation_id` against this |
-| `expected_components` | text[] | yes | snapshot of `ExpectedComponents` at cycle start (D13) |
-| `acks_received` | text[] | yes | component ids that have posted `reset-ack` for this `correlation_id` |
+| `state` | text | no | `idle` \| `draining` \| `resetting` (D12) — shared by both operations |
+| `operation` | text | no | `reset` \| `recover` (D18); default `reset`. Selects which `-initiated`/`-started`/`-completed` vocabulary and which reconciler-abort event fire for this cycle |
+| `correlation_id` | uuid | yes | the current cycle's process id — the `id` of its `reset-initiated`/`recover-initiated` event; `null` when `idle`. The ack-gate matches incoming `reset-ack`/`recover-ack` `correlation_id` against this |
+| `expected_components` | text[] | yes | snapshot of `ExpectedComponents` at cycle start (D13); shared knob for both operations |
+| `acks_received` | text[] | yes | component ids that have posted `reset-ack`/`recover-ack` for this `correlation_id` |
 | `started_at` | timestamptz | yes | when the current cycle entered `draining` |
 | `deadline_at` | timestamptz | yes | `started_at + AckTimeoutSeconds`; also bounded by `GateMaxTtlSeconds` for the abort path |
+| `recover_since` | timestamptz | yes | D18: the resolved rewind point for a `recover` cycle (`null` for `reset`); carried into the `recover-*` event `payload` |
 
-**Not covered by deployment retention** — a control-plane state row, not history. It is **not** truncated by a reset (D14) and is exempt from `HISTORY_RETENTION_DAYS`; it persists across cycles, overwritten in place.
+**Not covered by deployment retention** — a control-plane state row, not history. It is **not** truncated by a reset (D14) — recover clears no data at all — and is exempt from `HISTORY_RETENTION_DAYS`; it persists across cycles, overwritten in place. On cycle completion/abort both `operation` and `recover_since` reset to their `reset`/`null` baseline.
 
 ### Retention
 
@@ -191,7 +210,7 @@ Externally-persisted state for the reset state machine. **Single row** (fixed PK
 
 | Surface | Method · Path | Auth | Behaviour |
 |---|---|---|---|
-| ingest | `POST /api/deployments` | `X-Api-Key` | append 1 row → `NOTIFY deployment_events` → `201` + `Location`; **`403`** (problem+json) when event matches `SERVICE_EXCLUDE`; **`503` + `Retry-After`** during the reset data-clearing window (state `resetting`) |
+| ingest | `POST /api/deployments` | `X-Api-Key` | idempotent on `(deployment_id, status, happened_at)` — duplicate → **`200`** (existing event, no new row, no SSE frame); new event → append 1 row → `NOTIFY deployment_events` → **`201`** + `Location`; **`403`** (problem+json) when event matches `SERVICE_EXCLUDE`; **`503` + `Retry-After`** during the reset data-clearing window (state `resetting`) |
 | deployments | `GET /api/deployments` | none | cursor page, `happened_at DESC, id DESC`; filters: service/environment/status/deployment_id/since/until |
 | deployments | `GET /api/deployments/{id}` | none | single row / `404` |
 | matrix | `GET /api/matrix` | none | `current` (latest **effective**: `in-progress`/`success`/`failure`) + `last_successful` + optional `next` (latest **non-effective**: `pending`/`queued`/`waiting`/`cancelled`/`rejected`, only when newer than `current`) per slot; weak `ETag` + `If-None-Match` |
@@ -199,12 +218,15 @@ Externally-persisted state for the reset state machine. **Single row** (fixed PK
 | analytics | `GET /api/analytics/{dora,frequency,change-failure-rate,duration-histogram,promotion-funnel,status-distribution,heatmap,top-deployers,incidents}` | none | DORA-anchored aggregate reads (#299); `window` ∈ `7d`/`14d`/`30d` **clamped to `HISTORY_RETENTION_DAYS`** (echo `AnalyticsWindow{days,from,to,retention_days,clamped}`); weak `ETag` + `If-None-Match` → `304`. `dora.lead_time` is **approximated** from `parent_deployments` chains reaching `prod` (`approximated:true`); the other three keys are measured. One focused endpoint per concern — never a consolidated payload. Subject to `SERVICE_EXCLUDE` — excluded services contribute to no aggregate |
 | stream | `GET /api/events/stream` | none | SSE; `event: deployment`; `id:` = row id; `Last-Event-ID` replay; `: ping`/15 s |
 | fetcher | `GET/PUT /api/fetcher/state/{adapter}` | `X-Api-Key` | opaque upsert; `413` > 8 KiB |
-| control | `POST /api/control/reset` | `X-Control-API-Key` | **async** (D8, D12): emit `reset-initiated` (state `idle→draining`) → `202` + `ResetAccepted{correlation_id, state}`; drain + ack-or-timeout → `reset-started` (`draining→resetting`, ingest gate ON) → clear **only `deployment_events` + `fetcher_state`** (D14) → `reset-completed` (`resetting→idle`); `409` if a reset is already in flight |
-| control-stream | `GET /api/control/stream` | `X-Control-API-Key` | SSE; `event:` ∈ `reset-initiated` \| `reset-started` \| `reset-completed` (+ future types); `id:` = row id; `Last-Event-ID` replay from `control_stream_events` (2 h window); `: ping`/15 s; `?component=` filter |
+| control | `POST /api/control/reset` | `X-Control-API-Key` | **async** (D8, D12): emit `reset-initiated` (state `idle→draining`) → `202` + `ResetAccepted{correlation_id, state}`; drain + ack-or-timeout → `reset-started` (`draining→resetting`, ingest gate ON) → clear **only `deployment_events` + `fetcher_state`** (D14) → `reset-completed` (`resetting→idle`); `409` if a reset **or recover** is already in flight |
+| control | `POST /api/control/recover` | `X-Control-API-Key` | **async, non-destructive** (D8, D18): body `since` XOR `days_back` (else `422`; also `422` when `days_back` exceeds `Reset:RecoverMaxDaysBack` or `since` is older than that window, §9); emit `recover-initiated` (state `idle→draining`) → `202` + `RecoverAccepted{correlation_id, state, since, accepted_at}`; drain + ack-or-timeout → `recover-started` (`draining→resetting`, ingest gate ON, **no data cleared**) → `recover-completed` (`resetting→idle`) carrying the resolved `since` in `payload`; `409` if a reset **or recover** is already in flight |
+| control-stream | `GET /api/control/stream` | `X-Control-API-Key` | SSE; `event:` ∈ `reset-initiated` \| `reset-started` \| `reset-completed` \| `recover-initiated` \| `recover-started` \| `recover-completed` (+ future types); `id:` = row id; `Last-Event-ID` replay from `control_stream_events` (2 h window); `: ping`/15 s; `?component=` filter |
 | control-events | `POST /api/control/events` | `X-Api-Key` + `X-Component-Id` (+ optional `X-Correlation-Id`) | append 1 row to `component_events`; `component_id` from header (D9); optional `correlation_id` from `X-Correlation-Id` (opaque ≤ 128, nullable); `NOTIFY component_events <id>`; `413` > 8 KiB payload; `422` on missing/invalid `X-Component-Id` or `X-Correlation-Id` > 128 chars → `204` |
 | control-events-stream | `GET /api/control/events/stream` | none | SSE; `event: component`; `id:` = row id (UUIDv7); `Last-Event-ID` replay from `component_events` (2 h window); `: ping`/15 s; fresh connect = live only; no query filters |
 | ops | `GET /healthz`, `GET /readyz` | none | liveness / readiness (DB reachable + all four LISTEN channels attached: `deployment_events`, `control_events`, `component_acks`, `component_events` — D10, D12) |
 | meta | `GET /api/version` | none | deployed build version → `{ version }`; baked into the API assembly at image-build time, reflecting how the image was built — release images (`:X.Y.Z`) → `vX.Y.Z` (e.g. `v0.13.1`), CI / `:latest` / `main` → `main+<short-sha>` (e.g. `main+a947098`), `0.0.0-dev` only for genuinely local / unstamped builds; free-form, never parsed by the client; for the SPA footer |
+| presets | `PUT /api/presets/sources/{source}` | `X-Api-Key` | authoritative-replace of a source's preset bundle (`PresetBundle{version:1, presets[]}`); `{source}` is `owner/repo` and **contains a slash** → catch-all route; empty `presets:[]` prunes all for the source; `413` > 256 KiB body → `204` |
+| presets | `GET /api/presets` | none | merged provided-preset catalog across all sources → `ProvidedPresets{items[]}` where item = `{source, name, version, settings, fetched_at}`; public read (SPA) |
 
 ---
 
@@ -214,7 +236,7 @@ Externally-persisted state for the reset state machine. **Single row** (fixed PK
 |---|---|
 | **Auth** | `X-Api-Key` on write, fetcher, and component event POST. `X-Control-API-Key` on control reset and control stream. Both: missing/invalid → `401`. `X-Component-Id` on `POST /api/control/events`: missing/pattern-invalid → `422` (identity header, not an auth secret). Keys from env; never logged or echoed. |
 | **Validation** | Closed bodies (`additionalProperties:false`). Failures → `422` `application/problem+json` with `errors[]` (JSON-Pointer + message). |
-| **Errors** | RFC 9457 everywhere. No `409` on ingest (append-only). `Retry-After` reserved for `429`/`503`. |
+| **Errors** | RFC 9457 everywhere. No `409` on ingest (idempotent — duplicate returns `200`, not an error). `Retry-After` reserved for `429`/`503`. |
 | **CORS** | `CORS_ALLOWED_ORIGINS` (CSV). Empty → no CORS (gateway/same-origin). Set → policy over read GETs **and** the deployment SSE stream. Control stream is component-to-API only; CORS not required. |
 | **Statelessness (NFR-05)** | No in-memory cache of state; every read hits the DB. SSE fan-out only via per-instance `LISTEN`. No sticky sessions. |
 | **Secrets** | `X-Api-Key` and `X-Control-API-Key` never appear in any body, problem detail, or log line. `X-Component-Id` is not a secret — it is an identity token stored verbatim; never masked. Payloads/cursors stored verbatim, never parsed/logged. |
@@ -296,13 +318,14 @@ CI runs: `dotnet test backend/Dashboard.sln --settings backend/Dashboard.runsett
 | `HISTORY_RETENTION_DAYS` | `365` | deployment-events retention window (≥ 90); control-plane tables always use fixed 2 h |
 | `SERVICE_EXCLUDE` | *(empty)* | CSV of glob patterns matched against the event's opaque `namespace/service` identity. `namespace` is emitter-supplied and adopter-defined; the identity may contain `/`. A pattern **without `/`** matches the `service` segment across all namespaces; a pattern **containing `/`** is globbed against the full `namespace/service` composite, where `*` spans `/`. Same glob semantics as the Matrix `service` filter. Empty = exclude nothing. **Ingest:** `POST /api/deployments` rejects a matching event with `403` (problem+json). **Read:** matching events filtered from `/api/services`, `/api/matrix`, `/api/deployments`, `/api/events/stream` (live + replay), and `/api/analytics/*` (excluded services contribute to no aggregate); by-id returns `404`. Already-stored events for a now-excluded service remain in storage but are hidden; storage-clearing semantics are unchanged. See `api-guidelines.md` §5. |
 
-**Reset choreography (appsettings + env, D12–D13).** These bind from `appsettings.json` (PascalCase `Reset` section) **and** are overridable via flat `SCREAMING_SNAKE` env vars. `RESET_EXPECTED_COMPONENTS` is a CSV string (replaces the old indexed-array `Reset__ExpectedComponents__0…` override, eliminating the array-append footgun).
+**Reset choreography (appsettings + env, D12–D13).** These bind from `appsettings.json` (PascalCase `Reset` section) **and** are overridable via flat `SCREAMING_SNAKE` env vars. `RESET_EXPECTED_COMPONENTS` is a CSV string (replaces the old indexed-array `Reset__ExpectedComponents__0…` override, eliminating the array-append footgun). **Recover (D18) shares this exact config section** — `Reset:AckTimeoutSeconds`/`Reset:ExpectedComponents`/`Reset:GateMaxTtlSeconds` govern a recover cycle identically to a reset cycle (same drain/gate mechanics); there is no separate `Recover:*` section.
 
 | Key (appsettings) | Env override | Default | Purpose |
 |---|---|---|---|
 | `Reset:AckTimeoutSeconds` | `RESET_ACK_TIMEOUT_SECONDS` | `10` | Max seconds to await component acks before forcing `draining → resetting` (D13). |
 | `Reset:ExpectedComponents` | `RESET_EXPECTED_COMPONENTS` (CSV string) | `dashboard-fetcher,demo-driver` | Component ids whose acks are awaited; snapshotted into `reset_cycle.expected_components` at cycle start. |
-| `Reset:GateMaxTtlSeconds` | `RESET_GATE_MAX_TTL_SECONDS` | `60` | Hard wall-clock ceiling on the entire orchestrator cycle (draining → resetting → idle), including data clearing. When exceeded: state forced to `idle`, `reset-completed` emitted on the control stream (so components recover), advisory lock released. Prevents a hung DB call wedging ingest indefinitely. |
+| `Reset:GateMaxTtlSeconds` | `RESET_GATE_MAX_TTL_SECONDS` | `60` | Hard wall-clock ceiling on the entire orchestrator cycle (draining → resetting → idle), including data clearing (reset) or the rewind gate (recover). When exceeded: state forced to `idle`, the operation-matched `reset-completed`/`recover-completed` emitted on the control stream (so components recover), advisory lock released. Prevents a hung DB call wedging ingest indefinitely. |
+| `Reset:RecoverMaxDaysBack` | `RESET_RECOVER_MAX_DAYS_BACK` | `90` | Upper bound (days) on a recover's lookback window (D18, #423). Validates both request shapes: `days_back` must be in `[1, RecoverMaxDaysBack]`; an absolute `since` must not be older than `now − RecoverMaxDaysBack` days. Either violation → `422` on `POST /api/control/recover`. |
 
 ---
 

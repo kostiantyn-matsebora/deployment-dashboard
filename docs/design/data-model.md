@@ -53,6 +53,20 @@ Default: **all ON**.
 
 KPI counts derive from visible data only — filtered by the glob service filter (`dd:svcFilterMode` / `dd:svcPatterns`) and the Columns env filter (`dd:colHidden`). No invented metrics.
 
+---
+
+## Feed Grouping & Search (#397)
+
+The Feed view and feed dock read the same `GET /api/deployments` list endpoint as the Swimlanes drawer/inspector, not a bespoke endpoint. Two list-endpoint query params and one grouping key are specific to the Feed surfaces:
+
+| Param / key | Type | Description |
+|---|---|---|
+| `q` (query param) | string, max 200 chars | Server-side free-text search — case-insensitive substring match against `service`, `namespace`, `environment`, `version`, `status`, `actor`, `ref`, `sha`, `deployment_id`, `run_number`; a row matches when **any** field contains the value. Composes by logical AND with the structured filters (`service`/`environment`/`status`/`deployment_id`/`since`/`until`) and is applied **before** cursor pagination — `next_cursor` pages stay consistent for a fixed `q`. Empty/absent ⇒ no text filter. |
+| `cursor` / `next_cursor` (query param / response field) | string, opaque | Cursor pagination pair. `cursor` requests the next page from a prior `next_cursor`; `next_cursor: null` marks the final page. |
+| `deployment_id` (grouping key) | string | Not new — the existing wire field. The Feed surfaces use it as the **grouping key**: one roll-up per distinct `deployment_id`. Group order and event order within a group are newest-first by `happened_at`. |
+
+The Feed surfaces are the only UI surfaces that show `deployment_id` — it is not part of the 11-field Matrix/Swimlanes whitelist above, but it is a real wire field, not an invented one.
+
 ## Extension Field Usage
 
 The extension popup panel and notification toasts consume a subset of the existing [Deployment Event](#deployment-event-11-visible-fields) fields — no new fields are required.
@@ -141,7 +155,7 @@ Classification logic is server-side (in `GET /api/analytics/dora`); the SPA appl
 | `notifSvcPatterns` | `string[]` | Notification service glob patterns. |
 | `notifEnvMode` | `"exclude" \| "include"` | Notification environment filter mode. |
 | `notifEnvPatterns` | `string[]` | Notification environment glob patterns. |
-| `view` | `"matrix" \| "swimlanes" \| "analytics"` | Active view tab. |
+| `view` | `"matrix" \| "swimlanes" \| "feed" \| "analytics"` | Active view tab. Route-driven — applying restores the matching route (`withViewRealign`), not just an internal re-render. |
 | `svcFilterMode` | `"exclude" \| "include"` | Services board glob filter mode. |
 | `svcPatterns` | `string[]` | Services board glob patterns. |
 | `failuresOnly` | `boolean` | Failures-only toggle state (Matrix). |
@@ -154,6 +168,8 @@ Classification logic is server-side (in `GET /api/analytics/dora`); the SPA appl
 | `predicate` | `string` | Active correlation predicate key (Swimlanes). |
 | `timeWindow` | `string` | Active correlation time-window value (Swimlanes). |
 | `svcFilter` | `string` | Free-text service filter input value (Matrix + Swimlanes). Persisted under `dd:svcFilter`. |
+| `feedGrouped` | `boolean` | Group-by-deployment toggle state, shared by the Feed view and the feed dock. Default `true`. |
+| `feedDockOpen` | `boolean` | Feed dock open/closed preference. Default `false`. |
 
 **Apply fallback.** Unknown or missing keys in `settings` are silently ignored; the corresponding live setting retains its current value. Unknown array entries for field keys are dropped; if the result is empty, all fields default ON.
 

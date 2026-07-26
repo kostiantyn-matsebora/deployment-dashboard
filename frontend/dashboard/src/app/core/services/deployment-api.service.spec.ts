@@ -8,6 +8,8 @@
  *     exactly ONE EventSource (the core fix for issue #363).
  *   - Filtered stream (service=X) opens its own EventSource, independent of the
  *     shared stream.
+ *   - getProvidedPresets(): GET /api/presets — request shape + response passthrough
+ *     (issue #391).
  *
  * EventSource is not available in the Vitest/jsdom environment for the liveness
  * and App-logic tests. Those tests simulate the observable/callback layer directly.
@@ -15,8 +17,10 @@
  */
 import { signal }             from '@angular/core';
 import { TestBed }            from '@angular/core/testing';
+import { provideHttpClient }        from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Subject }            from 'rxjs';
-import { ComponentEventRecord, RateLimitReport } from '../models/deployment.model';
+import { ComponentEventRecord, ProvidedPreset, RateLimitReport } from '../models/deployment.model';
 import { DeploymentApiService } from './deployment-api.service';
 
 // ── Helper — build a ComponentEventRecord ────────────────────────────────────
@@ -427,5 +431,59 @@ describe('DeploymentApiService — shared EventSource multicast (issue #363)', (
 
     sub1.unsubscribe();
     stateSub.unsubscribe();
+  });
+});
+
+describe('DeploymentApiService.getProvidedPresets() — GET /api/presets (issue #391)', () => {
+  let svc:  DeploymentApiService;
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    svc  = TestBed.inject(DeploymentApiService);
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => {
+    http.verify();
+    TestBed.resetTestingModule();
+  });
+
+  it('issues a GET against /api/presets', () => {
+    svc.getProvidedPresets().subscribe();
+
+    const req = http.expectOne('/api/presets');
+    expect(req.request.method).toBe('GET');
+    req.flush({ items: [] });
+  });
+
+  it('passes the merged catalog through unchanged', () => {
+    const items: ProvidedPreset[] = [
+      {
+        source:     'acme/web',
+        name:       'ci-defaults',
+        version:    1,
+        settings:   { theme: 'dark', failOnly: true },
+        fetched_at: '2026-07-01T10:00:00Z',
+      },
+    ];
+
+    let result: { items: ProvidedPreset[] } | undefined;
+    svc.getProvidedPresets().subscribe((res) => { result = res; });
+
+    http.expectOne('/api/presets').flush({ items });
+
+    expect(result).toEqual({ items });
+  });
+
+  it('propagates an empty catalog (items: [])', () => {
+    let result: { items: ProvidedPreset[] } | undefined;
+    svc.getProvidedPresets().subscribe((res) => { result = res; });
+
+    http.expectOne('/api/presets').flush({ items: [] });
+
+    expect(result).toEqual({ items: [] });
   });
 });

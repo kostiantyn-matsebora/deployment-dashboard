@@ -53,10 +53,11 @@ Two images build from `gateway/` with the same build context.
 
 ```
 gateway/
-  Dockerfile                 # Production image: FROM nginxinc/nginx-unprivileged; COPY default.conf.template
-  Dockerfile.demo            # Demo image: FROM production image; adds DNS_RESOLVER env + demo.snippet.template
-  default.conf.template      # → /etc/nginx/templates/default.conf.template (envsubst at start)
-  demo.snippet.template      # → /etc/nginx/templates/demo.snippet.template (envsubst at start, demo image only)
+  Dockerfile                   # Production image: FROM nginxinc/nginx-unprivileged; COPY default.conf.template
+  Dockerfile.demo              # Demo image: FROM production image; adds 15-detect-dns-resolver.envsh + demo.snippet.template
+  15-detect-dns-resolver.envsh # Entrypoint drop-in — auto-detects DNS_RESOLVER from resolv.conf (demo image only)
+  default.conf.template        # → /etc/nginx/templates/default.conf.template (envsubst at start)
+  demo.snippet.template        # → /etc/nginx/templates/demo.snippet.template (envsubst at start, demo image only)
 ```
 
 **`*.snippet` render + include mechanism.**
@@ -169,8 +170,11 @@ Key properties:
 # DNS resolver — required for variable-based proxy_pass (demo-driver is optional).
 # Variable proxy_pass defers DNS resolution; gateway starts cleanly when
 # demo-driver is not running (returns 502 until available).
-#   Docker Compose (embedded DNS):    DNS_RESOLVER=127.0.0.11  (default)
-#   Azure Container Apps (Azure DNS): DNS_RESOLVER=168.63.129.16
+# DNS_RESOLVER is auto-detected at container start (see §7) — no default ENV
+# baked into the image. Examples of what detection yields per platform:
+#   Docker Compose (embedded DNS):    127.0.0.11
+#   Azure Container Apps (Azure DNS): 168.63.129.16
+#   Kubernetes (kube-dns/CoreDNS):    cluster DNS ClusterIP
 resolver ${DNS_RESOLVER} valid=10s ipv6=off;
 
 location = /demo/stream {
@@ -221,11 +225,11 @@ The production image filter **excludes** `DNS_RESOLVER` and `DEMO_DRIVER_UPSTREA
 
 | Var | Default in image | Example override | Purpose |
 |---|---|---|---|
-| `DNS_RESOLVER` | `127.0.0.11` (Docker embedded DNS) | `168.63.129.16` (Azure DNS) | DNS resolver address for variable-based `proxy_pass` in `demo.snippet` |
+| `DNS_RESOLVER` | *(unset — auto-detected)* | `168.63.129.16` (Azure DNS) | DNS resolver address for variable-based `proxy_pass` in `demo.snippet` |
 | `DEMO_DRIVER_UPSTREAM` | — | `demo-driver:3001` | Demo driver upstream `host:port`; required by the snippet's `resolver` + `proxy_pass` |
 | `NGINX_ENVSUBST_FILTER` | `^(FRONTEND_UPSTREAM\|API_UPSTREAM\|DEMO_DRIVER_UPSTREAM\|DNS_RESOLVER)$` | — | Widened filter to include demo vars in addition to production vars |
 
-The demo image sets `DNS_RESOLVER=127.0.0.11` as a default ENV; it can be overridden (e.g. to `168.63.129.16` for Azure Container Apps).
+The demo image ships no `DNS_RESOLVER` default ENV. A sourced entrypoint drop-in (`gateway/15-detect-dns-resolver.envsh`) auto-detects it at container start: if `DNS_RESOLVER` is unset or empty, it reads the first `nameserver` line from `/etc/resolv.conf`, falling back to `127.0.0.11` (Docker embedded DNS) when none is found. An explicitly set `DNS_RESOLVER` env always overrides — the script only fills in a value when one is not supplied. This makes the demo image zero-config on Compose, Kubernetes, and Azure Container Apps alike; override only when the auto-detected value is wrong for the target environment.
 
 ---
 

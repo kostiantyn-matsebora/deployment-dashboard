@@ -6,8 +6,12 @@
 # DNS resolver — required for variable-based proxy_pass (demo-driver is optional;
 # variable proxy_pass defers DNS resolution so the gateway starts cleanly when
 # demo-driver is not running, returning 502 until it becomes available).
-#   Docker Compose (embedded DNS):    DNS_RESOLVER=127.0.0.11  (default)
-#   Azure Container Apps (Azure DNS): DNS_RESOLVER=168.63.129.16
+#   DNS_RESOLVER is auto-detected at container start (15-detect-dns-resolver.
+#   envsh, in Dockerfile.demo) from the first `nameserver` in the container's
+#   own /etc/resolv.conf — zero-config on Docker Compose (embedded DNS
+#   127.0.0.11), any Kubernetes cluster (its DNS ClusterIP), and Azure
+#   Container Apps (Azure DNS) alike. Set the DNS_RESOLVER env var explicitly
+#   to override auto-detection.
 # valid=10s means nginx re-resolves at most once per 10 s so transient restarts
 # of optional containers recover quickly without a gateway restart.
 resolver ${DNS_RESOLVER} valid=10s ipv6=off;

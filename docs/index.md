@@ -51,6 +51,13 @@ hide:
     ![Swimlanes view](_assets/screenshots/swimlanes-dark.png#only-dark){ .dd-shot }
     ![Swimlanes view](_assets/screenshots/swimlanes-light.png#only-light){ .dd-shot }
 
+=== "Feed"
+
+    A chronological log of every deployment event, grouped by deployment with expandable roll-ups, server-side search across the full history, and cursor-based infinite scroll. A toggleable bottom dock mirrors the same log — last 8 events, live via SSE — on every other view.
+
+    ![Feed view](_assets/screenshots/feed-dark.png#only-dark){ .dd-shot }
+    ![Feed view](_assets/screenshots/feed-light.png#only-light){ .dd-shot }
+
 === "Analytics"
 
     DORA Four Keys — deployment frequency, lead time, change failure rate, and MTTR — plus eight supporting charts to spot delivery trends and regressions over 7, 14, or 30 days.
@@ -71,12 +78,22 @@ hide:
     ![Notifications](_assets/screenshots/notifications-dark.png#only-dark){ .dd-shot }
     ![Notifications](_assets/screenshots/notifications-light.png#only-light){ .dd-shot }
 
-=== "Presets"
+=== "Provided presets"
 
-    Save named sets of UI settings — active filters, view preferences, notification options — and apply them in one click. Export any preset as a `dd-preset-<slug>.json` file to share by email or by committing it to a git repo; teammates import it — no server involved.
+    Repo/CI-sourced UI-settings presets, published by any `owner/repo` source — over a plain `curl PUT` or auto-discovered by the optional Fetcher — and shown read-only to every visitor in a **PROVIDED** section of the presets popover, with one-click apply.
 
-    ![UI settings presets](_assets/screenshots/presets-dark.png#only-dark){ .dd-shot }
-    ![UI settings presets](_assets/screenshots/presets-light.png#only-light){ .dd-shot }
+    ![Provided presets in the topbar popover](_assets/screenshots/provided-presets-dark.png#only-dark){ .dd-shot }
+    ![Provided presets in the topbar popover](_assets/screenshots/provided-presets-light.png#only-light){ .dd-shot }
+
+    [:octicons-arrow-right-24: Provided presets guide](guide/provided-presets.md){ .md-button }
+
+=== "Install as an app"
+
+    Install the dashboard as a standalone app in Chrome or Edge — dedicated window, taskbar icon, no browser chrome. Works behind your gateway; no extra deployment needed.
+
+    ![Dashboard running as an installed standalone app](_assets/screenshots/install-app-dark.png){ .dd-shot }
+
+    [:octicons-arrow-right-24: How to install](guide/install-app.md){ .md-button }
 
 !!! quote ""
     **The question it answers:** *What version of service X is running in environment Y right now — and did the last deployment succeed?*

@@ -14,11 +14,12 @@
 ARG PROD_IMAGE=ghcr.io/kostiantyn-matsebora/deployment-dashboard-gateway:latest
 FROM ${PROD_IMAGE}
 
-# Demo-specific env vars.
-# DNS_RESOLVER: 127.0.0.11 = Docker embedded DNS (Compose default).
-#               168.63.129.16 = Azure internal DNS (Container Apps).
-# Required by the variable-based proxy_pass locations in demo.snippet (resolver directive).
-ENV DNS_RESOLVER='127.0.0.11'
+# DNS_RESOLVER: required by the variable-based proxy_pass locations in
+# demo.snippet (resolver directive). No default here — 15-detect-dns-
+# resolver.envsh (below) auto-detects it from the container's own
+# /etc/resolv.conf at start, so this image is zero-config on Docker Compose,
+# any Kubernetes cluster, and Azure Container Apps alike. Set the env var
+# explicitly at runtime to override the auto-detected value.
 
 # Widen envsubst filter to include demo vars in addition to the prod vars.
 ENV NGINX_ENVSUBST_FILTER='^(FRONTEND_UPSTREAM|API_UPSTREAM|DEMO_DRIVER_UPSTREAM|DNS_RESOLVER)$'
@@ -26,3 +27,10 @@ ENV NGINX_ENVSUBST_FILTER='^(FRONTEND_UPSTREAM|API_UPSTREAM|DEMO_DRIVER_UPSTREAM
 # Copy the demo snippet template; the stock entrypoint renders it to
 # /etc/nginx/conf.d/demo.snippet at start, which the server{} include picks up.
 COPY demo.snippet.template /etc/nginx/templates/demo.snippet.template
+
+# DNS_RESOLVER auto-detect hook — sourced (not executed) by the stock
+# entrypoint before it renders templates, so it must run before *.sh scripts
+# alphabetically (hence the "15-" prefix) and carry the exec bit (the
+# entrypoint only sources *.envsh files it can execute; --chmod grants
+# read+execute to all, satisfying the non-root `nginx` user, UID 101).
+COPY --chown=nginx:nginx --chmod=755 15-detect-dns-resolver.envsh /docker-entrypoint.d/15-detect-dns-resolver.envsh

@@ -44,8 +44,8 @@ Services and environments are **discovered from the data** — no registration, 
 
 ## Append-only semantics
 
-- `POST /api/deployments` **appends** a row. There is no update, no upsert, no server-side dedup.
-- A retried POST creates **another** row. Retry handling is the caller's concern.
+- `POST /api/deployments` **appends** a row, or returns the existing one — idempotent on `(deployment_id, status, happened_at)`. Duplicate → **`200`**; new event → **`201`** + `Location`.
+- A retried POST with the same `(deployment_id, status, happened_at)` is safe — the store de-duplicates it automatically; no extra rows are created.
 - The dashboard reduces the log on read: the matrix shows the latest by `happened_at` per `(service, environment)`; the history drawer keeps every row.
 
 So: send `in-progress` and the terminal `success`/`failure` as **separate** POSTs with the **same** `deployment_id` and increasing `happened_at`. Both persist; the matrix shows the latest.

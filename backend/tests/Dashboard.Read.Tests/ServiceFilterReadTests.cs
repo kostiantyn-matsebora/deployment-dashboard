@@ -165,7 +165,7 @@ public sealed class ServiceFilterReadTests : IDisposable
         var repo = BuildRepo(filter);
 
         var (items, _) = await repo.ListAsync(
-            new Dashboard.Read.Queries.DeploymentListQuery(null, null, null, null, null, null, null, 100),
+            new Dashboard.Read.Queries.DeploymentListQuery(null, null, null, null, null, null, null, null, 100),
             CancellationToken.None);
 
         Assert.DoesNotContain(items, e => e.Service == "checkout");
@@ -183,7 +183,7 @@ public sealed class ServiceFilterReadTests : IDisposable
         var repo = BuildRepo(filter);
 
         var (items, _) = await repo.ListAsync(
-            new Dashboard.Read.Queries.DeploymentListQuery(null, null, null, null, null, null, null, 100),
+            new Dashboard.Read.Queries.DeploymentListQuery(null, null, null, null, null, null, null, null, 100),
             CancellationToken.None);
 
         Assert.DoesNotContain(items, e => e.Service == "checkout");
@@ -293,7 +293,7 @@ public sealed class ServiceFilterReadTests : IDisposable
         var repo = BuildRepo(filter);
 
         var (items, nextCursor) = await repo.ListAsync(
-            new Dashboard.Read.Queries.DeploymentListQuery(null, null, null, null, null, null, null, 3),
+            new Dashboard.Read.Queries.DeploymentListQuery(null, null, null, null, null, null, null, null, 3),
             CancellationToken.None);
 
         Assert.Equal(3, items.Count);
@@ -316,7 +316,7 @@ public sealed class ServiceFilterReadTests : IDisposable
 
         // Page 1.
         var (page1, cursor1) = await repo.ListAsync(
-            new Dashboard.Read.Queries.DeploymentListQuery(null, null, null, null, null, null, null, 4),
+            new Dashboard.Read.Queries.DeploymentListQuery(null, null, null, null, null, null, null, null, 4),
             CancellationToken.None);
 
         Assert.Equal(4, page1.Count);
@@ -325,7 +325,7 @@ public sealed class ServiceFilterReadTests : IDisposable
 
         // Page 2 — must not overlap with page 1.
         var (page2, _) = await repo.ListAsync(
-            new Dashboard.Read.Queries.DeploymentListQuery(null, null, null, null, null, null, cursor1, 4),
+            new Dashboard.Read.Queries.DeploymentListQuery(null, null, null, null, null, null, null, cursor1, 4),
             CancellationToken.None);
 
         Assert.All(page2, e => Assert.Equal("wanted", e.Service));
@@ -344,7 +344,7 @@ public sealed class ServiceFilterReadTests : IDisposable
         var repo = BuildRepo(ServiceFilter.PassAll);
 
         var (items, nextCursor) = await repo.ListAsync(
-            new Dashboard.Read.Queries.DeploymentListQuery(null, null, null, null, null, null, null, 5),
+            new Dashboard.Read.Queries.DeploymentListQuery(null, null, null, null, null, null, null, null, 5),
             CancellationToken.None);
 
         Assert.Equal(5, items.Count);

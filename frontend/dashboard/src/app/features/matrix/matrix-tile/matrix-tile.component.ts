@@ -36,6 +36,12 @@ export class MatrixTileComponent {
   readonly slot              = input.required<MatrixSlot>();
   readonly visibleFields     = input<Set<MatrixField>>(new Set(MATRIX_FIELDS));
   readonly highlightedVersion = input<string | null>(null);
+  /**
+   * True while the tile should display a brief flash animation (change-
+   * emphasis on SSE update). Driven by `MatrixComponent.flashingIds` signal
+   * (#398) — mirrors `VisCardComponent.isFlashing` (#309).
+   */
+  readonly isFlashing = input<boolean>(false);
 
   // ── Outputs ───────────────────────────────────────────────
   readonly tileClick    = output<void>();

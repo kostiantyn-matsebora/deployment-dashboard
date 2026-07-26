@@ -4,6 +4,7 @@ using Dashboard.Fetcher.Control;
 using Dashboard.Fetcher.GitHub;
 using Dashboard.Fetcher.GitHub.Backfill;
 using Dashboard.Fetcher.GitHub.Configuration;
+using Dashboard.Fetcher.GitHub.Discovery;
 using Dashboard.Fetcher.GitHub.Graph;
 using Dashboard.Fetcher.GitHub.Mapping;
 using Dashboard.Fetcher.GitHub.RateLimit;
@@ -45,6 +46,15 @@ builder.Services.AddHttpClient<IIngestClient, IngestClient>(c =>
 });
 
 builder.Services.AddHttpClient<IFetcherStateClient, FetcherStateClient>(c =>
+{
+    c.BaseAddress = new Uri(apiBaseUrl);
+    c.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
+});
+
+// Preset-discovery publisher — PUT /api/presets/sources/{source} (issue #391 — preset
+// discovery; docs/api/openapi.yaml `presets` tag, docs/API_SPECIFICATION.md
+// `provided_presets`, FETCHER_SPECIFICATION.md "Preset discovery").
+builder.Services.AddHttpClient<IPresetIngestClient, PresetIngestClient>(c =>
 {
     c.BaseAddress = new Uri(apiBaseUrl);
     c.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
@@ -183,6 +193,20 @@ builder.Services.AddSingleton<IReadOnlyList<PollLoop>>(sp =>
         })
         .ToList()
         .AsReadOnly();
+});
+
+// Slow-cadence preset discovery (issue #391 — see FETCHER_SPECIFICATION.md
+// "Preset discovery") — separate cadence from the poll loops above; runs inside
+// FetcherWorker alongside them (own DiscoveryIntervalSeconds).
+builder.Services.AddSingleton<PresetDiscoveryRunner>();
+builder.Services.AddSingleton<DiscoveryLoop>(sp =>
+{
+    var runner = sp.GetRequiredService<PresetDiscoveryRunner>();
+    var logFactory = sp.GetRequiredService<ILoggerFactory>();
+    return new DiscoveryLoop(
+        runner.RunOnceAsync,
+        fetcherOptions.DiscoveryInterval,
+        logFactory.CreateLogger<DiscoveryLoop>());
 });
 
 // ── Workers ───────────────────────────────────────────────────────────────────

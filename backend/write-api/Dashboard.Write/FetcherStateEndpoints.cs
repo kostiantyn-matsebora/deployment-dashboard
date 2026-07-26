@@ -1,4 +1,5 @@
 using Dashboard.Shared.Entities;
+using Dashboard.Shared.Http;
 using Dashboard.Write.Contracts;
 using Dashboard.Write.Filters;
 using Dashboard.Write.Repositories;
@@ -60,11 +61,14 @@ public static class FetcherStateEndpoints
         IFetcherStateRepository repository,
         CancellationToken ct)
     {
-        if (body.Cursor.Length > MaxCursorLength)
-            return Results.Problem(
-                title: "Cursor exceeds the size limit.",
-                detail: $"The cursor must not exceed {MaxCursorLength} characters.",
-                statusCode: StatusCodes.Status413RequestEntityTooLarge);
+        var violation = SizeLimitGuard.EnsureWithinSize(
+            body.Cursor.Length,
+            MaxCursorLength,
+            title: "Cursor exceeds the size limit.",
+            detail: $"The cursor must not exceed {MaxCursorLength} characters.");
+
+        if (violation is { } v)
+            return Results.Problem(title: v.Title, detail: v.Detail, statusCode: StatusCodes.Status413RequestEntityTooLarge);
 
         await repository.UpsertAsync(adapter, body.Cursor, ct);
         return Results.NoContent();

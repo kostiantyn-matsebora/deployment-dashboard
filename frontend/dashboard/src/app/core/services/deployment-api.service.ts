@@ -16,6 +16,7 @@ import {
   DeploymentEvent,
   DeploymentEventPage,
   Matrix,
+  ProvidedPresets,
 } from '../models/deployment.model';
 
 /** Connection-state events emitted by the shared deployment SSE source. */
@@ -28,6 +29,13 @@ export interface ListDeploymentsParams {
   deployment_id?: string;
   since?: string;
   until?: string;
+  /**
+   * Free-text search — case-insensitive substring match across service,
+   * namespace, environment, version, status, actor, ref, sha, deployment_id,
+   * run_number. Composes by logical AND with the structured filters above.
+   * Contract: docs/api/openapi.yaml — listDeployments `q` param.
+   */
+  q?: string;
   cursor?: string;
   limit?: number;
 }
@@ -166,6 +174,16 @@ export class DeploymentApiService {
   /** GET /api/environments — distinct sorted environment identifiers. */
   listEnvironments(): Observable<{ items: string[] }> {
     return this.http.get<{ items: string[] }>('/api/environments');
+  }
+
+  /**
+   * GET /api/presets — merged repo/CI-sourced provided-preset catalog
+   * (issue #391). Unauthenticated public read; items arrive pre-parsed
+   * (source, name, version, settings, fetched_at) — no client-side bundle
+   * parsing required.
+   */
+  getProvidedPresets(): Observable<ProvidedPresets> {
+    return this.http.get<ProvidedPresets>('/api/presets');
   }
 
   /**
