@@ -115,22 +115,34 @@ internal sealed class ResetReconciler(
             return; // Cycle is alive and within its TTL — leave it alone.
 
         // Orphan detected: abort.
+        var operation = string.IsNullOrEmpty(cycle.Operation) ? ControlOperation.Reset : cycle.Operation;
         logger.LogWarning(
-            "Reset reconciler: orphaned cycle detected (state={State}, correlation_id={CorrelationId}, deadline={Deadline}). Aborting.",
-            cycle.State, cycle.CorrelationId, gateMaxDeadline);
+            "Reset reconciler: orphaned {Operation} cycle detected (state={State}, correlation_id={CorrelationId}, deadline={Deadline}). Aborting.",
+            operation, cycle.State, cycle.CorrelationId, gateMaxDeadline);
 
         var abortedResetId = cycle.CorrelationId ?? Guid.Empty;
+        var recoverSince = cycle.RecoverSince;
         var controlStream = sp.GetRequiredService<IControlStreamRepository>();
         var notifier = sp.GetRequiredService<IControlEventNotifier>();
         var stateNotifier = sp.GetService<IResetStateNotifier>();
 
-        // Emit reset-completed so connected components can recover.
-        await EmitOrphanRecoveryEventAsync(controlStream, notifier, abortedResetId, ct);
+        // Correlation-guarded release: no-ops (0 rows) if a fresh claim has since superseded this
+        // orphan on the shared row (e.g. a new cycle claimed it between the load above and here).
+        // Guarding on the orphaned cycle's OWN correlation_id — already loaded — means a genuine
+        // orphan (row still correlation-matched) is unaffected; only a superseded one is skipped.
+        if (!await ClearCycleToIdleAsync(db, cycle, abortedResetId, stateNotifier, ct))
+        {
+            logger.LogDebug(
+                "Reset reconciler: orphan clear no-op for {CorrelationId}; cycle was already superseded.",
+                abortedResetId);
+            return;
+        }
 
-        // Transition cycle to idle.
-        await ClearCycleToIdleAsync(db, cycle, stateNotifier, ct);
+        // Emit the operation-matched *-completed (reset-completed | recover-completed) so
+        // connected components can recover.
+        await EmitOrphanRecoveryEventAsync(controlStream, notifier, abortedResetId, operation, recoverSince, ct);
 
-        logger.LogInformation("Reset reconciler: orphaned cycle aborted; state reset to idle.");
+        logger.LogInformation("Reset reconciler: orphaned {Operation} cycle aborted; state reset to idle.", operation);
     }
 
     /// <summary>
@@ -159,10 +171,17 @@ internal sealed class ResetReconciler(
         }
     }
 
+    /// <summary>
+    /// Emits the operation-matched <c>*-completed</c> event (<c>reset-completed</c> for a stuck
+    /// reset, <c>recover-completed</c> — carrying the resolved <c>{"since":"…"}</c> payload — for
+    /// a stuck recovery) so connected components can recover.
+    /// </summary>
     private static async Task EmitOrphanRecoveryEventAsync(
         IControlStreamRepository controlStream,
         IControlEventNotifier notifier,
         Guid abortedResetId,
+        string operation,
+        DateTimeOffset? recoverSince,
         CancellationToken ct)
     {
         if (abortedResetId == Guid.Empty)
@@ -171,32 +190,49 @@ internal sealed class ResetReconciler(
         var completedEvent = new ControlStreamEvent
         {
             Id = Guid.CreateVersion7(),
-            Type = "reset-completed",
+            Type = $"{operation}-completed",
             Component = "*",
             CorrelationId = abortedResetId,
             OccurredAt = DateTimeOffset.UtcNow,
+            Payload = operation == ControlOperation.Recover && recoverSince is { } since
+                ? RecoverPayload.Build(since)
+                : null,
         };
         await controlStream.InsertAsync(completedEvent, ct);
         await notifier.NotifyAsync(completedEvent, ct);
     }
 
-    private static async Task ClearCycleToIdleAsync(
+    /// <summary>
+    /// Correlation-guarded release to the idle baseline (see
+    /// <see cref="ChoreographyCycleStore.TryReleaseToIdleAsync"/> — the same conditional UPDATE
+    /// shared by <see cref="ResetOrchestrator"/> and <see cref="RecoverOrchestrator"/>, so the
+    /// "idle" field set + release predicate have exactly one definition across all three callers).
+    /// Returns <c>false</c> (no-op) when <paramref name="expectedCorrelationId"/> no longer
+    /// matches the row — a fresh cycle claimed it between the orphan-check load and this write —
+    /// in which case the caller must not notify or emit a completion event for it.
+    /// </summary>
+    private static async Task<bool> ClearCycleToIdleAsync(
         DashboardDbContext db,
         ResetCycle cycle,
+        Guid expectedCorrelationId,
         IResetStateNotifier? stateNotifier,
         CancellationToken ct)
     {
-        cycle.State = ResetState.Idle;
-        cycle.CorrelationId = null;
-        cycle.ExpectedComponents = null;
-        cycle.AcksReceived = null;
-        cycle.StartedAt = null;
-        cycle.DeadlineAt = null;
-        await db.SaveChangesAsync(ct);
+        db.ChangeTracker.Clear();
+        var repository = new ResetCycleRepository(db);
+        var released = await repository.TryReleaseToIdleAsync(expectedCorrelationId, ct);
+        db.ChangeTracker.Clear();
+
+        if (!released)
+            return false;
+
+        ChoreographyCycleStore.ResetToIdleBaseline(cycle);
 
         // Notify all instances to update their cached gate flag (Fix C).
         if (stateNotifier is not null)
             await stateNotifier.NotifyStateAsync(ResetState.Idle, ct);
+
+        return true;
     }
 
     private static async Task<bool> TryAcquireAdvisoryLockAsync(NpgsqlConnection conn, CancellationToken ct)

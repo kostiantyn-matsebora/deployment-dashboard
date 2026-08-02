@@ -10,6 +10,7 @@
 import { Subject } from 'rxjs';
 import { DemoService, MAX_EMIT_DELAY_MS } from '../src/demo/demo.service';
 import { ResetCoordinator } from '../src/control/reset-coordinator';
+import { RecoverAckHandler } from '../src/control/recover-ack-handler';
 import { EmitService } from '../src/demo/emit.service';
 
 // ── Module-level mocks ────────────────────────────────────────────────────────
@@ -101,7 +102,9 @@ function makeService(
   coordinator: jest.Mocked<ResetCoordinator>,
   emitService: jest.Mocked<EmitService>,
 ): DemoService {
-  const svc = new DemoService(emitService, coordinator);
+  // RecoverAckHandler has no dependencies of its own — use a real instance
+  // rather than a mock (registerEventsClient is a plain setter).
+  const svc = new DemoService(emitService, coordinator, new RecoverAckHandler());
   svc.onModuleInit();
   return svc;
 }

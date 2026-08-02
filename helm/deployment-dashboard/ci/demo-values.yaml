@@ -1,0 +1,20 @@
+# helm install-test overlay: demo on (Demo Driver + GitHub Emulator + Fetcher).
+# apiKey / controlApiKey / postgresql.auth.password are intentionally UNSET —
+# demo.enabled triggers the chart's zero-config insecure defaults (mirrors
+# docker-compose.demo.yaml), so no secret needs to be supplied for evaluation.
+
+gateway:
+  enabled: true
+
+ingress:
+  enabled: true
+  className: nginx
+
+postgresql:
+  enabled: true
+  persistence:
+    enabled: false   # kind has no default StorageClass by default; emptyDir keeps the install-test fast & disposable
+
+demo:
+  enabled: true
+  emitIntervalMs: 1000   # fast cadence so install-test assertions don't wait 8s/tick

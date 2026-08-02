@@ -16,6 +16,13 @@ A per-service graph view: see how a version flows from `dev` through `qa`, `stag
 ![Swimlanes — dark](../_assets/screenshots/swimlanes-dark.png#only-dark){ .dd-shot }
 ![Swimlanes — light](../_assets/screenshots/swimlanes-light.png#only-light){ .dd-shot }
 
+## :material-format-list-bulleted: Deployment feed { #deployment-feed }
+
+The chronological event log, grouped by `deployment_id` into expandable roll-ups (or flat, one row per event) via a shared toggle. Search the full history server-side, or scroll to load older pages via cursor pagination. A toggleable bottom dock mirrors the same log — last 8 events, live via SSE with a flash on arrival — on every other view; it's suppressed while the Feed view itself is active.
+
+![Deployment feed — dark](../_assets/screenshots/feed-dark.png#only-dark){ .dd-shot }
+![Deployment feed — light](../_assets/screenshots/feed-light.png#only-light){ .dd-shot }
+
 ## :material-history: History drawer { #history-drawer }
 
 Click any slot to open its full deployment history — every event ever recorded for that `(service, environment)`, newest first, with status, version, actor, commit, and run reference.

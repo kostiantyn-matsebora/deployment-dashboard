@@ -32,4 +32,19 @@ public sealed class ResetCycle
     /// <c>StartedAt + AckTimeoutSeconds</c>; also the upper bound for the GateMaxTtl safety abort.
     /// </summary>
     public DateTimeOffset? DeadlineAt { get; set; }
+
+    /// <summary>
+    /// Discriminates which choreography owns this cycle: <c>reset</c> | <c>recover</c>.
+    /// Reset and recover share this single row + advisory lock (D12) — mutually exclusive —
+    /// so this column tells the orchestrator/reconciler which one is in flight and which
+    /// <c>*-completed</c> event to emit. Defaults to <c>reset</c> (seeded baseline at idle).
+    /// </summary>
+    public string Operation { get; set; } = "reset";
+
+    /// <summary>
+    /// The resolved rewind point for an in-flight recovery (from <c>RecoverRequest.since</c> or
+    /// <c>days_back</c>). <c>null</c> for reset cycles and when idle. Carried in the <c>payload</c>
+    /// of every <c>recover-*</c> control event (<c>{"since":"…"}</c>).
+    /// </summary>
+    public DateTimeOffset? RecoverSince { get; set; }
 }

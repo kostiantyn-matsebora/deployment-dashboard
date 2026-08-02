@@ -1,12 +1,14 @@
-import { Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, inject } from '@angular/core';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { Subscription, filter } from 'rxjs';
 
 import { TopbarComponent } from './shared/topbar/topbar.component';
 import { FooterComponent } from './shared/footer/footer.component';
+import { FeedDockComponent } from './shared/feed-dock/feed-dock.component';
 import { AppStateService } from './core/services/app-state.service';
 import { DeploymentApiService } from './core/services/deployment-api.service';
 import { BrowserNotificationService } from './core/services/browser-notification.service';
+import { FeedService, isDockVisible } from './core/services/feed.service';
 import { RateLimitReport } from './core/models/deployment.model';
 
 /**
@@ -29,24 +31,35 @@ import { RateLimitReport } from './core/models/deployment.model';
  */
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, TopbarComponent, FooterComponent],
+  imports: [RouterOutlet, TopbarComponent, FooterComponent, FeedDockComponent],
   templateUrl: './app.html',
   styleUrl: './app.css',
+  host: {
+    // Extra bottom clearance while the feed dock overlays the page (#397) —
+    // mirrors the dock's own suppression rule so the two never disagree.
+    '[class.feed-dock-open]': 'dockVisible()',
+  },
 })
 export class App implements OnInit, OnDestroy {
   private readonly state         = inject(AppStateService);
   private readonly api           = inject(DeploymentApiService);
   private readonly router        = inject(Router);
+  private readonly feedService   = inject(FeedService);
   // Inject to activate the effect that watches lastEffectiveEvent and fires notifications.
   private readonly _notifications = inject(BrowserNotificationService);
 
   private subs: Subscription[] = [];
+
+  protected readonly dockVisible = computed(() =>
+    isDockVisible(this.feedService.dockOpenPref(), this.state.activeView()),
+  );
 
   ngOnInit(): void {
     this.syncActiveView();
     this.loadMatrix();
     this.connectSSE();
     this.connectComponentEvents();
+    this.feedService.init();
   }
 
   ngOnDestroy(): void {
@@ -61,6 +74,7 @@ export class App implements OnInit, OnDestroy {
         const url = e.urlAfterRedirects;
         this.state.activeView.set(
           url.startsWith('/swimlanes') ? 'swimlanes'
+          : url.startsWith('/feed') ? 'feed'
           : url.startsWith('/analytics') ? 'analytics'
           : 'matrix',
         );

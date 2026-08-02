@@ -28,6 +28,14 @@ public sealed class ControlEndpointTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
+        // Drain (issue #423 flake fix, 2nd pass): Post_ValidControlApiKey_Returns202 and
+        // Post_ValidControlApiKey_BodyContainsCorrelationIdStateAndAcceptedAt each trigger a
+        // real reset via POST /api/control/reset and never send an ack, so their orchestrator
+        // is still driving toward its own AckTimeoutSeconds at teardown — leaking into the next
+        // test in this collection if not drained here first. See Helpers.ResetCycleQuiescence
+        // for the full root-cause writeup.
+        await ResetCycleQuiescence.WaitForIdleAsync(_fixture.ConnectionString);
+
         _client.Dispose();
         await _factory.DisposeAsync();
     }

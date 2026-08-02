@@ -142,6 +142,17 @@ body::after {
 .s-cancelled .status-chip { color: var(--grey);   border-color: var(--grey-edge);   background: var(--grey-wash); }
 .s-rejected  .status-chip { color: var(--rose);   border-color: var(--rose-edge);   background: var(--rose-wash); }
 
+/* ── Feed grid — shared column template (#397) ────────────────────────────
+   One definition, referenced by FeedHeadRowComponent and FeedRowComponent
+   (page header, flat rows, group roll-up rows, expanded child rows, and the
+   bottom dock) — never redeclared, so the page and the dock cannot drift
+   out of alignment. Order: expander · pip · time · service · environment ·
+   status · version · ref · sha · run# · actor · deployment_id · badge ·
+   run-link. Spec: docs/design/mockup/index.html §--feed-cols */
+:root {
+  --feed-cols: 16px 8px 54px minmax(100px,1fr) 70px 92px 68px minmax(110px,1fr) 56px 50px 80px minmax(80px,1fr) 26px 34px;
+}
+
 /* Keyframe animations shared across components */
 @keyframes spin {
   to { transform: rotate(360deg); }

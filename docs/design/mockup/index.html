@@ -3083,6 +3083,249 @@
   .row.is-hidden > * { display: none !important; }
 
   /* =========================================================
+     FEED — deployment-event log: bottom dock + Feed view (#397)
+     ========================================================= */
+  .feed-shell {
+    margin-top: 10px;
+    padding: 14px;
+    background: var(--glass);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--radius-lg);
+    box-shadow:
+      0 1px 0 var(--glass-edge-2) inset,
+      0 30px 80px -40px rgba(0,0,0,0.7);
+  }
+  .feed-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .feed-title-block .feed-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-0);
+  }
+  .feed-title-block .feed-sub {
+    font-size: 11px;
+    color: var(--ink-2);
+    margin-top: 2px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .feed-controls { display: flex; align-items: center; gap: 10px; }
+  .feed-controls #feed-search { min-width: 340px; }
+
+  .feed-log {
+    height: calc(100vh - 320px);
+    min-height: 320px;
+    overflow-y: auto;
+    overflow-x: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  /* ---- shared column grid (page header + rows + dock; #397 wave 2) ----
+     One definition, referenced by the header row, flat rows, group
+     roll-up rows, and expanded child rows — never redeclared, so the
+     page and the dock cannot drift out of alignment. */
+  :root {
+    --feed-cols: 16px 8px 54px minmax(100px,1fr) 70px 92px 68px minmax(110px,1fr) 56px 50px 80px minmax(80px,1fr) 26px 34px;
+  }
+  .feed-head-row, .feed-row {
+    display: grid;
+    grid-template-columns: var(--feed-cols);
+    align-items: center;
+    gap: 8px;
+  }
+  .feed-head-row {
+    padding: 4px 8px;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    font-family: 'JetBrains Mono', monospace;
+    border-bottom: 1px solid var(--glass-edge);
+    position: sticky;
+    top: 0;
+    background: var(--glass-strong);
+    z-index: 1;
+  }
+  .feed-head-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ---- rows (shared by dock + Feed page) ---- */
+  .feed-row {
+    padding: 6px 8px;
+    border-radius: 8px;
+    white-space: nowrap;
+    transition: background .15s ease;
+  }
+  .feed-row:hover { background: var(--input-bg); }
+  .feed-row .pip { width: 8px; height: 8px; border-radius: 50%; }
+  .feed-row.s-success .pip   { background: var(--emerald); box-shadow: 0 0 8px var(--emerald-glow); }
+  .feed-row.s-failure .pip   { background: var(--coral);   box-shadow: 0 0 8px var(--coral-glow); }
+  .feed-row.s-progress .pip  { background: var(--amber);   box-shadow: 0 0 8px var(--amber-glow); }
+  .feed-row.s-pending .pip   { background: var(--slate);   box-shadow: 0 0 6px var(--slate-glow); }
+  .feed-row.s-queued .pip    { background: var(--blue);    box-shadow: 0 0 6px var(--blue-glow); }
+  .feed-row.s-waiting .pip   { background: var(--violet);  box-shadow: 0 0 6px var(--violet-glow); }
+  .feed-row.s-cancelled .pip { background: var(--grey);    box-shadow: none; }
+  .feed-row.s-rejected .pip  { background: var(--rose);    box-shadow: 0 0 6px var(--rose-glow); }
+
+  /* leading expander slot — empty placeholder on flat/detail rows, holds
+     the chevron on group roll-up rows; always present so column 1 aligns */
+  .feed-expander { display: flex; align-items: center; justify-content: center; }
+  .feed-chevron {
+    appearance: none;
+    background: none;
+    border: none;
+    color: var(--ink-2);
+    cursor: pointer;
+    width: 14px; height: 14px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 10px;
+    transition: transform .15s ease, color .15s ease;
+  }
+  .feed-chevron:hover { color: var(--ink-0); }
+  .feed-chevron.is-expanded { transform: rotate(90deg); }
+  .feed-group-row { cursor: pointer; }
+
+  .feed-time {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--ink-3);
+  }
+  .feed-service { font-size: 12px; font-weight: 500; color: var(--ink-0); overflow: hidden; text-overflow: ellipsis; }
+  .feed-env { font-size: 11.5px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; }
+  .feed-version {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-1);
+  }
+  .feed-ref { font-size: 11px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; }
+  .feed-sha {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--ink-2);
+  }
+  .feed-runnum {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--ink-2);
+  }
+  .feed-actor { font-size: 11px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; }
+  .feed-depid {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--ink-3);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* trailing badge slot — empty placeholder; holds the ×N count badge on
+     group roll-up rows, mirrors .feed-expander at the other end */
+  .feed-badge-slot { display: flex; align-items: center; justify-content: flex-start; }
+  .feed-count-badge {
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--ink-2);
+    background: var(--kvtag-bg);
+    border-radius: 999px;
+    padding: 1px 6px;
+  }
+  .feed-run { text-align: center; }
+
+  /* ---- expanded group children — identical column template as the
+     parent roll-up row (a tint replaces the old margin-left indent,
+     which would have broken alignment with the shared header) ---- */
+  .feed-group-detail {
+    display: none;
+    flex-direction: column;
+    gap: 1px;
+    margin: 0 0 2px 0;
+  }
+  .feed-group-detail.is-expanded { display: flex; }
+  .feed-group-detail .feed-row { font-size: 10.5px; opacity: 0.82; background: var(--input-bg); }
+
+  .feed-loading, .feed-end {
+    text-align: center;
+    padding: 10px;
+    font-size: 11px;
+    color: var(--ink-3);
+    font-style: italic;
+  }
+  .feed-searching { text-align: center; padding: 10px; font-size: 11px; color: var(--ink-2); }
+
+  /* ---- live-ingest flash (modeled on svFlash) ---- */
+  @keyframes feedFlash {
+    0%   { background: rgba(var(--accent-rgb), 0); }
+    25%  { background: rgba(var(--accent-rgb), 0.22); }
+    100% { background: rgba(var(--accent-rgb), 0); }
+  }
+  .feed-row.feed-flash { animation: feedFlash 0.85s ease-out forwards; }
+
+  /* ---- bottom dock (toggleable) ---- */
+  .feed-dock {
+    position: fixed;
+    left: 18px; right: 18px; bottom: 44px;
+    max-height: 340px;
+    display: flex;
+    flex-direction: column;
+    background: var(--glass);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--radius-lg);
+    box-shadow:
+      0 1px 0 var(--glass-edge-2) inset,
+      0 30px 80px -40px rgba(0,0,0,0.7);
+    z-index: 25;
+    transform: translateY(calc(100% + 60px));
+    opacity: 0;
+    pointer-events: none;
+    transition: transform .3s cubic-bezier(.2,.7,.2,1), opacity .25s ease;
+  }
+  .feed-dock.is-open { transform: translateY(0); opacity: 1; pointer-events: auto; }
+  body.feed-dock-open .app { padding-bottom: 340px; }
+
+  .feed-dock-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--glass-edge);
+    flex-shrink: 0;
+  }
+  .feed-dock-title-block .feed-dock-title { font-size: 12px; font-weight: 600; color: var(--ink-0); }
+  .feed-dock-title-block .feed-dock-sub { font-size: 10px; color: var(--ink-2); margin-top: 1px; }
+  .feed-dock-head .toggle { padding: 4px 10px; font-size: 11px; }
+  .feed-dock-head .toggle .switch { width: 26px; height: 14px; }
+  .feed-dock-head .toggle .switch::after { width: 10px; height: 10px; }
+  .feed-dock-spacer { flex: 1; }
+  .feed-dock-open-link {
+    appearance: none;
+    background: none;
+    border: none;
+    color: var(--ink-2);
+    cursor: pointer;
+    font-size: 11.5px;
+    font-family: inherit;
+    padding: 4px 6px;
+    transition: color .15s ease;
+  }
+  .feed-dock-open-link:hover { color: var(--ink-0); }
+  .feed-dock-head .drawer-close { width: 26px; height: 26px; font-size: 14px; }
+  .feed-dock-body { overflow-y: auto; overflow-x: auto; padding: 6px 10px 10px; }
+  .feed-dock-body .feed-row { font-size: 11px; }
+
+  /* ---- topbar dock toggle: disabled while the Feed view itself is
+     active — the page IS the full log, the dock is redundant there ---- */
+  .icon-btn:disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+
+  /* =========================================================
      LEGEND POPOVER — deployment status key (issue #268)
      ========================================================= */
   .lg-group {
@@ -3372,6 +3615,7 @@
     <nav class="tabs" role="tablist">
       <button class="tab is-active" data-view="matrix" role="tab" title="Matrix view — service × environment grid" aria-label="Matrix view">Matrix</button>
       <button class="tab" data-view="vis" role="tab" title="Swimlanes view — deployment DAGs per service" aria-label="Swimlanes view">Swimlanes</button>
+      <button class="tab" data-view="feed" role="tab" title="Feed view — chronological deployment log with server-side search" aria-label="Feed view">Feed</button>
       <button class="tab" data-view="analytics" role="tab" title="Analytics view — DORA metrics &amp; deployment trends" aria-label="Analytics view">Analytics</button>
       <button class="tab" data-view="extension" role="tab" title="Extension view — browser extension MVP surfaces" aria-label="Extension view">Extension</button>
     </nav>
@@ -3683,6 +3927,23 @@
         </div>
       </div>
 
+      <!-- Deployment-feed dock toggle — visible on ALL views (#397) -->
+      <div style="position:relative">
+        <button class="icon-btn" id="btn-feeddock"
+                title="Deployment feed — toggle the live event panel"
+                aria-label="Deployment feed — toggle the live event panel" aria-pressed="false">
+          <svg aria-hidden="true" width="15" height="15" viewBox="0 0 15 15" fill="none"
+               stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="2" cy="3.5" r="0.9" fill="currentColor" stroke="none"/>
+            <path d="M5 3.5h8"/>
+            <circle cx="2" cy="7.5" r="0.9" fill="currentColor" stroke="none"/>
+            <path d="M5 7.5h8"/>
+            <circle cx="2" cy="11.5" r="0.9" fill="currentColor" stroke="none"/>
+            <path d="M5 11.5h8"/>
+          </svg>
+        </button>
+      </div>
+
       <!-- Notification bell — persistent icon-button; has-active = coral dot when notifications ON -->
       <div style="position:relative">
         <button class="icon-btn has-active" id="btn-notif"
@@ -3886,6 +4147,34 @@
         <div class="insp-grid" id="insp-grid"></div>
       </aside>
     </div>
+  </section>
+
+  <!-- ============== FEED VIEW (#397) ============== -->
+  <section class="view" id="view-feed">
+    <div class="feed-shell">
+
+      <!-- Header -->
+      <div class="feed-header">
+        <div class="feed-title-block">
+          <div class="feed-title">Deployment feed</div>
+          <div class="feed-sub" id="feed-count">312 events · 118 deployments — showing 50</div>
+        </div>
+        <div class="feed-controls">
+          <input type="text" class="input" id="feed-search"
+                 placeholder="search full history — service, env, version, actor, ref, sha, status…"
+                 title="Simulates the server-side q param on GET /api/deployments — searches the full history, not just the rows currently rendered"
+                 autocomplete="off" spellcheck="false" aria-label="Search deployment feed">
+          <label class="toggle is-on" id="feed-group-toggle" title="Group events by deployment" aria-label="Group by deployment" style="white-space:nowrap;cursor:pointer">
+            <span class="switch" aria-hidden="true"></span>
+            Group by deployment
+          </label>
+        </div>
+      </div>
+
+      <!-- Scrollable log -->
+      <div class="feed-log" id="feed-log"></div>
+
+    </div><!-- .feed-shell -->
   </section>
 
   <!-- ============== ANALYTICS VIEW ============== -->
@@ -4196,6 +4485,26 @@
   </section>
 
 </div>
+
+<!-- ============== DEPLOYMENT-FEED DOCK (#397) ============== -->
+<aside class="feed-dock" id="feed-dock" role="log" aria-label="Live deployment feed">
+  <div class="feed-dock-head">
+    <span class="live-dot" aria-hidden="true"></span>
+    <div class="feed-dock-title-block">
+      <div class="feed-dock-title">Deployment feed</div>
+      <div class="feed-dock-sub">last 8 · live</div>
+    </div>
+    <label class="toggle is-on" id="dock-group-toggle" title="Group events by deployment" aria-label="Group by deployment" style="white-space:nowrap;cursor:pointer">
+      <span class="switch" aria-hidden="true"></span>
+      Group by deployment
+    </label>
+    <div class="feed-dock-spacer"></div>
+    <button class="sv-sim-btn" id="dock-sim" type="button" title="Simulate a new deployment event" aria-label="Simulate a new deployment event">⚡ Simulate</button>
+    <button class="feed-dock-open-link" id="dock-open-feed" type="button">Open feed &rarr;</button>
+    <button class="drawer-close" id="dock-close" aria-label="Close deployment feed panel">×</button>
+  </div>
+  <div class="feed-dock-body" id="feed-dock-body"></div>
+</aside>
 
 <footer class="site-footx">
   <span class="sf-left">
@@ -5083,15 +5392,16 @@ function setView(view) {
   document.getElementById('view-matrix').classList.toggle('is-active', view === 'matrix');
   document.getElementById('view-vis').classList.toggle('is-active', view === 'vis');
   document.getElementById('view-analytics').classList.toggle('is-active', view === 'analytics');
+  document.getElementById('view-feed').classList.toggle('is-active', view === 'feed');
   document.getElementById('view-extension').classList.toggle('is-active', view === 'extension');
   // inline matrix filter + columns picker are matrix-only
   document.getElementById('hdr-matrix-filter').style.display = view === 'matrix' ? 'flex' : 'none';
   document.getElementById('hdr-cols-btn').style.display      = view === 'matrix' ? ''     : 'none';
   document.getElementById('hdr-vis-icons').style.display     = view === 'vis'    ? ''     : 'none';
-  // services picker is visible on matrix + swimlanes; hidden on analytics + extension
+  // services picker is visible on matrix + swimlanes; hidden on analytics + feed + extension
   document.getElementById('hdr-svcs-btn').style.display = (view === 'matrix' || view === 'vis') ? '' : 'none';
-  // Fields + Legend buttons hidden on analytics and extension (no per-cell fields there)
-  const hideFields = view === 'analytics' || view === 'extension';
+  // Fields + Legend buttons hidden on analytics, feed, and extension (no per-cell fields there)
+  const hideFields = view === 'analytics' || view === 'feed' || view === 'extension';
   document.getElementById('btn-fields').parentElement.style.display  = hideFields ? 'none' : '';
   document.getElementById('btn-legend').parentElement.style.display  = hideFields ? 'none' : '';
   // Fields popover content swaps per view
@@ -5122,6 +5432,18 @@ function setView(view) {
   if (view === 'analytics') {
     renderAnalytics(typeof anCurrentDays !== 'undefined' ? anCurrentDays : 14);
   }
+
+  // Feed: re-render on focus (#397)
+  if (view === 'feed' && typeof renderFeedPage === 'function') {
+    renderFeedPage(true);
+  }
+
+  // Feed dock: never shown while the Feed view itself is active — disable
+  // the topbar toggle there and restore the persisted open state on leaving
+  // (#397 wave 2). feedDockOpen (the stored preference) is untouched either way.
+  const feedDockBtn = document.getElementById('btn-feeddock');
+  if (feedDockBtn) feedDockBtn.disabled = (view === 'feed');
+  if (typeof feedSyncDockVisibility === 'function') feedSyncDockVisibility();
 }
 document.querySelectorAll('.tab').forEach(t => {
   t.addEventListener('click', () => {
@@ -7571,6 +7893,25 @@ function simulateEvent(svc) {
   VIS_NODES.push(newNode);
   VIS_BY_ID[newId] = newNode;
 
+  // Mirror into the deployment feed (#397)
+  if (typeof feedIngest === 'function') {
+    feedIngest({
+      id:              `${newId}-feed`,
+      deployment_id:   `sim-${_simNodeSeq}-1`,
+      service:         newNode.component,
+      environment:     newNode.environment,
+      version:         newNode.version,
+      status:          newNode.status,
+      actor:           newNode.actor,
+      ref:             newNode.ref,
+      sha:             newNode.sha,
+      run_number:      newNode.run_number,
+      run_url:         newNode.run_url,
+      happened_at_ms:  Date.now(),
+      happened_at:     newNode.happened_at,
+    });
+  }
+
   // Rebuild — forces remeasure so the new card gets sized correctly.
   window.__visNodeDims = null;
   buildSwim();
@@ -8092,6 +8433,8 @@ computeKPIs();
       laneAutoScroll:    laneAutoScrollVal,
       predicate:         predicateVal,
       timeWindow:        timeWindowVal,
+      feedDockOpen:      typeof feedDockOpen !== 'undefined' ? feedDockOpen : false,
+      feedGrouped:       typeof feedGrouped  !== 'undefined' ? feedGrouped  : true,
     };
   }
 
@@ -8259,6 +8602,16 @@ computeKPIs();
         const opt = [...twEl2.options].find(o => o.value === s.timeWindow);
         if (opt) twEl2.value = s.timeWindow;
       }
+    }
+
+    // feedGrouped
+    if (typeof s.feedGrouped === 'boolean' && typeof feedSetGrouped === 'function') {
+      feedSetGrouped(s.feedGrouped);
+    }
+
+    // feedDockOpen
+    if (typeof s.feedDockOpen === 'boolean' && typeof feedSetDockOpen === 'function') {
+      feedSetDockOpen(s.feedDockOpen);
     }
   }
 
@@ -8657,12 +9010,16 @@ function resetAllSettings() {
     'dd:svcFilter', 'dd:failOnly', 'dd:svcFilterMode', 'dd:svcPatterns',
     'dd:matFields', 'dd:swFields', 'dd:correlation', 'dd:timeWindow',
     'dd:colOrder', 'dd:colHidden', 'dd:swimCollapsed', 'dd:swimAutoScroll',
-    'dd:notifPrefs', 'dd:presetActive',
+    'dd:notifPrefs', 'dd:presetActive', 'dd:feedDock', 'dd:feedGrouped',
   ];
   keysToRemove.forEach(k => { try { localStorage.removeItem(k); } catch (_) {} });
 
   // Clear the in-scope activePresetName so the list re-renders correctly
   if (typeof saveActivePreset === 'function') saveActivePreset(null);
+
+  // feed dock → closed, grouped → default
+  if (typeof feedSetDockOpen === 'function') feedSetDockOpen(false);
+  if (typeof feedSetGrouped  === 'function') feedSetGrouped(true);
 
   // Rebuild affected views if available
   if (typeof renderMatrix === 'function') renderMatrix();
@@ -8670,6 +9027,503 @@ function resetAllSettings() {
 
   alert('All settings have been reset to defaults. Reload the page to see full effect.');
 }
+
+/* =================================================================
+   FEED — deployment-event log: bottom dock + Feed view (#397)
+   ================================================================= */
+const FEED_SEED = 90210;
+const feedRng = anMulberry32(FEED_SEED);
+const FEED_STATUS_TERMINAL = ['success', 'success', 'success', 'success', 'failure', 'cancelled', 'rejected'];
+const FEED_REFS = ['main', 'release/2.4', 'release/3.0', 'feat/checkout-v2', 'feat/retry-policy', '#1183', '#1244', '#1301'];
+
+function feedPick(arr) { return arr[Math.floor(feedRng() * arr.length)]; }
+function feedSemver() {
+  return `v${1 + Math.floor(feedRng() * 4)}.${Math.floor(feedRng() * 20)}.${Math.floor(feedRng() * 10)}`;
+}
+function feedSha() {
+  const chars = '0123456789abcdef';
+  let s = '';
+  for (let i = 0; i < 7; i++) s += chars[Math.floor(feedRng() * 16)];
+  return s;
+}
+function fmtElapsed(ms) {
+  const diff = Date.now() - ms;
+  if (diff < 45 * 1000) return 'just now';
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+const FEED_LOG = [];            // flat, all events, newest-first
+const FEED_GROUPS = new Map();  // deployment_id -> { id, events:[newest-first] }
+const FEED_GROUP_ORDER = [];    // deployment_ids, newest-first by group's newest event
+
+(function buildFeedFixture() {
+  const now = Date.now();
+  const DEPLOY_COUNT = 70;
+  const rows = [];
+
+  for (let g = 0; g < DEPLOY_COUNT; g++) {
+    const orderNum = DEPLOY_COUNT - g; // newest deployment (g=0) gets the highest number
+    const deploymentId = `gh-${9000 + orderNum * 7}-1`;
+    const service = feedPick(SERVICES);
+    const environment = feedPick(ENVS);
+    const actor = feedPick(AN_ACTORS);
+    const ref = feedPick(FEED_REFS);
+    const version = feedSemver();
+    const runNumber = 4200 + orderNum * 3;
+    const runUrl = `https://github.com/example/${service}/actions/runs/${900000 + g}`;
+    const sha = feedSha();
+
+    // deployment-group age: spread over ~7 days, newest groups (low g) closest to now
+    const groupAgeMs = g === 0 ? 0 : (g / DEPLOY_COUNT) * 7 * 24 * 60 * 60 * 1000 + feedRng() * 30 * 60 * 1000;
+
+    // lifecycle shape: ~20% single-event, ~40% two-event, ~40% three-event
+    const shapeRoll = feedRng();
+    let statuses;
+    if (shapeRoll < 0.20) statuses = [feedPick(FEED_STATUS_TERMINAL)];
+    else if (shapeRoll < 0.60) statuses = ['in-progress', feedPick(FEED_STATUS_TERMINAL)];
+    else statuses = ['queued', 'in-progress', feedPick(FEED_STATUS_TERMINAL)];
+
+    // newest 5 groups: force a non-terminal tip so the dock reads "live"
+    if (g < 5) {
+      const liveTip = ['in-progress', 'queued', 'waiting', 'pending'][g % 4];
+      statuses = statuses.slice(0, -1).concat(liveTip);
+    }
+
+    const events = statuses.map((status, i) => {
+      // oldest event is furthest in the past; tip (last) sits at groupAgeMs
+      const stepsFromTip = statuses.length - 1 - i;
+      const eventAgeMs = groupAgeMs + stepsFromTip * (1 + feedRng() * 5) * 60 * 1000;
+      const ts = now - eventAgeMs;
+      return {
+        id: `${deploymentId}-ev${i}`,
+        deployment_id: deploymentId,
+        service, environment, version, status,
+        actor, ref, sha,
+        run_number: runNumber + i,
+        run_url: runUrl,
+        happened_at_ms: ts,
+        happened_at: new Date(ts).toISOString(),
+      };
+    });
+    events.sort((a, b) => b.happened_at_ms - a.happened_at_ms); // newest-first within the group
+    rows.push({ deployment_id: deploymentId, events });
+  }
+
+  rows.forEach(row => {
+    FEED_GROUPS.set(row.deployment_id, { id: row.deployment_id, events: row.events });
+    row.events.forEach(ev => FEED_LOG.push(ev));
+  });
+  FEED_LOG.sort((a, b) => b.happened_at_ms - a.happened_at_ms);
+  FEED_GROUP_ORDER.push(...[...FEED_GROUPS.keys()].sort((a, b) =>
+    FEED_GROUPS.get(b).events[0].happened_at_ms - FEED_GROUPS.get(a).events[0].happened_at_ms));
+})();
+
+/* ---- column grid (shared by header row + rows; #397 wave 2) ----
+   Order: expander · pip · time · service · environment · status · version ·
+   ref · sha · run# · actor · deployment_id · badge · run-link — matches
+   --feed-cols verbatim; row id and parent_deployments stay excluded. */
+const FEED_HEAD_LABELS = ['', '', 'Time', 'Service', 'Env', 'Status', 'Version', 'Ref', 'SHA', 'Run', 'Actor', 'Deployment', '', ''];
+function feedBuildHeadRow() {
+  const head = document.createElement('div');
+  head.className = 'feed-head-row';
+  FEED_HEAD_LABELS.forEach(label => {
+    const span = document.createElement('span');
+    span.textContent = label;
+    head.appendChild(span);
+  });
+  return head;
+}
+
+/* ---- row renderers (shared by dock + Feed page) ---- */
+function feedRenderRow(ev) {
+  const row = document.createElement('div');
+  row.className = `feed-row ${statusKlass(ev.status)}`;
+  row.dataset.eventId = ev.id;
+  row.title = ev.happened_at;
+
+  // col 1: expander — empty placeholder; feedRenderGroupRow fills it with a chevron
+  const expander = document.createElement('span');
+  expander.className = 'feed-expander';
+  row.appendChild(expander);
+
+  const pip = document.createElement('span');
+  pip.className = 'pip';
+  row.appendChild(pip);
+
+  const time = document.createElement('span');
+  time.className = 'feed-time';
+  time.textContent = fmtElapsed(ev.happened_at_ms);
+  row.appendChild(time);
+
+  const service = document.createElement('span');
+  service.className = 'feed-service';
+  service.textContent = ev.service;
+  row.appendChild(service);
+
+  const env = document.createElement('span');
+  env.className = 'feed-env';
+  env.textContent = ev.environment;
+  row.appendChild(env);
+
+  const chip = document.createElement('span');
+  chip.className = `status-chip ${statusKlass(ev.status)}`;
+  chip.textContent = ev.status;
+  row.appendChild(chip);
+
+  const ver = document.createElement('span');
+  ver.className = 'feed-version';
+  ver.textContent = ev.version;
+  row.appendChild(ver);
+
+  const ref = document.createElement('span');
+  ref.className = 'feed-ref';
+  ref.textContent = ev.ref;
+  row.appendChild(ref);
+
+  const sha = document.createElement('span');
+  sha.className = 'feed-sha';
+  sha.textContent = ev.sha;
+  row.appendChild(sha);
+
+  const runnum = document.createElement('span');
+  runnum.className = 'feed-runnum';
+  runnum.textContent = `#${ev.run_number}`;
+  row.appendChild(runnum);
+
+  const actor = document.createElement('span');
+  actor.className = 'feed-actor';
+  actor.textContent = ev.actor;
+  row.appendChild(actor);
+
+  const depid = document.createElement('span');
+  depid.className = 'feed-depid';
+  depid.textContent = ev.deployment_id;
+  row.appendChild(depid);
+
+  // col 13: badge slot — empty placeholder; feedRenderGroupRow fills it with ×N
+  const badgeSlot = document.createElement('span');
+  badgeSlot.className = 'feed-badge-slot';
+  row.appendChild(badgeSlot);
+
+  const run = document.createElement('a');
+  run.className = 'hist-link feed-run';
+  run.href = ev.run_url;
+  run.target = '_blank';
+  run.rel = 'noopener';
+  run.title = `Open run #${ev.run_number}`;
+  run.setAttribute('aria-label', `Open run #${ev.run_number}`);
+  run.textContent = '↗';
+  row.appendChild(run);
+
+  return row;
+}
+
+function feedRenderGroupRow(group) {
+  const wrap = document.createElement('div');
+  wrap.className = 'feed-group';
+  wrap.dataset.deploymentId = group.id;
+
+  const latest = group.events[0];
+  const row = feedRenderRow(latest);
+  row.classList.add('feed-group-row');
+
+  const chevron = document.createElement('button');
+  chevron.type = 'button';
+  chevron.className = 'feed-chevron' + (group._expanded ? ' is-expanded' : '');
+  chevron.setAttribute('aria-label', group._expanded ? 'Collapse group' : 'Expand group');
+  chevron.textContent = '▸';
+  row.querySelector('.feed-expander').appendChild(chevron);
+
+  if (group.events.length > 1) {
+    const badge = document.createElement('span');
+    badge.className = 'feed-count-badge';
+    badge.textContent = `×${group.events.length}`;
+    row.querySelector('.feed-badge-slot').appendChild(badge);
+  }
+
+  const detail = document.createElement('div');
+  detail.className = 'feed-group-detail' + (group._expanded ? ' is-expanded' : '');
+  group.events.forEach(ev => detail.appendChild(feedRenderRow(ev)));
+
+  function toggleGroup() {
+    group._expanded = !group._expanded;
+    chevron.classList.toggle('is-expanded', group._expanded);
+    detail.classList.toggle('is-expanded', group._expanded);
+    chevron.setAttribute('aria-label', group._expanded ? 'Collapse group' : 'Expand group');
+  }
+  row.addEventListener('click', (e) => {
+    if (e.target.closest('.hist-link')) return; // let the run link navigate
+    toggleGroup();
+  });
+
+  wrap.appendChild(row);
+  wrap.appendChild(detail);
+  return wrap;
+}
+
+function feedFlashNewest(container) {
+  if (!container) return;
+  const first = container.querySelector('.feed-row');
+  if (!first) return;
+  first.classList.remove('feed-flash');
+  void first.offsetWidth; // force reflow to restart the CSS animation
+  first.classList.add('feed-flash');
+  first.addEventListener('animationend', () => first.classList.remove('feed-flash'), { once: true });
+}
+
+/* ---- shared state ---- */
+let feedGrouped = true;
+var feedDockOpen = false; // var (not let): setView('matrix') fires synchronously during
+                          // initial script bootstrap, before this line — a let would TDZ-throw
+let feedQuery = '';
+let feedFilteredEvents = FEED_LOG;
+let feedFilteredGroupIds = FEED_GROUP_ORDER;
+const FEED_PAGE_SIZE = 25;
+let feedShownCount = 0;
+let feedLoadingMore = false;
+
+function feedEventMatches(ev, q) {
+  if (!q) return true;
+  const hay = [ev.service, ev.environment, ev.version, ev.status, ev.actor, ev.ref, ev.sha, ev.deployment_id, String(ev.run_number)]
+    .join(' ').toLowerCase();
+  return hay.includes(q);
+}
+function feedRecompute() {
+  const q = feedQuery.trim().toLowerCase();
+  feedFilteredEvents = q ? FEED_LOG.filter(ev => feedEventMatches(ev, q)) : FEED_LOG;
+  feedFilteredGroupIds = q
+    ? FEED_GROUP_ORDER.filter(id => FEED_GROUPS.get(id).events.some(ev => feedEventMatches(ev, q)))
+    : FEED_GROUP_ORDER;
+}
+function feedTotalEntries() {
+  return feedGrouped ? feedFilteredGroupIds.length : feedFilteredEvents.length;
+}
+function feedRenderTail(logEl) {
+  const existingTail = logEl.querySelector('.feed-loading, .feed-end');
+  if (existingTail) existingTail.remove();
+  const total = feedTotalEntries();
+  if (feedShownCount < total) return; // more available — infinite scroll appends on demand
+  const end = document.createElement('div');
+  end.className = 'feed-end';
+  end.textContent = total > 0
+    ? '— end of history · bounded by HISTORY_RETENTION_DAYS —'
+    : 'no matching deployment events';
+  logEl.appendChild(end);
+}
+function feedAppendPage(logEl) {
+  const total = feedTotalEntries();
+  const nextEnd = Math.min(feedShownCount + FEED_PAGE_SIZE, total);
+  if (feedGrouped) {
+    for (let i = feedShownCount; i < nextEnd; i++) logEl.appendChild(feedRenderGroupRow(FEED_GROUPS.get(feedFilteredGroupIds[i])));
+  } else {
+    for (let i = feedShownCount; i < nextEnd; i++) logEl.appendChild(feedRenderRow(feedFilteredEvents[i]));
+  }
+  feedShownCount = nextEnd;
+  feedRenderTail(logEl);
+}
+function feedUpdateCount() {
+  const el = document.getElementById('feed-count');
+  if (!el) return;
+  const shown = Math.min(feedShownCount, feedTotalEntries());
+  const matchedNote = feedQuery.trim()
+    ? ` · ${feedGrouped ? feedFilteredGroupIds.length + ' matching deployments' : feedFilteredEvents.length + ' matching events'}`
+    : '';
+  el.textContent = `${FEED_LOG.length} events · ${FEED_GROUPS.size} deployments${matchedNote} — showing ${shown}`;
+}
+function renderFeedPage(resetPaging) {
+  const logEl = document.getElementById('feed-log');
+  if (!logEl) return;
+  if (resetPaging !== false) feedShownCount = 0;
+  feedRecompute();
+  logEl.innerHTML = '';
+  logEl.appendChild(feedBuildHeadRow());
+  feedAppendPage(logEl);
+  feedUpdateCount();
+}
+function feedOnScroll() {
+  const logEl = document.getElementById('feed-log');
+  if (!logEl || feedLoadingMore) return;
+  if (feedShownCount >= feedTotalEntries()) return;
+  const nearBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 120;
+  if (!nearBottom) return;
+  feedLoadingMore = true;
+  const existingTail = logEl.querySelector('.feed-loading, .feed-end');
+  if (existingTail) existingTail.remove();
+  const loading = document.createElement('div');
+  loading.className = 'feed-loading';
+  loading.textContent = 'loading older events…';
+  logEl.appendChild(loading);
+  setTimeout(() => {
+    loading.remove();
+    feedAppendPage(logEl);
+    feedLoadingMore = false;
+  }, 450);
+}
+
+let feedSearchTimer = null;
+function feedWireSearch() {
+  const input = document.getElementById('feed-search');
+  if (!input) return;
+  input.addEventListener('input', () => {
+    clearTimeout(feedSearchTimer);
+    const val = input.value;
+    feedSearchTimer = setTimeout(() => {
+      const logEl = document.getElementById('feed-log');
+      if (logEl) {
+        logEl.innerHTML = '';
+        logEl.appendChild(feedBuildHeadRow());
+        const s = document.createElement('div');
+        s.className = 'feed-searching';
+        s.textContent = 'searching…';
+        logEl.appendChild(s);
+      }
+      setTimeout(() => {
+        feedQuery = val;
+        renderFeedPage(true);
+      }, 350);
+    }, 250);
+  });
+}
+
+function feedSetGrouped(val) {
+  feedGrouped = val;
+  try { localStorage.setItem('dd:feedGrouped', String(feedGrouped)); } catch (_) {}
+  document.querySelectorAll('#feed-group-toggle, #dock-group-toggle').forEach(t => t.classList.toggle('is-on', feedGrouped));
+  renderFeedPage(true);
+  renderFeedDockBody();
+}
+function feedWireGroupToggles() {
+  ['feed-group-toggle', 'dock-group-toggle'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('click', () => feedSetGrouped(!feedGrouped));
+  });
+}
+
+function renderFeedDockBody() {
+  const body = document.getElementById('feed-dock-body');
+  if (!body) return;
+  body.innerHTML = '';
+  if (feedGrouped) {
+    FEED_GROUP_ORDER.slice(0, 8).forEach(id => body.appendChild(feedRenderGroupRow(FEED_GROUPS.get(id))));
+  } else {
+    FEED_LOG.slice(0, 8).forEach(ev => body.appendChild(feedRenderRow(ev)));
+  }
+}
+// The dock's persisted preference (feedDockOpen) is distinct from its
+// on-screen visibility: the dock is always suppressed while the Feed view
+// itself is active (the page IS the full log) without touching the stored
+// preference, so leaving Feed restores exactly what the user had (#397 wave 2).
+function feedDockVisible() {
+  return feedDockOpen && (typeof currentView === 'undefined' || currentView !== 'feed');
+}
+function feedSyncDockVisibility() {
+  const visible = feedDockVisible();
+  const dock = document.getElementById('feed-dock');
+  if (dock) dock.classList.toggle('is-open', visible);
+  document.body.classList.toggle('feed-dock-open', visible);
+  if (visible) renderFeedDockBody();
+}
+function feedSetDockOpen(open) {
+  feedDockOpen = open;
+  const btn = document.getElementById('btn-feeddock');
+  if (btn) { btn.classList.toggle('is-active', open); btn.setAttribute('aria-pressed', open ? 'true' : 'false'); }
+  try { localStorage.setItem('dd:feedDock', open ? 'open' : 'closed'); } catch (_) {}
+  feedSyncDockVisibility();
+}
+
+const FEED_SIM_STATUS_CYCLE = ['success', 'in-progress', 'failure', 'queued'];
+let _feedSimSeq = 0;
+function feedSimulateOne() {
+  _feedSimSeq++;
+  const service = SERVICES[_feedSimSeq % SERVICES.length];
+  const environment = ENVS[_feedSimSeq % ENVS.length];
+  const status = FEED_SIM_STATUS_CYCLE[_feedSimSeq % FEED_SIM_STATUS_CYCLE.length];
+  const now = Date.now();
+  feedIngest({
+    id: `sim-${_feedSimSeq}-1-ev0`,
+    deployment_id: `sim-${_feedSimSeq}-1`,
+    service, environment,
+    version: `v9.${_feedSimSeq}.0`,
+    status,
+    actor: 'sim-bot',
+    ref: 'main',
+    sha: feedSha(),
+    run_number: 9000 + _feedSimSeq,
+    run_url: `https://github.com/example/${service}/actions/runs/${9000000 + _feedSimSeq}`,
+    happened_at_ms: now,
+    happened_at: new Date(now).toISOString(),
+  });
+}
+
+function feedIngest(ev) {
+  FEED_LOG.unshift(ev);
+  let group = FEED_GROUPS.get(ev.deployment_id);
+  if (!group) {
+    group = { id: ev.deployment_id, events: [ev] };
+    FEED_GROUPS.set(ev.deployment_id, group);
+    FEED_GROUP_ORDER.unshift(ev.deployment_id);
+  } else {
+    group.events.unshift(ev);
+    const idx = FEED_GROUP_ORDER.indexOf(ev.deployment_id);
+    if (idx !== -1) FEED_GROUP_ORDER.splice(idx, 1);
+    FEED_GROUP_ORDER.unshift(ev.deployment_id);
+  }
+
+  if (feedDockVisible()) {
+    renderFeedDockBody();
+    feedFlashNewest(document.getElementById('feed-dock-body'));
+  }
+  if (typeof currentView !== 'undefined' && currentView === 'feed') {
+    const q = feedQuery.trim().toLowerCase();
+    if (feedEventMatches(ev, q)) {
+      renderFeedPage(true);
+      feedFlashNewest(document.getElementById('feed-log'));
+    }
+  }
+  feedUpdateCount();
+}
+
+function feedWireDock() {
+  const toggleBtn = document.getElementById('btn-feeddock');
+  if (toggleBtn) toggleBtn.addEventListener('click', () => feedSetDockOpen(!feedDockOpen));
+  const closeBtn = document.getElementById('dock-close');
+  if (closeBtn) closeBtn.addEventListener('click', () => feedSetDockOpen(false));
+  const openFeedBtn = document.getElementById('dock-open-feed');
+  if (openFeedBtn) openFeedBtn.addEventListener('click', () => {
+    const tab = document.querySelector('.tab[data-view="feed"]');
+    if (tab) tab.click();
+  });
+  const simBtn = document.getElementById('dock-sim');
+  if (simBtn) simBtn.addEventListener('click', feedSimulateOne);
+}
+
+function feedInitState() {
+  let storedGrouped = true;
+  try {
+    const raw = localStorage.getItem('dd:feedGrouped');
+    if (raw !== null) storedGrouped = raw === 'true';
+  } catch (_) {}
+  feedGrouped = storedGrouped;
+  document.querySelectorAll('#feed-group-toggle, #dock-group-toggle').forEach(t => t.classList.toggle('is-on', feedGrouped));
+
+  let storedOpen = false;
+  try { storedOpen = localStorage.getItem('dd:feedDock') === 'open'; } catch (_) {}
+  feedSetDockOpen(storedOpen);
+}
+
+feedWireSearch();
+feedWireGroupToggles();
+feedWireDock();
+const _feedLogEl = document.getElementById('feed-log');
+if (_feedLogEl) _feedLogEl.addEventListener('scroll', feedOnScroll);
+feedInitState();
+renderFeedDockBody();
+renderFeedPage(true);
 
 /* =================================================================
    PRE-OPEN drawer on initial load — demonstrates full 11-field record

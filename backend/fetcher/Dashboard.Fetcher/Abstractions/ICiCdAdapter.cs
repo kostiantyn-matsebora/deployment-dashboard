@@ -30,6 +30,21 @@ public interface ICiCdAdapter
     /// </summary>
     void ResetState() { }
 
+    /// <summary>
+    /// Recover saga (§5.10.6): builds a rewound cursor with every known target's high-water
+    /// mark set to <paramref name="since"/> and NO backfill markers, so the next
+    /// <see cref="FetchAsync"/> call takes the incremental poll branch. Recover is
+    /// non-destructive — unlike <see cref="ResetState"/> paired with a null cursor (which
+    /// triggers backfill), recovery must never re-enter backfill. Implementations also clear
+    /// any in-memory windowed dedup caches (same effect as <see cref="ResetState"/>) so a
+    /// warm conditional-request hit does not reuse the narrow pre-rewind window and miss the
+    /// gap being recovered.
+    /// Default: not supported — adapters that hold no per-target cursor state should not be
+    /// targeted by a recover command. Adapters that support recovery override this.
+    /// </summary>
+    string RewindTo(DateTimeOffset since) =>
+        throw new NotSupportedException($"{GetType().Name} does not support recovery rewind.");
+
     IAsyncEnumerable<FetchResult> FetchAsync(string? cursor, CancellationToken ct);
 }
 

@@ -24,4 +24,21 @@ internal interface IResetCycleRepository
     /// that already hold the advisory lock and own the current state).
     /// </summary>
     Task SaveAsync(ResetCycle cycle, CancellationToken ct);
+
+    /// <summary>
+    /// Atomically releases the row to the idle baseline (state=idle, correlation/acks/timers
+    /// cleared, operation=reset, recover_since=null) via a conditional UPDATE:
+    /// <c>WHERE id=1 AND (correlation_id = @expectedCorrelationId OR state = 'idle')</c>.
+    /// <para>
+    /// The <c>correlation_id</c> arm guards the normal case — only the orchestrator/reconciler that
+    /// actually owns the in-flight cycle (its correlation still matches the row) may move it to
+    /// idle. The <c>state = 'idle'</c> arm keeps the release idempotent when there is nothing to
+    /// protect (row already idle, e.g. a redundant abort call) without ever letting a genuinely
+    /// in-flight, differently-correlated cycle — a newer claim that superseded a stale/leaked
+    /// writer — get clobbered.
+    /// </para>
+    /// Returns <c>true</c> iff exactly one row was updated; <c>false</c> means this caller's
+    /// cycle was superseded and the write no-oped — the row must be left exactly as-is.
+    /// </summary>
+    Task<bool> TryReleaseToIdleAsync(Guid expectedCorrelationId, CancellationToken ct);
 }
