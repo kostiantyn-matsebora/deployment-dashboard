@@ -40,7 +40,7 @@ The DB is unreachable, a required `LISTEN` channel isn't attached, or a reset is
 `CONTROL_API_KEY` is unset — the reset surface is hidden by design. Set it (distinct from `API_KEY`) to enable. See [Configuration](./configuration/api.md#api).
 
 **Duplicate rows after a retry.**
-Expected — ingest is append-only, retries append. The matrix still shows the latest; the history drawer shows every row. Make retries idempotent on your side if you want to avoid history noise. See [Integrate your CI/CD](./send-events.md#append-only-semantics).
+Ingest is idempotent on `(deployment_id, status, happened_at)` — a duplicate POST returns `200` and no extra row is created. If you still see duplicate rows, the `happened_at` values differ between the calls (e.g. a dynamic timestamp in the pipeline). See [Integrate your CI/CD](./send-events.md#append-only-semantics).
 
 **Fetcher gets `403` against an org repo even though the token is valid.**
 Two common causes: (1) the org enforces SAML SSO and the token hasn't been authorized for it; (2) the token was recently rotated and the new token starts unauthorized — re-authorize before deploying. The `X-GitHub-SSO` header on the 403 contains the authorization URL. If the org also disables fine-grained PATs, a classic PAT with `repo` scope is the required path. See [GitHub token scope](./install/docker-compose.md#2-configure--run) for the full setup, including the re-authorize-after-rotation requirement.

@@ -34,6 +34,18 @@ public sealed class ResetChoreographyTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
+        // Drain (issue #423 flake fix, 2nd pass): block until this test's own orchestrator (if
+        // any — e.g. Post_Reset_WhileAlreadyInFlight_Returns409/Timeout_WhenNoAcksArrive... never
+        // send acks, so their orchestrator is still driving here) reaches its own terminal
+        // 'idle' write on the shared reset_cycle (id=1) row, BEFORE the factory is torn down.
+        // See Helpers.ResetCycleQuiescence for the full root-cause writeup: an advisory-lock-free
+        // probe is NOT sufficient because the lock is only acquired *inside* the fire-and-forget
+        // Task.Run, after the endpoint already returned 202 and claimed the row — a leaked,
+        // never-acked orchestrator from this class was one of the two confirmed contamination
+        // sources (the other being RecoverReconcilerIntegrationTests) for RecoverChoreographyTests'
+        // in-flight 409 assertions.
+        await ResetCycleQuiescence.WaitForIdleAsync(_fixture.ConnectionString);
+
         _client.Dispose();
         await _factory.DisposeAsync();
     }
@@ -345,6 +357,15 @@ public sealed class AckFanInTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
+        // Drain (issue #423 flake fix, 2nd pass): AckGate_ResetAckWithMissingCorrelationIdHeader_...
+        // and AckGate_ResetAckWithMismatchedCorrelationId_... deliberately never send a
+        // correctly-correlated ack, so their orchestrator is still driving toward its own
+        // AckTimeoutSeconds (30 s, per this class's ResetConfigOverride above) at teardown.
+        // Use an explicit timeout comfortably above that 30 s bound — ResetCycleQuiescence's
+        // 30 s default would race the orchestrator's own terminal write for this class.
+        // See Helpers.ResetCycleQuiescence for the full root-cause writeup.
+        await ResetCycleQuiescence.WaitForIdleAsync(_fixture.ConnectionString, TimeSpan.FromSeconds(60));
+
         _client.Dispose();
         await _factory.DisposeAsync();
     }

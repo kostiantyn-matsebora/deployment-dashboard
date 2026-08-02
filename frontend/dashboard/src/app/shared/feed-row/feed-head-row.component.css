@@ -1,0 +1,23 @@
+/* FeedHeadRowComponent — pixel-matched to docs/design/mockup/index.html §FEED (#397) */
+
+:host { display: contents; }
+
+.feed-head-row {
+  display: grid;
+  grid-template-columns: var(--feed-cols);
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-family: 'JetBrains Mono', monospace;
+  border-bottom: 1px solid var(--glass-edge);
+  position: sticky;
+  top: 0;
+  background: var(--glass-strong);
+  z-index: 1;
+}
+.feed-head-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

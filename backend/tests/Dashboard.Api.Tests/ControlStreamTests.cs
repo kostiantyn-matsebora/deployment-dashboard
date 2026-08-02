@@ -32,6 +32,13 @@ public sealed class ControlStreamTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
+        // Drain (issue #423 flake fix, 2nd pass): Stream_LiveReset_ReceivesResetInitiatedEvent
+        // triggers a real reset via POST /api/control/reset and never sends an ack, so its
+        // orchestrator is still driving toward its own AckTimeoutSeconds when the test cancels
+        // its token and returns — leaking into the next test in this collection if not drained
+        // here first. See Helpers.ResetCycleQuiescence for the full root-cause writeup.
+        await ResetCycleQuiescence.WaitForIdleAsync(_fixture.ConnectionString);
+
         _client.Dispose();
         await _factory.DisposeAsync();
     }

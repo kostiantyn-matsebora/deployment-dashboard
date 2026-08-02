@@ -1,0 +1,77 @@
+<!-- FeedRowComponent — one row of the shared 14-slot feed grid (#397) -->
+<div
+  class="feed-row"
+  [class]="statusClass(event().status)"
+  [class.feed-group-row]="isGroup()"
+  [class.feed-child]="variant() === 'child'"
+  [class.feed-flash]="flash()"
+  [attr.title]="event().happened_at"
+  [attr.data-event-id]="event().id"
+  (click)="onRowClick($event)"
+>
+  <!-- 1: expander — chevron on group rows only -->
+  <span class="feed-expander">
+    @if (isGroup()) {
+      <button
+        type="button"
+        class="feed-chevron"
+        [class.is-expanded]="expanded()"
+        [attr.aria-label]="expanded() ? 'Collapse group' : 'Expand group'"
+      >▸</button>
+    }
+  </span>
+
+  <!-- 2: status pip -->
+  <span class="pip" aria-hidden="true"></span>
+
+  <!-- 3: time (relative, ISO tooltip on the row) -->
+  <span class="feed-time">{{ event().happened_at | timeAgo }}</span>
+
+  <!-- 4: service — render-on-collision namespace prefix (issue #353), computed by the caller -->
+  <span class="feed-service">{{ serviceLabel() ?? event().service }}</span>
+
+  <!-- 5: environment -->
+  <span class="feed-env">{{ event().environment }}</span>
+
+  <!-- 6: status chip -->
+  <span class="status-chip" [class]="statusClass(event().status)">{{ event().status }}</span>
+
+  <!-- 7: version -->
+  <span class="feed-version">{{ event().version }}</span>
+
+  <!-- 8: ref -->
+  <span class="feed-ref">{{ event().ref }}</span>
+
+  <!-- 9: sha -->
+  <span class="feed-sha">{{ event().sha }}</span>
+
+  <!-- 10: run # -->
+  <span class="feed-runnum">{{ event().run_number ? '#' + event().run_number : '' }}</span>
+
+  <!-- 11: actor -->
+  <span class="feed-actor">{{ event().actor }}</span>
+
+  <!-- 12: deployment_id -->
+  <span class="feed-depid">{{ event().deployment_id }}</span>
+
+  <!-- 13: badge slot — ×N on group rows with more than one event -->
+  <span class="feed-badge-slot">
+    @if (isGroup() && count() > 1) {
+      <span class="feed-count-badge">×{{ count() }}</span>
+    }
+  </span>
+
+  <!-- 14: run link -->
+  @if (event().run_url) {
+    <a
+      class="hist-link feed-run"
+      [href]="event().run_url"
+      target="_blank"
+      rel="noopener"
+      [title]="'Open run' + (event().run_number ? ' #' + event().run_number : '')"
+      [attr.aria-label]="'Open run' + (event().run_number ? ' #' + event().run_number : '')"
+    >↗</a>
+  } @else {
+    <span class="feed-run"></span>
+  }
+</div>

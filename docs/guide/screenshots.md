@@ -16,6 +16,13 @@ A per-service graph view: see how a version flows from `dev` through `qa`, `stag
 ![Swimlanes — dark](../_assets/screenshots/swimlanes-dark.png#only-dark){ .dd-shot }
 ![Swimlanes — light](../_assets/screenshots/swimlanes-light.png#only-light){ .dd-shot }
 
+## :material-format-list-bulleted: Deployment feed { #deployment-feed }
+
+The chronological event log, grouped by `deployment_id` into expandable roll-ups (or flat, one row per event) via a shared toggle. Search the full history server-side, or scroll to load older pages via cursor pagination. A toggleable bottom dock mirrors the same log — last 8 events, live via SSE with a flash on arrival — on every other view; it's suppressed while the Feed view itself is active.
+
+![Deployment feed — dark](../_assets/screenshots/feed-dark.png#only-dark){ .dd-shot }
+![Deployment feed — light](../_assets/screenshots/feed-light.png#only-light){ .dd-shot }
+
 ## :material-history: History drawer { #history-drawer }
 
 Click any slot to open its full deployment history — every event ever recorded for that `(service, environment)`, newest first, with status, version, actor, commit, and run reference.
@@ -50,18 +57,39 @@ Opt-in desktop notifications triggered by deployment status transitions. Enable 
 
 ## :material-bookmark-box-multiple-outline: UI settings presets { #ui-settings-presets }
 
-Save and reuse sets of UI settings — active filter patterns, view preferences, and notification options — as named presets stored in the browser. Apply any preset in one click to switch context instantly; clone or rename to create variants; delete removes with a confirmation prompt.
-
-**File-based sharing.** Export any preset as a `dd-preset-<slug>.json` file (one file per preset). Share it by email or by committing it to a git repo. Recipients import it via the same preset panel — the app never fetches preset files from the network.
+Save, apply, share, and import named snapshots of your UI settings — filters, display preferences, and notification configuration — via the preset panel.
 
 ![UI settings presets — dark](../_assets/screenshots/presets-dark.png#only-dark){ .dd-shot }
 ![UI settings presets — light](../_assets/screenshots/presets-light.png#only-light){ .dd-shot }
+
+### Import from URL
+
+The preset panel's **Import from URL** field lets you paste a public HTTPS link to a single preset or a multi-preset bundle. The SPA fetches client-side — no backend involved.
+
+[:octicons-arrow-right-24: Import from URL — accepted formats and boundaries](./ui-settings.md#import-from-url)
 
 ## :material-tune-variant: Demo control panel { #demo-control-panel }
 
 The demo profile ships a **Demo Driver** control panel (`/demo/`): ingest the curated or random dataset, seed the GitHub emulator, drive live emission, trigger a system reset, and watch the deployment feed and component event streams in real time.
 
 ![Demo Driver control panel](../_assets/screenshots/demo-panel-dark.png){ .dd-shot }
+
+## :material-application-outline: Install as an app { #install-as-an-app }
+
+The dashboard can be installed as a standalone Chromium app — a dedicated window with no browser chrome, a taskbar or dock icon, and the same deployment URL behind your gateway.
+
+![Dashboard running as an installed standalone app](../_assets/screenshots/install-app-dark.png){ .dd-shot }
+
+[:octicons-arrow-right-24: Install guide](./install-app.md){ .md-button }
+
+## :material-cloud-download-outline: Provided presets { #provided-presets }
+
+Read-only, repo/CI-sourced UI-settings presets published by a `owner/repo` source — either directly over the [push-mode REST recipe](./provided-presets.md#publishing-presets-push-mode) or automatically discovered by the Fetcher in pull mode. They appear in a **PROVIDED** section of the topbar presets popover, alongside any presets saved locally, with **Apply** and **Clone-to-edit** actions. Nothing here is ever written back — provided presets are never edited or deleted from the UI.
+
+![Provided presets in the topbar popover — dark](../_assets/screenshots/provided-presets-dark.png#only-dark){ .dd-shot }
+![Provided presets in the topbar popover — light](../_assets/screenshots/provided-presets-light.png#only-light){ .dd-shot }
+
+[:octicons-arrow-right-24: Provided presets guide](./provided-presets.md){ .md-button }
 
 ## :material-dock-bottom: Footer { #footer }
 

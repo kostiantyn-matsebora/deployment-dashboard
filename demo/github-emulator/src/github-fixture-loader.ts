@@ -13,6 +13,21 @@ interface RepoFixture {
   workflows:    WorkflowFixture[];
   environments: string[];
   deployments:  DeploymentFixture[];
+  /**
+   * Arbitrary repo files to seed into the store's generic file map (issue #391 —
+   * preset discovery). Each entry's `json` is serialised to a UTF-8 string and
+   * stored under `path`, so the Contents API can serve it both as a directory
+   * listing (any entry whose path starts with a requested directory prefix)
+   * and as a single-file fetch (exact path match).
+   */
+  files?: RepoFileFixture[];
+}
+
+interface RepoFileFixture {
+  /** Full repo-relative path, e.g. ".deployment-dashboard/presets.json". */
+  path: string;
+  /** JSON content — serialised with JSON.stringify and stored as UTF-8 text. */
+  json: unknown;
 }
 
 interface WorkflowFixture {
@@ -152,6 +167,11 @@ export class GithubFixtureLoader {
       for (const envName of repoFixture.environments) {
         const env: GhEnvironment = { name: envName };
         repo.environments.push(env);
+      }
+
+      // Arbitrary repo files (issue #391 — preset discovery: directory listing + content)
+      for (const f of repoFixture.files ?? []) {
+        repo.files.set(f.path, JSON.stringify(f.json, null, 2));
       }
 
       // Workflows + YAML

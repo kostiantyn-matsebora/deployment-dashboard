@@ -1,0 +1,120 @@
+/* FeedRowComponent — pixel-matched to docs/design/mockup/index.html §FEED (#397) */
+
+:host {
+  display: contents;
+}
+
+.feed-row {
+  display: grid;
+  grid-template-columns: var(--feed-cols);
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  white-space: nowrap;
+  transition: background 0.15s ease;
+}
+.feed-row:hover { background: var(--input-bg); }
+.feed-row.feed-group-row { cursor: pointer; }
+
+.pip { width: 8px; height: 8px; border-radius: 50%; }
+.feed-row.s-success  .pip { background: var(--emerald); box-shadow: 0 0 8px var(--emerald-glow); }
+.feed-row.s-failure  .pip { background: var(--coral);   box-shadow: 0 0 8px var(--coral-glow); }
+.feed-row.s-progress .pip { background: var(--amber);   box-shadow: 0 0 8px var(--amber-glow); }
+.feed-row.s-pending  .pip { background: var(--slate);   box-shadow: 0 0 6px var(--slate-glow); }
+.feed-row.s-queued   .pip { background: var(--blue);    box-shadow: 0 0 6px var(--blue-glow); }
+.feed-row.s-waiting  .pip { background: var(--violet);  box-shadow: 0 0 6px var(--violet-glow); }
+.feed-row.s-cancelled .pip { background: var(--grey);   box-shadow: none; }
+.feed-row.s-rejected  .pip { background: var(--rose);   box-shadow: 0 0 6px var(--rose-glow); }
+
+/* Leading expander slot — empty placeholder on flat/child rows, holds the
+   chevron on group roll-up rows; always present so column 1 stays aligned. */
+.feed-expander { display: flex; align-items: center; justify-content: center; }
+.feed-chevron {
+  appearance: none;
+  background: none;
+  border: none;
+  color: var(--ink-2);
+  cursor: pointer;
+  width: 14px; height: 14px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10px;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+.feed-chevron:hover { color: var(--ink-0); }
+.feed-chevron.is-expanded { transform: rotate(90deg); }
+
+/* overflow:hidden (+ ellipsis where text-bearing) on every cell — CSS Grid
+   items default to a content-based automatic minimum size, so without it a
+   long value (e.g. a build-metadata version string) pushes past its track
+   and overlaps the next column instead of clipping inside its own. */
+.feed-time    { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; }
+.feed-service { font-size: 12px; font-weight: 500; color: var(--ink-0); overflow: hidden; text-overflow: ellipsis; }
+.feed-env     { font-size: 11.5px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; }
+.feed-version { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-1); overflow: hidden; text-overflow: ellipsis; }
+.feed-ref     { font-size: 11px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; }
+.feed-sha     { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; }
+.feed-runnum  { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; }
+.feed-actor   { font-size: 11px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; }
+.feed-depid   {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Trailing badge slot — empty placeholder; holds the ×N count badge on
+   group roll-up rows, mirrors .feed-expander at the other end. */
+.feed-badge-slot { display: flex; align-items: center; justify-content: flex-start; }
+.feed-count-badge {
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--ink-2);
+  background: var(--kvtag-bg);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+
+.feed-run { text-align: center; display: inline-block; }
+.hist-link.feed-run {
+  color: var(--ink-2);
+  text-decoration: none;
+  font-size: 11px;
+}
+.hist-link.feed-run:hover { color: var(--ink-0); }
+
+/* ── Status chip — same hue families as the history drawer's chip ────────── */
+.status-chip {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid;
+  justify-self: start;
+}
+.status-chip.s-success   { color: var(--emerald); border-color: var(--emerald-edge); background: var(--emerald-wash); }
+.status-chip.s-failure   { color: var(--coral);   border-color: var(--coral-edge);   background: var(--coral-wash);   }
+.status-chip.s-progress  { color: var(--amber);   border-color: var(--amber-edge);   background: var(--amber-wash);   }
+.status-chip.s-pending   { color: var(--slate);   border-color: var(--slate-edge);   background: var(--slate-wash);   }
+.status-chip.s-queued    { color: var(--blue);    border-color: var(--blue-edge);    background: var(--blue-wash);    }
+.status-chip.s-waiting   { color: var(--violet);  border-color: var(--violet-edge);  background: var(--violet-wash);  }
+.status-chip.s-cancelled { color: var(--grey);    border-color: var(--grey-edge);    background: var(--grey-wash);    }
+.status-chip.s-rejected  { color: var(--rose);    border-color: var(--rose-edge);    background: var(--rose-wash);    }
+
+/* ── Live-ingest flash (modeled on the mockup's feedFlash / svFlash) ─────── */
+@keyframes feedFlash {
+  0%   { background: rgba(var(--accent-rgb), 0); }
+  25%  { background: rgba(var(--accent-rgb), 0.22); }
+  100% { background: rgba(var(--accent-rgb), 0); }
+}
+.feed-row.feed-flash { animation: feedFlash 0.85s ease-out forwards; }
+
+/* ── Expanded group children — same column template, tinted background ──── */
+.feed-row.feed-child {
+  font-size: 10.5px;
+  opacity: 0.82;
+  background: var(--input-bg);
+}

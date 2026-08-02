@@ -7,6 +7,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 
+## [0.22.0] - 2026-07-13
+
+### Added
+
+- **Deployment feed — a full-history event log, plus a live bottom dock (#397).** A new top-level **Feed** view (tab after Swimlanes) is a full-history, columnar deployment-event log grouped by `deployment_id` — collapse a deployment's events into a roll-up row and expand it back out, or flatten to one row per event. History loads via cursor-paginated infinite scroll, auto-filling further pages on tall viewports so the list never leaves dead space above the fold. A new server-side free-text search — the `q` param on `GET /api/deployments` — matches case-insensitively as a substring across ten fields and composes with the existing service/environment/status/namespace filters (`400` above 200 characters). Alongside it, a toggleable bottom dock surfaces the newest 8 events live over SSE (with the existing flash-on-arrival treatment) on every other view; the toggle persists and is preset-integrated, and the dock is suppressed while the Feed view itself is active. See [Deployment feed](https://kostiantyn-matsebora.github.io/deployment-dashboard/guide/screenshots/#deployment-feed).
+- **Matrix tile flashes on a live effective-status change (#398).** Mirrors the existing Swimlanes card-flash on the Matrix view: when a slot's effective status (success / in-progress / failure) changes live, the affected tile plays a one-shot ~1.2s accent glow that composes with the existing tile styling and then clears — no change to the underlying matrix data or contract.
+
+### Fixed
+
+- **Deployment event ids are now minted via a monotonic UUIDv7 generator, closing a same-millisecond ordering hazard (#330).** The per-slot "latest wins" tiebreak picks the greatest-id row per (service, environment) slot, relying on the UUIDv7 row id being insert-time ordered. .NET's `Guid.CreateVersion7()` encodes only a millisecond timestamp and fills the rest with random bits, so two ids minted within the same millisecond could sort in either order — occasionally surfacing the older of two same-slot, same-`happenedAt` events as "latest" (and, separately, could reorder the `WHERE id > @last ORDER BY id` SSE resume cursor). Deployment ingest now mints ids through a process-monotonic UUIDv7 generator that guarantees strict ordering under both .NET `Guid` and big-endian/Postgres `uuid` comparison. No schema or contract change.
+
+
+## [0.21.0] - 2026-07-02
+
+### Fixed
+
+- **Fetcher no longer misses a late `waiting → success` transition on approval-gated deployments (#407).** A deployment that sat non-terminal for longer than a day aged past the deployments-list window (`cutoff = since − 1 day`, early-stopped on `CreatedAt < cutoff`), was evicted, and was never re-polled — so an approval that finally succeeded was never recorded. The per-repo cursor now tracks the oldest still-pending deployment and lowers the list cutoff to `min(since − 1 day, oldest_pending)`, keeping non-terminal deployments inside the window until they reach a terminal status. (Already-stranded rows are not backfilled by this change — see the reconciliation runbook below.)
+
+### Changed
+
+- **Deployment ingest is now idempotent on its natural key (#407).** A unique key `(deployment_id, status, happened_at)` (`ux_de_dedup_natural_key`), added by a dedup-then-index migration, closes the latent at-least-once duplication hazard: re-ingesting the same event is swallowed, returns the existing row, and emits no duplicate SSE notification. The write endpoint now returns `200` for a duplicate and `201` for a newly-created event.
+
+### Added
+
+- **Reconciliation runbook for recovering already-stranded statuses (`docs/guide/reconcile-missed-statuses.md`) (#407).** Documents how to recover deployments that were already stranded before the re-poll fix, via a bounded backfill (raising `BACKFILL_DEPTH` / `BACKFILL_MAX_AGE`) — now safe to re-run thanks to idempotent ingest.
+
+
+## [0.20.0] - 2026-06-26
+
+### Added
+
+- **Install the dashboard as an in-browser app (#314).** The SPA now ships a web app manifest (`manifest.webmanifest`) with a full icon set (192/512 px, standard and maskable), `standalone` display, scope `/`, and theme/background colors, plus the `<link rel="manifest">` and `theme-color` meta in the page head. Chromium browsers (Chrome/Edge) offer an "Install" action that runs the dashboard in its own standalone window with an app icon, separate from browser tabs. The gateway serves `.webmanifest` as `application/manifest+json`. See [Install as an app](guide/install-app.md).
+
+
 ## [0.19.0] - 2026-06-25
 
 ### Changed

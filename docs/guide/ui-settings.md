@@ -2,6 +2,8 @@
 
 Presets are a client-side feature of the running dashboard — no server configuration, no env vars, no accounts. State lives in `localStorage` in the browser.
 
+Looking for the read-only, repo/CI-sourced presets that show up in a **PROVIDED** section of the same popover? See [Provided presets](./provided-presets.md) — a separate feature published by a source outside the browser, never edited or deleted from the UI.
+
 ## :material-bookmark-box-multiple-outline: UI settings presets { #ui-settings-presets }
 
 Presets are a **client-side feature** — no env vars, no backend, no accounts. State lives in `localStorage` in the browser. Nothing here needs to be configured on the server.
@@ -40,9 +42,33 @@ Presets can be shared without a server. Each preset exports as a single `dd-pres
 2. Share the file by email, Slack, or by committing it to a git repo alongside your pipeline config.
 3. The recipient opens the preset panel, clicks **Import**, and selects the file — the preset appears in their list immediately.
 
-The app **never fetches preset files from the network**. Import is always an explicit user action. There is no central registry and no sync — each browser holds its own presets independently.
+Import is always an explicit user action. There is no central registry and no sync — each browser holds its own presets independently.
 
 !!! tip "Team starter kit"
     Commit a `presets/` directory to your repo with a `dd-preset-<name>.json` for each standard view (e.g. `dd-preset-prod-services.json`, `dd-preset-on-call.json`). New team members import them on first launch and are up to speed in seconds.
+
+### Import from URL { #import-from-url }
+
+The preset panel also accepts a public HTTPS URL. Paste a URL in the **Import from URL** field and click **Import** — the SPA fetches the JSON client-side, validates it, and imports using the same name-dedup rules as file import (`(2)`, `(3)`, … on collision).
+
+**Accepted JSON formats:**
+
+| Format | Shape |
+|---|---|
+| Single preset | `{"version":1,"name":"<name>","settings":{…}}` |
+| Tagged bundle | `{"version":1,"presets":[{"name":"<name>","settings":{…}},…]}` |
+
+A bundle URL delivers an entire preset set in one share. Bare JSON arrays are rejected.
+
+**URL compatibility:**
+
+| Source | Works? | Notes |
+|---|---|---|
+| Public GitHub raw (`raw.githubusercontent.com`) | Yes | Public repos only. |
+| Secret Gist raw URL | Yes | The raw URL is the secret; anyone with it can import. |
+| Private repo raw URL | No | Requires auth the SPA cannot send — the SPA holds no secrets. |
+| `http://` (non-TLS) | No | Browser mixed-content blocking; HTTPS required. |
+
+**Error handling:** A clear inline error is shown for each failure case — CORS block, 404, non-JSON response, or invalid preset shape. No partial state is written on error.
 
 [:octicons-arrow-right-24: See the preset panel in action](./screenshots.md#ui-settings-presets)

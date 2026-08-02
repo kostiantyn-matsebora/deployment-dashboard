@@ -10,6 +10,14 @@ server {
     server_tokens off;
     client_max_body_size 256k;
 
+    # Relative redirects only — nginx-generated redirects (e.g. the implicit
+    # trailing-slash 301) must not echo this container's internal listen port
+    # or hostname. The external topology (ingress/gateway on 80/443) differs
+    # from this listen directive, so absolute Location headers built from it
+    # are unreachable from outside. Relative redirects are immune to both
+    # host and port rewriting, unlike `port_in_redirect off` alone.
+    absolute_redirect off;
+
     # Server-level proxy defaults — do NOT set Host here.
     # nginx cancels server-level proxy_set_header inheritance the moment a
     # location declares any proxy_set_header of its own, so every proxy

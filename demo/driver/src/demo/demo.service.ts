@@ -2,12 +2,13 @@ import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { Subject, Subscription } from 'rxjs';
 import { ScenarioRunner, RunnerStatus, StreamFrame } from '../scenarios/scenario-runner';
 import { WriteApiClient } from '../write-api/write-api.client';
-import { ControlApiClient, ResetResult } from '../write-api/control-api.client';
+import { ControlApiClient, RecoverInput, RecoverResult, ResetResult } from '../write-api/control-api.client';
 import { generateRandomEvents, SERVICE_COUNT } from '../scenarios/random-event-generator';
 import { Scenario, loadScenarios } from '../scenarios/scenario-loader';
 import { EmitService } from './emit.service';
 import { getConfig } from '../config/configuration';
 import { ResetCoordinator, ResetParticipant } from '../control/reset-coordinator';
+import { RecoverAckHandler } from '../control/recover-ack-handler';
 import { ControlEventsClient } from '../control/control-events.client';
 
 export interface IngestOptions {
@@ -53,8 +54,9 @@ export class DemoService implements OnModuleInit, OnModuleDestroy, ResetParticip
   readonly stream$ = new Subject<StreamFrame>();
 
   constructor(
-    private readonly emitService:       EmitService,
-    private readonly resetCoordinator:  ResetCoordinator,
+    private readonly emitService:        EmitService,
+    private readonly resetCoordinator:   ResetCoordinator,
+    private readonly recoverAckHandler:  RecoverAckHandler,
   ) {}
 
   onModuleInit(): void {
@@ -69,6 +71,7 @@ export class DemoService implements OnModuleInit, OnModuleDestroy, ResetParticip
     );
     this.eventsClient = eventsClient;
     this.resetCoordinator.registerEventsClient(eventsClient);
+    this.recoverAckHandler.registerEventsClient(eventsClient);
     this.emitService.setEventsClient(eventsClient);
 
     try {
@@ -218,6 +221,13 @@ export class DemoService implements OnModuleInit, OnModuleDestroy, ResetParticip
     const config = getConfig();
     const ctrl   = new ControlApiClient(config.writeApiUrl, config.controlApiKey);
     return ctrl.resetApi();
+  }
+
+  /** Proxy POST /api/control/recover to the write-API target (#423, D18). */
+  async recoverApi(input: RecoverInput): Promise<RecoverResult> {
+    const config = getConfig();
+    const ctrl   = new ControlApiClient(config.writeApiUrl, config.controlApiKey);
+    return ctrl.recoverApi(input);
   }
 
   // â”€â”€ Legacy scenario commands (backwards compat) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

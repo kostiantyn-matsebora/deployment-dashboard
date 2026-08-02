@@ -20,6 +20,7 @@
   [class.s-run-fail-only]="boxState() === 's-run-fail-only'"
   [class.s-never-deployed]="boxState() === 's-never-deployed'"
   [class.highlighted-slot]="isHighlighted()"
+  [class.is-flashing]="isFlashing()"
   role="button"
   tabindex="0"
   (click)="onTileClick($event)"

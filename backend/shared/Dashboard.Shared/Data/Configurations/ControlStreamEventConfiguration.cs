@@ -40,6 +40,12 @@ internal sealed class ControlStreamEventConfiguration : IEntityTypeConfiguration
               .HasColumnType("timestamptz")
               .IsRequired();
 
+        // Opaque blob, stored verbatim. jsonb on Postgres; plain text on SQLite (no jsonb type) —
+        // mirrors ComponentEventConfiguration.Payload.
+        entity.Property(e => e.Payload)
+              .HasColumnName("payload")
+              .HasColumnType(_isSqlite ? "TEXT" : "jsonb");
+
         if (_isSqlite)
             entity.Property(e => e.OccurredAt).HasConversion(ValueConverters.DateTimeOffsetToUnixMs);
 

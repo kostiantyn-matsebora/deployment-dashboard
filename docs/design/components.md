@@ -27,7 +27,7 @@ flowchart LR
 | Element | PrimeNG Component | Behavior |
 |---------|-------------------|----------|
 | Brand mark | Custom | 32×32 radial-gradient square, `border-radius: 9px` |
-| Segmented tabs | `p-selectButton` | Two options: Matrix / Swimlanes. Active = accent gradient + glow ring. Switches view. |
+| Segmented tabs | `p-selectButton` | Four options: Matrix / Swimlanes / Feed / Analytics. Active = accent gradient + glow ring. Switches view. |
 | KPI strip | Custom | 4 counters: services, environments, in-flight (`.is-warn`), failed (`.is-bad`). Derived from data. |
 | Filter input | `pInputText` | Matrix-only, inline. Filters service rows by name (case-insensitive substring). |
 | Failures toggle | `p-toggleSwitch` | Matrix-only, inline pill. `.is-on` = coral border + switch, hides non-failed rows. |
@@ -35,11 +35,12 @@ flowchart LR
 | Icon buttons — Fields (▦) | Custom | Shared (Matrix + Swimlanes). Opens Fields picker popover. Shows accent state + hidden-count badge when any fields are OFF. Tooltip: `Fields — toggle visible data fields` (normal); `Fields — N field(s) hidden` when N > 0. |
 | Icon buttons — Columns (⊞) | Custom | **Matrix-only** (hidden in Swimlanes). Opens Columns picker popover. Shows accent state + hidden-count badge when any environments are hidden. Tooltip: `Columns — show/hide environments` (normal); `Columns — N environment(s) hidden` when N > 0. |
 | Icon buttons — Correlation (⇆) | Custom | **Swimlanes-only**. Opens Correlation picker popover. |
+| Icon button — Feed dock (`btn-feeddock`) | Custom | Shared (all views). Toggles the [Deployment Feed Dock](#deployment-feed-dock) open/closed; `aria-pressed` reflects open state. **Disabled** (dimmed, non-interactive) while the Feed view itself is active. Tooltip: `Deployment feed — toggle the live event panel`. |
 | Bell toggle (🔔) | Custom | Enables/disables browser notifications. Toggling ON for the first time triggers the browser permission prompt (lazy — never on load). Hidden when the Notifications API is unsupported, permission is denied, or the context is insecure. Tooltip: `Notifications — enable/disable desktop alerts`. |
 | Presets (bookmark) | Custom | Shared (all views). Opens Presets popover. Shows filled badge dot (`presets-badge-dot`) when at least one preset is saved. Tooltip: `Presets — save and restore view configurations`. |
 | Live indicator | Custom | Green dot with `pulseRing` animation (1.8s). Shows SSE connection status. |
 
-**Tooltip consistency.** Every interactive topbar control carries a concise hover `title` tooltip: view tabs, service filter input, failures-only toggle, theme options, Fields button, Columns button, rate-limit chip, bell toggle, and the Live pill.
+**Tooltip consistency.** Every interactive topbar control carries a concise hover `title` tooltip: view tabs, service filter input, failures-only toggle, theme options, Fields button, Columns button, rate-limit chip, feed dock toggle, bell toggle, and the Live pill.
 
 **Hidden-count badge.** Fields and Columns buttons share the same badge mechanism: when the hidden count N > 0, the button gains `.is-active` accent styling and a small filled count badge (`.hidden-count-badge`) positioned top-right on the icon. When N = 0, the badge is hidden and styling reverts to default.
 
@@ -74,6 +75,14 @@ flowchart TB
 ### Version Hover Highlight
 
 Hovering any `.ver` span amber-highlights every tile across the matrix that shares the same version string. Effect: amber background + amber text + glow ring on `.ver.highlighted`, plus amber glow on `.slot.highlighted-slot`.
+
+### Live-Change Flash (#398)
+
+A live SSE update that changes a slot's **effective** status (success / in-progress / failure — the *context* statuses pending/queued/waiting/cancelled/rejected never trigger it, per "Deployment statuses & context rendering" above) plays a one-shot accent glow on the affected tile, identified by `(service, environment, namespace)`.
+
+- Rendered on `.slot::after` (`tile-flash` keyframe, toggled by `.slot.is-flashing`) — a separate pseudo-element layer, not the `animation` shorthand on `.slot` itself, so the glow composes with the box-state background/border/box-shadow and with `breathe` (running tiles) instead of overriding them.
+- Fades out over ~1.2s, then clears. One-shot — does not loop or persist.
+- Mirrors the Swimlanes tip-card flash (`card-flash` keyframe, `.vis-card.is-flashing`, see "Collapse / Expand (#309)" in `views.md`) for cross-view consistency. No auto-scroll counterpart — the Matrix is a grid, not a scrollable lane list.
 
 ---
 
@@ -156,6 +165,31 @@ When a swimlane is collapsed, it renders a **vector** — not a new compact comp
 - If `tip` is isolated (no parents), the vector is that single card.
 
 **Visual.** Cards are identical to the expanded vis-cards — same markup, same status styling (status-accent left bar, glass background, field rendering). Edges between cards are the same status-colored SVG arrows produced by the expanded renderer (not custom arrow connectors or a bespoke flex overlay). The collapsed vector runs through the identical `partitionDAGs` → `rankNodes` → `assignTracks` → position → card → SVG-edge pipeline as the expanded form, restricted to the chain nodes.
+
+---
+
+## Feed Row & Group Roll-up
+
+The atomic rendering unit shared by the [Feed view](./views.md#feed-view-layout) log and the [feed dock](#deployment-feed-dock) body — one `.feed-row` per event, laid out on the shared `--feed-cols` grid (see `views.md` for the full 14-slot column contract).
+
+- **Row states.** `.feed-row` carries a status class (`s-success` / `s-failure` / … — the same 8-status set as "Deployment statuses & context rendering" below) that colors its `.pip` dot. Hover: subtle background tint.
+- **Live-ingest flash.** A newly-ingested event's row plays a one-shot accent-glow animation (`feedFlash`, ~0.85s) on first render — the Feed-surface counterpart to the Matrix [Live-Change Flash (#398)](#live-change-flash-398): same one-shot, non-looping intent, different trigger (any new event, not only effective-status changes) and different surface (row background tint, not a tile pseudo-element).
+- **Group roll-up row (`.feed-group-row`).** Renders the group's newest event through the standard row template; adds a `.feed-chevron` (▸, rotates 90° when expanded) in the leading expander slot, and — when the group has more than one event — a `×N` count badge (`.feed-count-badge`) in the trailing badge slot. The whole row (outside the run link) is clickable to toggle expansion.
+- **Group detail (`.feed-group-detail`).** Expanded state reveals every event in the group through the identical row template, at a reduced, dimmed style (smaller font, tinted background) — no separate renderer.
+- **Flat mode.** When the shared grouped/flat toggle (see [behavior.md § Interactions](./behavior.md#interactions)) is OFF, both surfaces render one `.feed-row` per event with no chevron and no badge — the group roll-up machinery is bypassed entirely.
+
+---
+
+## Deployment Feed Dock
+
+A fixed **glass panel** surfacing the live tail of the deployment-event log, visible on every view except the Feed view itself (#397).
+
+- **Position & surface.** `position: fixed; left/right: 18px; bottom: 44px`, `z-index: 25` — below the [history drawer](#history-drawer) and its overlay (`z-index: 40` / `30`), above the app content. Same glass treatment as the Feed view shell: translucent `--glass` background + `backdrop-filter: blur(20px) saturate(140%)`, `--glass-edge` border, `--radius-lg` corners. Slides up and fades in via a `transform`/`opacity` transition when opened.
+- **Header (`.feed-dock-head`).** Live-status dot, title block ("Deployment feed" · "last 8 · live" subtitle), the shared group/flat toggle (`.dock-group-toggle` — see [Feed Row & Group Roll-up](#feed-row--group-roll-up)), an "Open feed →" link that switches to the Feed view tab, and a close (×) button.
+- **Body (`.feed-dock-body`).** Up to 8 rows (or groups), newest-first, rendered through [Feed Row & Group Roll-up](#feed-row--group-roll-up) on the same shared column grid as the Feed view.
+- **Open/close.** Toggled by the topbar feed-toggle icon button (see Topbar → Sub-components) or the dock's own close button. The open/closed preference persists to `localStorage` and survives reload.
+- **Suppression on the Feed view.** While the Feed view is the active tab, the dock is hidden (the page IS the full log) and the topbar toggle button is disabled — but the persisted open/closed preference is left untouched, so leaving the Feed view restores exactly what the user had before.
+- **Live updates.** A new SSE event prepends to the dock body (and to whichever group it belongs to) and plays the row flash animation — no dock re-open, no reload.
 
 ---
 
@@ -321,7 +355,7 @@ Accessible from the bell toggle area when notifications are enabled. Three indep
 
 ### Presets Popover
 
-Accessible from the bookmark icon button (`btn-presets`) in the topbar icon cluster. Shared across all views (Matrix, Swimlanes, Analytics).
+Accessible from the bookmark icon button (`btn-presets`) in the topbar icon cluster. Shared across all views (Matrix, Swimlanes, Feed, Analytics).
 
 **PrimeNG component:** `p-popover` with `[dismissable]="true"`, `appendTo="body"`. Min-width: 300px; anchored right-aligned to the button.
 

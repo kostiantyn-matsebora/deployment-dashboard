@@ -148,7 +148,7 @@ For `422` payload-validation failures, the body additionally carries an `errors[
 | `429 Too Many Requests` | Future rate-limit slot. `Retry-After` always present. |
 | `503 Service Unavailable` | DB unreachable; any LISTEN channel not attached (`deployment_events`, `control_events`, `component_acks`, `component_events`). |
 
-**No `409 Conflict` on ingest.** The store is append-only — duplicates are not a server-side concern.
+**No `409 Conflict` on ingest.** A duplicate on the natural key `(deployment_id, status, happened_at)` returns `200` — not an error. A new event returns `201`.
 
 ---
 
@@ -166,9 +166,9 @@ For `422` payload-validation failures, the body additionally carries an `errors[
 
 ## 8. Append-only semantics
 
-- `POST /api/deployments` **appends** a row. There is no update, no upsert, no dedup.
-- A retried POST produces an **additional** row. Handling retries is the caller's concern.
-- `deployment_id` is an **emitter-supplied correlation key** grouping multiple event rows. NOT a row identity, NOT a uniqueness constraint, NOT an idempotency key.
+- `POST /api/deployments` **appends** a row, or returns the existing one — idempotent on `(deployment_id, status, happened_at)`. Duplicate → **`200`** (no new row, no SSE frame); new event → **`201`** + `Location`.
+- A retried POST with the same `(deployment_id, status, happened_at)` is safe — the store de-duplicates it automatically; no extra rows are created.
+- `deployment_id` is an **emitter-supplied correlation key** grouping multiple event rows (one per status event). NOT a row identity on its own. `(deployment_id, status, happened_at)` is the natural idempotency key.
 - `happened_at` is **emitter-supplied** and required (UTC wall-clock on the CI/CD side).
 - The read surface reduces the log:
   - **Matrix** — `MAX(happened_at)` per `(service, environment)` for `current`; success-filtered for `last_successful`.
@@ -226,7 +226,7 @@ Every arrow originates at the caller. The SSE stream is a **response to a compon
 | Auth | `X-Control-API-Key` (header required) |
 | Client type | Backend service components only — NOT browser clients |
 | HTTP client | Components MUST use `fetch()` + `ReadableStream`; browser `EventSource` cannot send custom headers |
-| Event names | `reset-initiated` \| `reset-started` \| `reset-completed` (reset choreography); forward-compatible — unknown types are no-ops |
+| Event names | `reset-initiated` \| `reset-started` \| `reset-completed` (reset choreography) \| `recover-initiated` \| `recover-started` \| `recover-completed` (recover choreography, non-destructive, D18); forward-compatible — unknown types are no-ops |
 | **`Last-Event-ID` replay** | Supported; backed by `control_stream_events` table (2 h retention) |
 | Heartbeat | `: ping` comment every 15 s |
 | Filter | `?component=<id>` — server delivers only events where `component` equals the id or `"*"` |
@@ -245,14 +245,24 @@ Every arrow originates at the caller. The SSE stream is a **response to a compon
 | `reset-started` | All acks in OR `AckTimeoutSeconds` elapsed (`draining → resetting`) | `*` | Reset window open; ingest briefly returns `503`. |
 | `reset-completed` | Data cleared, gates released (`resetting → idle`) | `*` | Recover: clear state, re-ingest/backfill, report `running`. |
 
-**`correlation_id` — the process id (binding).** Every frame carries `correlation_id`:
-- `reset-initiated` — equals the frame's own `id` (the process id originates here).
-- `reset-started` / `reset-completed` — the initiating `reset-initiated` id.
+**Current event types — recover choreography** (non-destructive counterpart, API_SPECIFICATION D18; issue #423):
 
-Each frame's `id` (SSE cursor) is its own unique value, **distinct** from `correlation_id`; the two coincide only at the origin. The component side carries the same `correlation_id` on `reset-ack` + post-reset `status`, so the whole saga shares one filterable key. There is no `reset_id` field anywhere.
+| `type` | When emitted | Scope | Component action |
+|---|---|---|---|
+| `recover-initiated` | `POST /api/control/recover` accepted (`idle → draining`) | `*` | Drain: same as `reset-initiated`, then ack (reuses `reset-ack` — see below). |
+| `recover-started` | All acks in OR `AckTimeoutSeconds` elapsed (`draining → resetting`) | `*` | Hold — **no data is cleared**; ingest briefly gated while cursors are about to be rewound. |
+| `recover-completed` | Gates released (`resetting → idle`) | `*` | Rewind: `payload.since` carries the resolved rewind point; components rewind their own cursor to it (non-destructively) and resume, then report `running`. |
+
+`recover-*` frames carry the resolved rewind point in `payload` (`{"since":"2026-07-14T00:00:00Z"}`); `reset-*` frames keep `payload: null`.
+
+**`correlation_id` — the process id (binding).** Every frame carries `correlation_id`, for either choreography:
+- `reset-initiated` / `recover-initiated` — equals the frame's own `id` (the process id originates here).
+- `reset-started` / `reset-completed` / `recover-started` / `recover-completed` — the initiating `-initiated` id.
+
+Each frame's `id` (SSE cursor) is its own unique value, **distinct** from `correlation_id`; the two coincide only at the origin. The component side carries the same `correlation_id` on `reset-ack`/`recover-ack` + post-operation `status`, so the whole saga shares one filterable key regardless of which operation it is. There is no `reset_id` field anywhere.
 Components MUST ignore unknown `type` values (forward-compatibility).
 
-**Wire example:**
+**Wire example — reset:**
 ```
 : ping
 
@@ -269,6 +279,21 @@ id: 01J9F4X1N6B2C3D4E5F6G7H8J9
 data: {"id":"01J9F4X1N6B2C3D4E5F6G7H8J9","type":"reset-completed","component":"*","correlation_id":"01J9F4WZK3W9G2T6X4QH3DKQF6","occurred_at":"2026-05-31T10:00:11Z"}
 ```
 
+**Wire example — recover** (note the `payload.since` on `recover-completed`; `recover-initiated`/`recover-started` carry no payload):
+```
+event: recover-initiated
+id: 01J9G5A1B2C3D4E5F6G7H8J9K0
+data: {"id":"01J9G5A1B2C3D4E5F6G7H8J9K0","type":"recover-initiated","component":"*","correlation_id":"01J9G5A1B2C3D4E5F6G7H8J9K0","occurred_at":"2026-07-21T10:00:00Z"}
+
+event: recover-started
+id: 01J9G5A2C3D4E5F6G7H8J9K0L1
+data: {"id":"01J9G5A2C3D4E5F6G7H8J9K0L1","type":"recover-started","component":"*","correlation_id":"01J9G5A1B2C3D4E5F6G7H8J9K0","occurred_at":"2026-07-21T10:00:05Z"}
+
+event: recover-completed
+id: 01J9G5A3D4E5F6G7H8J9K0L1M2
+data: {"id":"01J9G5A3D4E5F6G7H8J9K0L1M2","type":"recover-completed","component":"*","correlation_id":"01J9G5A1B2C3D4E5F6G7H8J9K0","occurred_at":"2026-07-21T10:00:06Z","payload":{"since":"2026-07-19T10:00:00Z"}}
+```
+
 ### Component event reporting (`POST /api/control/events`)
 
 | Property | Value |
@@ -276,7 +301,7 @@ data: {"id":"01J9F4X1N6B2C3D4E5F6G7H8J9","type":"reset-completed","component":"*
 | Auth | **`X-Api-Key`** — same key components already hold for ingest / fetcher state |
 | Component identity | **`X-Component-Id` header (required)** — NOT a body field |
 | `component_id` stored | Server writes the `X-Component-Id` value as `component_id` on the row |
-| Correlation | **`X-Correlation-Id` header** — the process key grouping the event with a control command; NOT a body field. REQUIRED on `reset-ack` (the ack-gate key); optional otherwise |
+| Correlation | **`X-Correlation-Id` header** — the process key grouping the event with a control command; NOT a body field. REQUIRED on `reset-ack`/`recover-ack` (the ack-gate key); optional otherwise |
 | `correlation_id` stored | Server writes the `X-Correlation-Id` value as nullable `correlation_id` on the row; echoed on the SSE frame |
 | Shape | Single endpoint for ALL components — body contains only event data, no identity field |
 | Semantics | Append-only log in `component_events` table; `received_at` is server-assigned |
@@ -294,9 +319,9 @@ data: {"id":"01J9F4X1N6B2C3D4E5F6G7H8J9","type":"reset-completed","component":"*
 **`X-Correlation-Id` rules:**
 - The process key — opaque string, length 1–128 → accepted. Longer than 128 chars → `422` (problem+json, `/X-Correlation-Id` pointer). Format is **not** constrained to a UUID — generic for any future control command.
 - Stored verbatim as the nullable `correlation_id` column, **distinct** from the row's own `id`; echoed on the `component` SSE frame.
-- **REQUIRED on `reset-ack`** — set to the `reset-initiated` event id (a UUIDv7). This IS the ack-gate key.
-  - **Ack-gate keys on `correlation_id` (binding).** The reset ack fan-in matches `correlation_id` against the in-flight cycle (`NOTIFY component_acks {component_id, correlation_id}`). A `reset-ack` with a missing/invalid/mismatched `correlation_id` is still recorded (`204`) but does **NOT** count toward the gate (stale/mismatch-safe). There is no `reset_id` body field.
-- **Optional on non-reset posts** (`status` / `heartbeat` / `error` / `rate-limit`). Absent → `correlation_id` is `null`; `204` (no error). For a post-reset `status`, components SHOULD set it to the reset id to correlate recovery to the same process.
+- **REQUIRED on `reset-ack` / `recover-ack`** — set to the initiating `reset-initiated`/`recover-initiated` event id (a UUIDv7). This IS the ack-gate key, for either operation.
+  - **Ack-gate keys on `correlation_id` (binding).** The ack fan-in matches `correlation_id` against the in-flight cycle (`NOTIFY component_acks {component_id, correlation_id}`), whichever operation (reset or recover) currently holds it. A `reset-ack`/`recover-ack` with a missing/invalid/mismatched `correlation_id` is still recorded (`204`) but does **NOT** count toward the gate (stale/mismatch-safe). There is no `reset_id` body field.
+- **Optional on non-reset/non-recover posts** (`status` / `heartbeat` / `error` / `rate-limit`). Absent → `correlation_id` is `null`; `204` (no error). For a post-reset or post-recover `status`, components SHOULD set it to the initiating id to correlate recovery to the same process.
 
 **Known `event_type` values** (not exhaustive — new types are additive):
 
@@ -306,7 +331,8 @@ data: {"id":"01J9F4X1N6B2C3D4E5F6G7H8J9","type":"reset-completed","component":"*
 | `heartbeat` | Periodic liveness ping; no state change |
 | `error` | Component encountered an error; `state` will be `error` |
 | `reset-ack` | Drain-complete ack for a `reset-initiated` event; sent with `state: paused` and the **required** `X-Correlation-Id` header = the initiating event id (the ack-gate key) |
-| `rate-limit` | Per-cycle fetcher report of CI/CD API limits and the fetcher's own budget/usage; `state` = running (or paused during reset); see Rate-limit payload below. |
+| `recover-ack` | Drain-complete ack for a `recover-initiated` event (D18) — same shape and gate semantics as `reset-ack`. **Accepted as an alias by the ack-gate**, but the reference fetcher always sends `reset-ack` even when acking a recover; a future component MAY send the more literal `recover-ack` instead. |
+| `rate-limit` | Per-cycle fetcher report of CI/CD API limits and the fetcher's own budget/usage; `state` = running (or paused during reset/recover); see Rate-limit payload below. |
 
 ### Rate-limit report payload (`event_type: rate-limit`)
 
@@ -424,6 +450,19 @@ on event "reset-completed":
     body: JSON.stringify({ event_type: "status", state: "running", occurred_at: new Date().toISOString() })
   })
 
+// Recover choreography (#423, D18) — non-destructive; same drain/ack shape, different completion action.
+// "reset-ack" is reused as the ack event_type for recover-initiated too (no separate wire type).
+
+on event "recover-completed":
+  since = event.data.payload.since               // resolved rewind point, NOT a drop-to-null
+  rewind local cursor to `since` (non-destructively) → resume poll incrementally, no backfill
+  fetch("POST /api/control/events", {            // recovered: running — same shape as reset-completed above
+    headers: { "X-Api-Key": API_KEY, "X-Component-Id": "dashboard-fetcher",
+               "X-Correlation-Id": event.data.correlation_id,
+               "Content-Type": "application/json" },
+    body: JSON.stringify({ event_type: "status", state: "running", occurred_at: new Date().toISOString() })
+  })
+
 // Periodic heartbeat (every ≤ 30 s)
 fetch("POST /api/control/events", {
   headers: {
@@ -504,7 +543,7 @@ the value as measured commit→prod lead time.
 
 ## 13. Examples — copy-paste minimum viable calls
 
-See [`api-examples.md`](./api-examples.md) — ingest, matrix snapshot, SSE, fetcher cursor, control reset, control stream subscription, component event post.
+See [`api-examples.md`](./api-examples.md) — ingest, matrix snapshot, SSE, fetcher cursor, control reset, control recover, control stream subscription, component event post.
 
 ---
 

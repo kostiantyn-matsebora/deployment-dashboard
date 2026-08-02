@@ -1,0 +1,40 @@
+{{- if .Values.demo.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "deployment-dashboard.componentName" (dict "root" . "component" "github-emulator") }}
+  labels:
+    {{- include "deployment-dashboard.componentLabels" (dict "root" . "component" "github-emulator") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "deployment-dashboard.componentSelectorLabels" (dict "root" . "component" "github-emulator") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "deployment-dashboard.componentLabels" (dict "root" . "component" "github-emulator") | nindent 8 }}
+    spec:
+      containers:
+        - name: github-emulator
+          image: {{ include "deployment-dashboard.image" (dict "root" . "component" "github-emulator") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3100
+          env:
+            - name: PORT
+              value: "3100"
+            - name: SEED_ON_STARTUP
+              value: "true"
+            - name: SCENARIOS_DIR
+              value: /app/data
+            - name: EMIT_INTERVAL_MS
+              value: {{ .Values.demo.emitIntervalMs | quote }}
+          livenessProbe:
+            httpGet:
+              path: /_github/status
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+{{- end }}

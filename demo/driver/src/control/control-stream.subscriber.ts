@@ -1,5 +1,6 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ResetCoordinator } from './reset-coordinator';
+import { RecoverAckHandler } from './recover-ack-handler';
 import { ControlFeed } from './control-feed';
 import { getConfig } from '../config/configuration';
 
@@ -26,7 +27,10 @@ const BACKOFF_MULTIPLIER  = 2;
  * - Connect failures — log + exponential backoff retry; NEVER crashes the process.
  *
  * Dispatches reset-initiated / reset-started / reset-completed to
- * ResetCoordinator.
+ * ResetCoordinator, and recover-initiated / recover-started /
+ * recover-completed to RecoverAckHandler (#423, D18) — a separate
+ * participant so the non-destructive recover choreography never touches
+ * ResetCoordinator's block state.
  */
 @Injectable()
 export class ControlStreamSubscriber implements OnModuleInit, OnModuleDestroy {
@@ -36,8 +40,9 @@ export class ControlStreamSubscriber implements OnModuleInit, OnModuleDestroy {
   private _currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
   constructor(
-    private readonly coordinator:  ResetCoordinator,
-    private readonly controlFeed:  ControlFeed,
+    private readonly coordinator:      ResetCoordinator,
+    private readonly controlFeed:      ControlFeed,
+    private readonly recoverHandler:   RecoverAckHandler,
   ) {}
 
   onModuleInit(): void {
@@ -168,23 +173,45 @@ export class ControlStreamSubscriber implements OnModuleInit, OnModuleDestroy {
     switch (evt.type) {
       case 'reset-initiated': {
         // The correlation_id IS the event id (§4.7 spec + choreography diagram).
-        const resetId = evt.id ?? this._parseResetId(evt.data);
+        const resetId = evt.id ?? this._parseCorrelationId(evt.data);
         if (resetId) {
           await this.coordinator.onResetInitiated(resetId);
         }
         break;
       }
       case 'reset-started': {
-        const resetId = this._parseResetId(evt.data);
+        const resetId = this._parseCorrelationId(evt.data);
         if (resetId) {
           this.coordinator.onResetStarted(resetId);
         }
         break;
       }
       case 'reset-completed': {
-        const resetId = this._parseResetId(evt.data);
+        const resetId = this._parseCorrelationId(evt.data);
         if (resetId) {
           await this.coordinator.onResetCompleted(resetId);
+        }
+        break;
+      }
+      case 'recover-initiated': {
+        // Same shape as reset-initiated — the correlation_id IS the event id.
+        const correlationId = evt.id ?? this._parseCorrelationId(evt.data);
+        if (correlationId) {
+          await this.recoverHandler.onRecoverInitiated(correlationId);
+        }
+        break;
+      }
+      case 'recover-started': {
+        const correlationId = this._parseCorrelationId(evt.data);
+        if (correlationId) {
+          this.recoverHandler.onRecoverStarted(correlationId);
+        }
+        break;
+      }
+      case 'recover-completed': {
+        const correlationId = this._parseCorrelationId(evt.data);
+        if (correlationId) {
+          await this.recoverHandler.onRecoverCompleted(correlationId);
         }
         break;
       }
@@ -194,7 +221,7 @@ export class ControlStreamSubscriber implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private _parseResetId(data?: string): string | null {
+  private _parseCorrelationId(data?: string): string | null {
     if (!data) return null;
     try {
       const parsed = JSON.parse(data) as Record<string, unknown>;

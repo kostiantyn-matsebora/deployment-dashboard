@@ -76,6 +76,8 @@ jobs:
       - run: echo prod
 `;
   const VERSION_STRING = 'v1.2.3';
+  const DISCOVERY_DIR = '.deployment-dashboard';
+  const PRESET_PATH = `${DISCOVERY_DIR}/preset.json`;
 
   beforeEach(async () => {
     process.env.SEED_ON_STARTUP = 'false';
@@ -142,6 +144,9 @@ jobs:
       expired:  false,
       _content: VERSION_STRING,
     }]);
+
+    // Repo files (issue #391 — preset discovery: directory listing + content)
+    repo.files.set(PRESET_PATH, JSON.stringify({ version: 1, name: 'CI Default', settings: { theme: 'dark' } }));
   });
 
   afterEach(async () => {
@@ -413,6 +418,81 @@ jobs:
         .expect(200);
 
       expect(res.body.encoding).toBe('base64');
+    });
+  });
+
+  // ── GET /repos/:owner/:repo/contents/.deployment-dashboard (issue #391) ────
+  // Directory listing + preset-file serving for the fetcher's preset-discovery
+  // pull path. Verifies GhContentEntry shape ({name,path,type}) for the listing
+  // and the existing {content,encoding} shape for a listed file, per the demo
+  // BRIEF gate.
+
+  describe('GET /repos/:owner/:repo/contents/.deployment-dashboard (directory listing)', () => {
+    it('returns an array of {name, path, type} entries', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/repos/${OWNER}/${REPO}/contents/${DISCOVERY_DIR}`)
+        .expect(200);
+
+      expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body).toHaveLength(1);
+      const entry = res.body[0];
+      expect(entry).toEqual({ name: 'preset.json', path: PRESET_PATH, type: 'file' });
+    });
+
+    it('carries X-RateLimit-* headers', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/repos/${OWNER}/${REPO}/contents/${DISCOVERY_DIR}`)
+        .expect(200);
+      expectRateLimitHeaders(res.headers as Record<string, string>);
+    });
+
+    it('sets a stable ETag and returns 304 on a matching If-None-Match', async () => {
+      const first = await request(app.getHttpServer())
+        .get(`/repos/${OWNER}/${REPO}/contents/${DISCOVERY_DIR}`)
+        .expect(200);
+
+      const etag = first.headers['etag'];
+      expect(typeof etag).toBe('string');
+
+      const second = await request(app.getHttpServer())
+        .get(`/repos/${OWNER}/${REPO}/contents/${DISCOVERY_DIR}`)
+        .set('If-None-Match', etag)
+        .expect(304);
+
+      expect(second.body).toEqual({});
+    });
+
+    it('returns GitHub-shaped 404 when the repo has no .deployment-dashboard directory', async () => {
+      const store = storeService.getStore();
+      store.getOrCreateRepo('no-presets-org', 'no-presets-repo');
+
+      const res = await request(app.getHttpServer())
+        .get(`/repos/no-presets-org/no-presets-repo/contents/${DISCOVERY_DIR}`)
+        .expect(404);
+
+      expect(res.body).toMatchObject(GITHUB_404_SHAPE);
+    });
+
+    it('returns the existing {content(base64), encoding} shape for a listed file', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/repos/${OWNER}/${REPO}/contents/${PRESET_PATH}`)
+        .expect(200);
+
+      expect(res.body.encoding).toBe('base64');
+      expect(typeof res.body.content).toBe('string');
+
+      const decoded = JSON.parse(Buffer.from(res.body.content, 'base64').toString('utf-8'));
+      expect(decoded).toEqual({ version: 1, name: 'CI Default', settings: { theme: 'dark' } });
+    });
+
+    it('preserves existing workflow-YAML behavior for other paths', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/repos/${OWNER}/${REPO}/contents/${WF_PATH}?ref=${SHA}`)
+        .expect(200);
+
+      expect(res.body.encoding).toBe('base64');
+      const decoded = Buffer.from(res.body.content, 'base64').toString('utf-8');
+      expect(decoded).toContain('environment: dev');
     });
   });
 

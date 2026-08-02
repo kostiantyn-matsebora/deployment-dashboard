@@ -1,10 +1,11 @@
-import { inject, Injectable, signal } from '@angular/core';
+import { inject, Injectable, Injector, signal } from '@angular/core';
 
 import {
   CORRELATION_PREDICATES,
   CorrelationPredicate,
   MATRIX_FIELDS,
   MatrixField,
+  ProvidedPreset,
   SWIMLANE_FIELDS,
   SwimlaneField,
   Theme,
@@ -15,6 +16,8 @@ import {
   AppStateService,
   ServiceFilterMode,
 } from './app-state.service';
+import { DeploymentApiService } from './deployment-api.service';
+import { FeedService } from './feed.service';
 import {
   NOTIFICATION_STATUSES,
   NotifPrefs,
@@ -48,6 +51,10 @@ export interface PresetSettings {
   swimAutoScroll?: boolean;
   timeWindow?: string;
   correlation?: string;
+  /** Feed grouping toggle — shared by the Feed page and the bottom dock (#397). */
+  feedGrouped?: boolean;
+  /** Feed dock open/closed preference (#397). */
+  feedDockOpen?: boolean;
 }
 
 /**
@@ -59,6 +66,12 @@ export interface PresetEnvelope {
   name: string;
   settings: PresetSettings;
 }
+
+/**
+ * Parsed result from parseOrBundle(): either an array of envelopes (success)
+ * or a string error message (failure).
+ */
+export type ParseOrBundleResult = PresetEnvelope[] | string;
 
 /** Stored collection: array of envelopes. */
 type PresetsStore = PresetEnvelope[];
@@ -82,13 +95,26 @@ const ENVELOPE_VERSION   = 1 as const;
  * existing persistence effects in AppStateService handle re-saving to
  * localStorage automatically.  No parallel store.
  *
- * Spec: docs/design/mockup/index.html §presets
+ * Provided presets (issue #391): a SEPARATE providedPresets signal holds the
+ * read-only repo/CI-sourced catalog from GET /api/presets. It is fetched on
+ * demand via loadProvidedPresets() (never at construction — see the injector
+ * field below) and is NEVER written to the dd:presets localStorage store.
+ * apply()/clone() are reused unchanged via providedToEnvelope().
+ *
+ * Spec: docs/design/mockup/index.html §presets; docs/api/openapi.yaml (presets tag)
  */
 @Injectable({ providedIn: 'root' })
 export class PresetsService {
   private readonly state      = inject(AppStateService);
   private readonly themeService = inject(ThemeService);
   private readonly notifPrefs = inject(NotificationPrefsService);
+  /**
+   * Stored (not eagerly resolved) so that constructing PresetsService never
+   * requires an HttpClient provider. DeploymentApiService is only pulled from
+   * the injector inside loadProvidedPresets(), i.e. when a caller actually
+   * asks for the provided-preset catalog.
+   */
+  private readonly injector   = inject(Injector);
 
   /** Reactive list of saved presets; refreshed on every mutating operation. */
   readonly presets = signal<PresetEnvelope[]>(this.loadFromStorage());
@@ -98,8 +124,20 @@ export class PresetsService {
    * dd:presetActive.  null when no preset has been applied, or after the
    * active preset is deleted or all settings are reset.
    * Active = LAST APPLIED — not auto-cleared when the user changes settings.
+   * Also doubles as the "active" pointer for provided presets (issue #391):
+   * apply() sets it from envelope.name regardless of whether the envelope
+   * came from a local preset or a provided preset converted via
+   * providedToEnvelope().
    */
   readonly activePresetName = signal<string | null>(this.loadActiveFromStorage());
+
+  /**
+   * Read-only repo/CI-sourced provided presets fetched from GET /api/presets
+   * (issue #391). NEVER written to the dd:presets localStorage store — this
+   * signal is populated exclusively by loadProvidedPresets() and reset on
+   * each successful fetch. Empty until the first successful load.
+   */
+  readonly providedPresets = signal<ProvidedPreset[]>([]);
 
   // ── Capture ─────────────────────────────────────────────────────────────
 
@@ -130,6 +168,8 @@ export class PresetsService {
       swimAutoScroll:    this.state.autoScrollOnChange(),
       timeWindow:        this.state.timeWindow(),
       correlation:       this.state.correlationPredicate(),
+      feedGrouped:       this.injector.get(FeedService).grouped(),
+      feedDockOpen:      this.injector.get(FeedService).dockOpenPref(),
     };
   }
 
@@ -157,6 +197,9 @@ export class PresetsService {
    * Apply a saved preset by writing its settings to the live signals.
    * Fields not present in the preset (undefined) are left at their current
    * value — unknown/missing fields fall back to the current app default.
+   * Intentionally does NOT navigate: the rendered view is router-driven
+   * (App.syncActiveView maps URL → activeView), so a caller surfacing a
+   * `view` change must re-align the router itself (TopbarComponent.applyEnvelope does).
    */
   apply(envelope: PresetEnvelope): void {
     const s = envelope.settings;
@@ -241,6 +284,12 @@ export class PresetsService {
     if (s.correlation !== undefined && this.isCorrelation(s.correlation)) {
       this.state.correlationPredicate.set(s.correlation);
     }
+    if (s.feedGrouped !== undefined) {
+      this.injector.get(FeedService).setGrouped(Boolean(s.feedGrouped));
+    }
+    if (s.feedDockOpen !== undefined) {
+      this.injector.get(FeedService).setDockOpen(Boolean(s.feedDockOpen));
+    }
 
     this.persistActive(envelope.name);
   }
@@ -261,6 +310,40 @@ export class PresetsService {
     };
     const updated = [...this.presets(), cloned];
     this.persist(updated);
+  }
+
+  // ── Provided presets (repo/CI-sourced, read-only — issue #391) ────────────
+
+  /**
+   * Fetch the merged provided-preset catalog from GET /api/presets and
+   * refresh providedPresets(). Safe to call repeatedly (e.g. every time the
+   * presets popover opens) — each successful response replaces the signal
+   * wholesale. On error, providedPresets() is left at its last known value
+   * (never persisted anywhere, so there is nothing to roll back).
+   */
+  loadProvidedPresets(): void {
+    const api = this.injector.get(DeploymentApiService);
+    api.getProvidedPresets().subscribe({
+      next: (res) => this.providedPresets.set(res.items),
+      error: () => {
+        // Network/API failure — keep the last successfully loaded catalog.
+      },
+    });
+  }
+
+  /**
+   * Convert a ProvidedPreset into a local-shaped PresetEnvelope so that
+   * apply() and clone() — which only read .name/.settings — work unchanged
+   * for provided presets. `settings` is opaque on the wire; the SPA trusts
+   * it as a PresetSettings payload, same as validateImport() does for
+   * imported files.
+   */
+  providedToEnvelope(provided: ProvidedPreset): PresetEnvelope {
+    return {
+      version: ENVELOPE_VERSION,
+      name: provided.name,
+      settings: provided.settings as PresetSettings,
+    };
   }
 
   // ── Rename ───────────────────────────────────────────────────────────────
@@ -292,13 +375,14 @@ export class PresetsService {
    * Callers are responsible for showing a native confirm dialog before
    * calling this method.
    *
-   * Defaults mirror the AppStateService / ThemeService / NotificationPrefsService
-   * signal initialisers:
+   * Defaults mirror the AppStateService / ThemeService / NotificationPrefsService /
+   * FeedService signal initialisers:
    *   theme: 'dark' · notif: disabled, success+failure statuses, no filters ·
    *   view: 'matrix' · svcFilterMode: 'exclude' · svcPatterns: [] ·
    *   failOnly: false · matFields: all · swFields: all ·
    *   colOrder: [] · colHidden: {} · swimCollapsed: {} · swimAutoScroll: true ·
-   *   timeWindow: '1 day' · correlation: 'explicit parent'
+   *   timeWindow: '1 day' · correlation: 'explicit parent' ·
+   *   feedGrouped: true · feedDockOpen: false
    */
   resetAllSettings(): void {
     this.themeService.setTheme('dark');
@@ -325,6 +409,8 @@ export class PresetsService {
     this.state.autoScrollOnChange.set(true);
     this.state.timeWindow.set('1 day' as TimeWindow);
     this.state.correlationPredicate.set('explicit parent' as CorrelationPredicate);
+    this.injector.get(FeedService).setGrouped(true);
+    this.injector.get(FeedService).setDockOpen(false);
     this.persistActive(null);
   }
 
@@ -450,6 +536,169 @@ export class PresetsService {
     this.persist(updated);
   }
 
+  /**
+   * Parse a raw JSON string as either a single preset (SINGLE) or a bundle
+   * (BUNDLE) and return an array of PresetEnvelopes.
+   *
+   * Accepted shapes:
+   *   SINGLE  {version:1, name:string, settings:{}} → [envelope]
+   *   BUNDLE  {version:1, presets:[{name,settings}, ...]} → [envelope, ...]
+   *
+   * Bare top-level arrays are rejected (backward-compat guard).
+   * Each bundle entry inherits version:1.
+   * Delegates single-envelope validation to validateImport so there is one
+   * validation sink (no new sinks, prototype-pollution-safe per #357).
+   *
+   * Returns ParseOrBundleResult: PresetEnvelope[] on success, string on error.
+   */
+  parseOrBundle(raw: string): ParseOrBundleResult {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return 'Invalid JSON — could not parse the content.';
+    }
+
+    if (Array.isArray(parsed)) {
+      return 'Invalid format — bare top-level arrays are not supported. Use a single preset envelope or a bundle object.';
+    }
+
+    if (!parsed || typeof parsed !== 'object') {
+      return 'Invalid format — expected a JSON object.';
+    }
+
+    const obj = parsed as Record<string, unknown>;
+
+    // BUNDLE: {version:1, presets:[...]}
+    if (Array.isArray(obj['presets'])) {
+      if (obj['version'] !== 1) {
+        return `Unsupported version: ${String(obj['version'])}. Only version 1 is supported.`;
+      }
+      const entries = obj['presets'] as unknown[];
+      if (entries.length === 0) {
+        return 'Invalid bundle — "presets" array is empty.';
+      }
+      const envelopes: PresetEnvelope[] = [];
+      for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i];
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+          return `Invalid bundle — presets[${i}] is not an object.`;
+        }
+        const e = entry as Record<string, unknown>;
+        if (typeof e['name'] !== 'string' || !(e['name'] as string).trim()) {
+          return `Invalid bundle — presets[${i}] has a missing or blank "name" field.`;
+        }
+        if (!e['settings'] || typeof e['settings'] !== 'object' || Array.isArray(e['settings'])) {
+          return `Invalid bundle — presets[${i}] has a missing or invalid "settings" field.`;
+        }
+        envelopes.push({
+          version:  1,
+          name:     (e['name'] as string).trim(),
+          settings: this.sanitizeSettings(e['settings'] as Record<string, unknown>),
+        });
+      }
+      return envelopes;
+    }
+
+    // SINGLE — delegate to validateImport (single validation sink).
+    const result = this.validateImport(raw);
+    if (typeof result === 'string') {
+      return result;
+    }
+    return [{ ...result, settings: this.sanitizeSettings(result.settings as unknown as Record<string, unknown>) }];
+  }
+
+  /**
+   * Import an array of validated PresetEnvelopes (from parseOrBundle), appending
+   * each to the stored list with cross-bundle name deduplication: the dedup
+   * counter spans the entire existing store plus all previously appended entries
+   * in this batch, matching the mockup's importPresets() loop.
+   *
+   * Returns the array of final names assigned (after dedup).
+   */
+  importPresets(envelopes: PresetEnvelope[]): string[] {
+    const existing = this.presets();
+    const takenNames = new Set(existing.map((p) => p.name));
+    const added: PresetEnvelope[] = [];
+    const names: string[] = [];
+
+    for (const envelope of envelopes) {
+      let name = envelope.name;
+      if (takenNames.has(name)) {
+        let counter = 2;
+        while (takenNames.has(`${name} (${counter})`)) {
+          counter++;
+        }
+        name = `${name} (${counter})`;
+      }
+      takenNames.add(name);
+      added.push({ ...envelope, name });
+      names.push(name);
+    }
+
+    this.persist([...existing, ...added]);
+    return names;
+  }
+
+  /**
+   * Fetch a preset file from a URL and import all presets it contains.
+   *
+   * HTTPS-only — non-https URLs are rejected with a clear message about
+   * browser mixed-content restrictions.
+   *
+   * Note: private-repo raw URLs (e.g. raw.githubusercontent.com on a private
+   * repo) will fail with a CORS or 404 error by design — the SPA holds no
+   * secrets and cannot inject auth headers.
+   *
+   * Returns {imported: string[]} with the final preset names on success,
+   * or a string error message on failure.
+   *
+   * Error taxonomy (each returns a distinct user-readable string):
+   *   - Non-https URL
+   *   - Network / CORS failure (fetch() throws)
+   *   - Non-OK HTTP response (e.g. 404)
+   *   - Non-JSON body (response.json() throws)
+   *   - Invalid shape (delegates to parseOrBundle)
+   */
+  async importFromUrl(url: string): Promise<{ imported: string[] } | string> {
+    const trimmed = url.trim();
+    try {
+      const u = new URL(trimmed);
+      if (u.protocol !== 'https:') {
+        return 'Only HTTPS URLs are supported — HTTP and other schemes are blocked by browser mixed-content policy.';
+      }
+    } catch {
+      return 'Invalid URL — could not parse the address.';
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(trimmed);
+    } catch {
+      // Network failure, CORS rejection, or DNS failure — no status available.
+      return 'Could not reach that URL — check the address or CORS policy (private-repo raw URLs require auth the browser cannot provide).';
+    }
+
+    if (!response.ok) {
+      return `HTTP ${response.status} — the server returned an error for that URL.`;
+    }
+
+    let text: string;
+    try {
+      text = await response.text();
+    } catch {
+      return 'Could not read the response body.';
+    }
+
+    const parseResult = this.parseOrBundle(text);
+    if (typeof parseResult === 'string') {
+      return parseResult;
+    }
+
+    const names = this.importPresets(parseResult);
+    return { imported: names };
+  }
+
   // ── Helpers ──────────────────────────────────────────────────────────────
 
   /**
@@ -518,6 +767,25 @@ export class PresetsService {
     }
   }
 
+  /**
+   * Return a copy of a settings object with dangerous prototype-pollution keys
+   * (`__proto__`, `constructor`, `prototype`) dropped.
+   *
+   * The copy is built via a plain for…in loop that skips the three dangerous
+   * key names entirely — bracket-assigning `__proto__` would itself re-trigger
+   * the Object prototype setter, so we NEVER do `safe[k] = v` for that key.
+   */
+  private sanitizeSettings(raw: Record<string, unknown>): PresetSettings {
+    const DANGEROUS = new Set(['__proto__', 'constructor', 'prototype']);
+    const safe: Record<string, unknown> = Object.create(null);
+    for (const k in raw) {
+      if (Object.prototype.hasOwnProperty.call(raw, k) && !DANGEROUS.has(k)) {
+        Object.defineProperty(safe, k, { value: raw[k], writable: true, enumerable: true, configurable: true });
+      }
+    }
+    return safe as unknown as PresetSettings;
+  }
+
   private parseStringArray(value: unknown): string[] {
     if (!Array.isArray(value)) return [];
     return (value as unknown[]).filter((x): x is string => typeof x === 'string');
@@ -527,8 +795,8 @@ export class PresetsService {
     return v === 'dark' || v === 'light' || v === 'auto';
   }
 
-  private isView(v: string): v is 'matrix' | 'swimlanes' | 'analytics' {
-    return v === 'matrix' || v === 'swimlanes' || v === 'analytics';
+  private isView(v: string): v is 'matrix' | 'swimlanes' | 'feed' | 'analytics' {
+    return v === 'matrix' || v === 'swimlanes' || v === 'feed' || v === 'analytics';
   }
 
   private isTimeWindow(v: string): v is TimeWindow {
